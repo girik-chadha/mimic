@@ -64,6 +64,12 @@ class Calib:
         return cls(data["H"], data["pixel_pts"], data["table_pts_cm"])
 
 
+def disagreement_cm(a: Calib, b: Calib, pt_cm) -> float:
+    """How far apart two maps put the same table point: to pixels with map `a`, back to cm with map `b`.
+    Two photos from a camera that has not moved give about 0."""
+    return math.dist(b.px_to_cm(a.cm_to_px(pt_cm)), pt_cm)
+
+
 def _triangle_area(a, b, c) -> float:
     return abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) / 2
 

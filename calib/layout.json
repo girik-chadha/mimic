@@ -1,5 +1,6 @@
 {
-  "note": "PLACEHOLDER numbers until the real sheet is measured (todo.md, Thu physical jobs). All positions in cm, origin at the bottom-left sticker, x to the right, y away from you. The first 4 stickers are the corners that build the map; any after that are check stickers.",
+  "placeholder": true,
+  "note": "PLACEHOLDER numbers until the real sheet is measured (todo.md, Thu physical jobs). All positions in cm, origin at the bottom-left sticker, x to the right, y away from you. The first 4 stickers are the corners that build the map; any after that are check stickers. Set placeholder to false once the real numbers are in.",
   "stickers": [
     {"name": "pink sticker",       "cm": [0.0, 0.0]},
     {"name": "orange sticker",     "cm": [38.0, 0.0]},

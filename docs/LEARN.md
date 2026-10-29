@@ -174,3 +174,22 @@ refuses to run."
 Two sentences: "One photo of the sheet gives us the stickers, which give the pixel-to-centimetre map, and then
 the position of every block in centimetres. The demo order is read by putting each block in its nearest slot,
 and anything ambiguous, like a block between two slots, stops the run instead of guessing."
+
+## 29 Oct, item 8: plan_from_photos.py, the Gate 1 demo
+
+- **What:** one command, two photos. It calibrates each photo from its stickers, asks Spark to name the
+  objects in the demo photo (checked by SAM), reads which object is in which slot, finds the objects in the
+  mess photo in cm, and prints the list of moves. It saves both photos with boxes, cm labels, numbered slots
+  and arrows, plus a `plan.json` with every number, in `runs/<date-time>/`.
+- **Safety checks you can point at:**
+  - each photo's check sticker error is printed; over 0.5 cm, the run stops;
+  - if the demo and mess maps disagree by more than 0.5 cm at the sheet centre, the camera moved: a loud
+    warning (the plan is still right, because each photo uses its own map, but the arm would not be);
+  - a hard $0.15 cap per run through the same budget guard as everything else;
+  - it refuses to run at all while `calib/layout.json` still holds placeholder numbers.
+- **Tests** run the whole script offline: a fake Spark, a fake SAM that "sees" a tilted sheet, and blank photos.
+  They check the printed moves, the saved files, the camera-bump warning, a bad check sticker, and the cap.
+
+Two sentences: "Give Mimic a photo of your arrangement and a photo of the mess, and it prints exactly which
+block goes where, in centimetres, with a picture to prove it. Before it trusts anything it checks its own
+calibration against a spare sticker and refuses to run if the numbers do not add up."

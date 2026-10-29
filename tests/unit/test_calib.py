@@ -113,6 +113,19 @@ def test_every_bad_check_sticker_is_named():
         calib.fit(stickers_px, CORNER_STICKERS_CM + [(16, 20), (30, 10)])
 
 
+def test_two_maps_from_the_same_camera_agree():
+    a = corners_only()
+    b = calib.fit(camera(CORNER_STICKERS_CM), CORNER_STICKERS_CM)
+    assert calib.disagreement_cm(a, b, (21, 14.85)) < 0.01
+
+
+def test_bumped_camera_shows_as_disagreement():
+    a = corners_only()
+    bumped_px = [(x + 30, y + 10) for x, y in camera(CORNER_STICKERS_CM)]  # camera nudged ~30 px
+    b = calib.fit(bumped_px, CORNER_STICKERS_CM)
+    assert calib.disagreement_cm(a, b, (21, 14.85)) > 0.5
+
+
 # ---------- bad input ----------
 
 def test_needs_at_least_4_stickers():

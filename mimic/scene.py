@@ -34,6 +34,7 @@ class Layout:
     sheet_min_cm: tuple[float, float]
     sheet_max_cm: tuple[float, float]
     height: HeightCorrection | None = None  # None = correction off
+    placeholder: bool = False               # True until the real sheet has been measured
 
 
 def load_layout(path=config.LAYOUT_PATH) -> Layout:
@@ -53,6 +54,7 @@ def load_layout(path=config.LAYOUT_PATH) -> Layout:
         sheet_min_cm=tuple(data["sheet_cm"]["min"]),
         sheet_max_cm=tuple(data["sheet_cm"]["max"]),
         height=height,
+        placeholder=data["placeholder"],
     )
     _check_slot_tolerance(layout.slots_cm, layout.slot_tolerance_cm)
     return layout
@@ -72,8 +74,15 @@ def find_stickers(image_path: str, names: list[str]) -> list[tuple[float, float]
     return [_one_box(image_path, name).centre for name in names]
 
 
+def refuse_placeholder(layout: Layout) -> None:
+    if layout.placeholder:
+        raise SceneError("calib/layout.json still holds placeholder numbers: "
+                         "measure your sheet and set placeholder to false.")
+
+
 def calibrate(image_path: str, layout: Layout) -> Calib:
     """One photo of the sheet -> the pixel/cm map, checked by the check sticker(s)."""
+    refuse_placeholder(layout)
     return fit_calib(find_stickers(image_path, layout.sticker_names), layout.stickers_cm)
 
 

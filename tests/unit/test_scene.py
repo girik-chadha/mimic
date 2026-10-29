@@ -90,6 +90,13 @@ def test_find_stickers_needs_exactly_one_box_each(monkeypatch):
         scene.find_stickers(PHOTO, STICKERS)
 
 
+def test_calibrate_refuses_a_placeholder_layout(monkeypatch):
+    asked = fake_sam(monkeypatch, {n: [box_at(cm)] for n, cm in zip(STICKERS, STICKERS_CM)})
+    with pytest.raises(SceneError, match="measure your sheet and set placeholder to false"):
+        scene.calibrate(PHOTO, make_layout(placeholder=True))
+    assert asked == []  # refused before spending anything on SAM
+
+
 def test_calibrate_from_a_photo_of_the_stickers(monkeypatch):
     fake_sam(monkeypatch, {n: [box_at(cm)] for n, cm in zip(STICKERS, STICKERS_CM)})
     c = scene.calibrate(PHOTO, make_layout())
