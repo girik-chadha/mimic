@@ -139,6 +139,10 @@ BASETEN_API_KEY=...          # Mon, optional
 
 ### C4. Physical setup
 
+- **Arm power-on (29 Oct):** hobby servos cannot report their position, so when the arm is powered the firmware
+  sends every joint to the home pose and they jump there. The home pose must therefore be a safe pose: clear of
+  the table, the blocks and the camera. Always send `H` before switching off, so the next jump is small.
+
 - White table, bright even light, no hard shadows.
 - An A3 sheet taped to the table as the work area, with 4 small coloured stickers at its corners (camera calibration) and 3-4 numbered target slots drawn on it.
 - **Plus 1 check sticker (decided 29 Oct):** anywhere inside the corner stickers (the centre is fine). Only the

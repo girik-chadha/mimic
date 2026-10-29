@@ -193,3 +193,23 @@ and anything ambiguous, like a block between two slots, stops the run instead of
 Two sentences: "Give Mimic a photo of your arrangement and a photo of the mess, and it prints exactly which
 block goes where, in centimetres, with a picture to prove it. Before it trusts anything it checks its own
 calibration against a spare sticker and refuses to run if the numbers do not add up."
+
+## 29 Oct, Phase 2 software: firmware, arm.py, arm_jog.py (before the arm arrives)
+
+- **What:** the arm understands four one-line commands: `J` (move all joints smoothly, e.g. `J 95 90 87 90 400`),
+  `H` (home), `?` (where are you?) and `S` (stop). `arm.py` sends them from Python; `arm_jog.py` lets you type
+  `base +5` to move one joint; the firmware on the ESP32 carries them out.
+- **Safety in two layers:** Python refuses any angle outside the limits (that would be a bug), and the firmware
+  clamps to the same limits anyway, as the last line of defence. A test checks both layers use identical numbers.
+  The firmware also: slows any move to a speed limit, eases in and out (no jerks), relaxes a closed grip after
+  5 s (the grip servo overheats), rejects over-long lines, and holds still when no command arrives.
+- **Nothing moves by accident:** `calib/arm_limits.json` starts as a placeholder. A real arm only moves when
+  it says `placeholder: false` *and* `limits_checked_by_hand: true`. Stop and status always work.
+- **How firmware is tested without a board:** all the rules live in `arm_logic.h`, plain C++ with no Arduino
+  calls. The laptop compiles it with g++ and runs 38 checks: clamps, ramps, timers, refusals. The `.ino` file
+  only connects those rules to the servos and the serial port.
+- **Known limit:** at power-on the servos jump to home, because a hobby servo cannot say where it is.
+
+Two sentences: "The arm speaks four one-line commands, and every safety rule (joint limits, speed limit, grip
+timeout) lives in a small C++ file that we test on the laptop, so the rules are proven before the arm is even
+plugged in. Python checks the same limits first, and a test makes sure the two copies of the numbers never differ."

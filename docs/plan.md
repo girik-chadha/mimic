@@ -108,12 +108,15 @@ def extra_objects(positions_cm: dict, target_order: list[str]) -> list[str]   # 
 # mimic/kinematics.py
 def to_angles(x_cm: float, y_cm: float, height: str) -> dict   # height: "hover" | "grab"
 
-# mimic/arm.py
+# mimic/arm.py   (29 Oct: limits from calib/arm_limits.json; transport = anything with send(line) -> reply, is_real)
 class Arm:
-    def move(self, angles: dict, ms: int = 800) -> None
+    def __init__(self, transport, limits: ArmLimits)
+    def move(self, angles: dict, ms: int = 800) -> None   # raises ArmError outside the limits / too fast
     def grip(self, closed: bool) -> None
     def home(self) -> None
     def status(self) -> dict
+    def stop(self) -> None                               # always allowed
+    # a real transport refuses move/grip/home unless placeholder is false AND limits_checked_by_hand is true
 
 # mimic/camera.py
 def capture(path: str) -> str
@@ -134,6 +137,15 @@ One line in, one line out, the same over USB serial or Wi-Fi HTTP (`GET /cmd?c=<
 | `S` | stop and hold | `OK` |
 
 Safety in the firmware, not only in Python: every angle is clamped to the limits measured on Friday (needs.md B4); moves are ramped, never jumps; the gripper never closes past its measured limit (overheating).
+
+Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the laptop):
+- `J` replies `OK` as soon as the move starts; the ramp runs in the background, so `S` and `?` work mid-move.
+  A new `J` replaces a running ramp, starting from where the arm is.
+- Moves are slowed to at least `MIN_MS_PER_DEGREE` per degree. A grip held closed for `MAX_GRIP_HOLD_MS` relaxes to open.
+- Lines over 64 characters are rejected. With no command, the arm holds; the last move is never repeated.
+- `J` and `H` reply `ERR limits not measured` unless the limits are real and checked by hand; `?` and `S` always work.
+- Python (`arm.py`) refuses out-of-range angles; the firmware clamps. The same numbers live in
+  `calib/arm_limits.json` and `arm_logic.h`, and a unit test checks they match.
 
 ### 2.3 Scene layout
 

@@ -26,6 +26,7 @@ CACHE_DIR = ROOT / ".cache"
 RESPONSES_DIR = ROOT / "tests" / "fixtures" / "meta_responses"
 RUNS_DIR = ROOT / "runs"
 LAYOUT_PATH = ROOT / "calib" / "layout.json"  # stickers, slots, sheet size
+ARM_LIMITS_PATH = ROOT / "calib" / "arm_limits.json"  # pins, joint ranges, grip limit
 
 
 def api_key() -> str:
