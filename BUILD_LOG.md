@@ -32,3 +32,6 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - `calib.py`: homography from the 4 corner stickers; extra stickers are independent check points (> 0.5 cm off
   raises `CalibrationError` with the numbers). Tested: fitting all 5 points, or leaving one out, hides or
   amplifies errors, so the check sticker is kept out of the fit. 14 tests on a made-up tilted camera.
+- `scene.py` + `calib/layout.json`: find stickers and calibrate from one photo; object positions in cm (exactly 1
+  SAM box each, must be on the sheet); demo order by nearest slot (tolerance <= half the slot spacing); optional
+  block-height correction, off by default. 18 tests with a fake SAM. plan.md 2.1 / 2.3 updated.

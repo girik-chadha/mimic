@@ -1,0 +1,19 @@
+{
+  "note": "PLACEHOLDER numbers until the real sheet is measured (todo.md, Thu physical jobs). All positions in cm, origin at the bottom-left sticker, x to the right, y away from you. The first 4 stickers are the corners that build the map; any after that are check stickers.",
+  "stickers": [
+    {"name": "pink sticker",       "cm": [0.0, 0.0]},
+    {"name": "orange sticker",     "cm": [38.0, 0.0]},
+    {"name": "purple sticker",     "cm": [38.0, 25.7]},
+    {"name": "yellow sticker",     "cm": [0.0, 25.7]},
+    {"name": "light blue sticker", "cm": [14.0, 18.0]}
+  ],
+  "sheet_cm": {"min": [-2.0, -2.0], "max": [40.0, 27.7]},
+  "slots_cm": [[32.0, 5.0], [32.0, 12.85], [32.0, 20.7]],
+  "slot_tolerance_cm": 3.0,
+  "height_correction": {
+    "enabled": false,
+    "camera_height_cm": null,
+    "under_lens_cm": null,
+    "point_height_cm": null
+  }
+}

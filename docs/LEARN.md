@@ -143,8 +143,9 @@ ask the map where the 5th sticker should be and compare with the ruler. More tha
 calibration is refused with the numbers in the message.
 We tested two other ideas first and both were worse: fitting all 5 together let the map bend to hide a 2 cm
 mistake (it showed as 0.13 cm), and checking each sticker against the other four was so sensitive that 1 pixel
-of noise looked like several cm. The 5th sticker must not be in line with two others (the exact centre is on a
-diagonal, which broke one of our tests).
+of noise looked like several cm. (Correction, 29 Oct item 7: the check sticker can go anywhere, even the
+centre. Only the 4 corner stickers must not have 3 in a line. The "not in line" problem only affected the
+checking-against-the-other-four idea we threw away.)
 
 - **Tests** use a made-up tilted camera: a tilted A3 sheet measures 42 x 29.7 cm, a 10 cm square measures
   10 cm on every side, and a check sticker written down 2 cm wrong is refused with the numbers.
@@ -153,3 +154,23 @@ Two sentences: "The camera sees the table at an angle, so we use a homography: a
 out from 4 stickers at known positions, that turns any pixel into centimetres on the table. A fifth sticker
 that the map never saw checks it, and if the map puts that sticker more than half a centimetre off, Mimic
 refuses to run."
+
+## 29 Oct, item 7: scene.py, reading the photo
+
+- **What:** `calib/layout.json` holds the fixed facts about the sheet: each sticker's name and position, the
+  slot centres, the sheet edges. From one photo, `calibrate()` finds the stickers with SAM and builds the
+  pixel-to-cm map. `read_positions()` finds each object and gives its position in cm. `read_target()` puts
+  each object of the demo photo into its nearest slot and returns the names in slot order: that is the
+  arrangement the robot must copy.
+- **Strict on purpose:** SAM must find each name exactly once. An object off the sheet, more than the
+  tolerance away from every slot, or two objects in one slot each stop the run with a clear message.
+  The tolerance may not be more than half the gap between slots, so an object can never count as being in two.
+- **Block height:** the map is exact only for things lying flat. The middle of a block is a little above the
+  table, and from a camera above, raised things look further from the centre of the view than they are.
+  The fix pulls each point towards the spot under the lens by (camera height - point height) / camera height.
+  For a point 20 cm from that spot, 1.25 cm up, with the lens 45 cm up, that is about 0.56 cm. It is off until
+  Gate 1 shows we need it; a test traces the camera ray to prove the formula.
+
+Two sentences: "One photo of the sheet gives us the stickers, which give the pixel-to-centimetre map, and then
+the position of every block in centimetres. The demo order is read by putting each block in its nearest slot,
+and anything ambiguous, like a block between two slots, stops the run instead of guessing."

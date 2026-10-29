@@ -23,12 +23,12 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] 4. Settle B1: can Spark see images? `brain.name_objects()` (29 Oct: yes; names checked by SAM, renamed by Spark if needed)
 - [x] 5. `plan.py` with unit tests (29 Oct)
 - [x] 6. `calib.py` with unit tests (29 Oct)
-- [ ] 7. `scene.py`
+- [x] 7. `scene.py` (29 Oct)
 - [ ] 8. `scripts/plan_from_photos.py`, then **Gate 1** on two real photos
 
 ### Thu, physical jobs (you, in between)
 
-- [ ] Make the work area: A3 sheet taped down, 4 small coloured stickers at the corners, plus 1 check sticker off-centre (not in line with any two others, e.g. at about (14, 20) cm). Measure every sticker's position in cm from the bottom-left one
+- [ ] Make the work area: A3 sheet taped down, 4 small coloured stickers at the corners, plus 1 check sticker anywhere inside them. Measure every sticker's position in cm from the bottom-left one and write them, the slot centres and the sheet edges into `calib/layout.json` (it holds placeholders now)
 - [ ] Draw 3 numbered target slots on one side; leave the other side as the mess area
 - [ ] Take two photos from the same fixed spot: `demo.jpg` (objects in your chosen order in the slots) and `mess.jpg` (scattered in the mess area)
 - [ ] Decide the camera (needs.md B2): cheap USB webcam, or a phone webcam app that works on Windows

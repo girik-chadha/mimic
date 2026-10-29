@@ -25,6 +25,7 @@ BUDGET_USD = float(os.environ.get("MIMIC_BUDGET_USD", "1.00"))
 CACHE_DIR = ROOT / ".cache"
 RESPONSES_DIR = ROOT / "tests" / "fixtures" / "meta_responses"
 RUNS_DIR = ROOT / "runs"
+LAYOUT_PATH = ROOT / "calib" / "layout.json"  # stickers, slots, sheet size
 
 
 def api_key() -> str:
