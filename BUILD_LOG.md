@@ -17,3 +17,5 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - `config.py` + `meta_api.py`: one door to Meta's models with a disk cache, retries on 429/5xx,
   a cost counter, a hard per-run budget, and `--save` to keep real replies as test fixtures.
   19 offline tests; budget, retry, cache and contributor guards each broken on purpose to prove the tests catch it.
+- `meta_api` hardening: `use_cache=False` for honest benchmark costs, `reset()` / `cost_so_far()` per run,
+  API key replaced by *** in every raised error (and its causes), 60 s request timeout. 24 offline tests.

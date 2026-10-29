@@ -10,6 +10,7 @@ load_dotenv(ROOT / ".env")
 BASE_URL = "https://api.meta.ai/v1"
 SAM_MODEL = "sam-3.1"
 SPARK_MODEL = "muse-spark-1.3"
+REQUEST_TIMEOUT_S = 60  # give up on a single request after this long
 
 # Prices in US dollars, from Meta's pricing page (docs/needs.md A4).
 SAM_PER_IMAGE = 2.50 / 1000
