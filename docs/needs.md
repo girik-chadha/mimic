@@ -61,6 +61,20 @@ From Meta's pricing page (read 27 Oct) and third-party docs as marked.
 - `client.responses.create(model="muse-spark-1.3", input="...")` returned bare JSON when told "Reply with ONLY a JSON list". It parsed first time.
 - **Lesson:** asked to plan moves, it returned one "insert" move that a real arm cannot do. Prompts must define what an action is allowed to be, and exact planning stays in Python.
 
+### A5b. Muse Spark 1.3 sees images (B1 and B10, settled 29 Oct)
+
+- **B1: yes.** Spark accepts `{"type": "input_image", "image_url": "data:image/jpeg;base64,..."}` in the same
+  content list as SAM. On `desk.jpeg`, with `brain.NAME_OBJECTS_PROMPT`, it replied with bare JSON:
+  `["blue lighter", "green lighter", "black box"]`. Saved as `spark_name_objects_desk.txt`.
+- **B10: yes, `resp.usage` exists** with `input_tokens` and `output_tokens`. That call: 1,661 in, 704 out, $0.005068.
+  704 output tokens for a 45-character answer: hidden reasoning tokens are billed, so never estimate Spark
+  output cost from the visible text.
+- **Spark's names are not always SAM's names.** SAM found exactly 1 box for "blue lighter" and "green lighter",
+  but 0 for "black box" (the object SAM finds as "black rectangle"). Saved as `sam_photo_desk_black_box.txt`.
+- **Renaming works.** `brain.name_objects` sends any name that does not give exactly 1 SAM box back to Spark
+  with the match counts (up to 2 retries). On `desk.jpeg`, retry 1 turned "black box" into "black rectangle"
+  (1 box). That retry cost $0.0091 (1,692 tokens in, 1,644 out). Saved as `spark_rename_desk_round1.txt`.
+
 ### A6. The laptop
 
 - Microsoft Surface Laptop 7, Snapdragon X Plus (ARM64), Windows 11 Home, 16 GB RAM.
@@ -90,7 +104,6 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 
 | # | Question | Test that settles it | When |
 |---|---|---|---|
-| B1 | Does Muse Spark 1.3 accept an image (`input_image`, same format as SAM)? | One call: demo photo + "list the objects as short colour + object names, JSON". | Thu, first task after the API module |
 | B2 | Which camera can our code trigger? iPhone-as-webcam on Windows needs a third-party app. A cheap USB webcam is the reliable route. | `capture.py` saves a sharp, overhead photo in under 3 s, ten times in a row. | Decide Thu |
 | B3 | How does WSL talk to the arm? Option 1: ESP32 joins the phone hotspot and runs a tiny HTTP server; WSL sends requests. Option 2: a small Windows-side bridge over USB serial. | Option 1 first: ESP32 prints its IP, `curl` from WSL gets a reply. If the hotspot blocks it, Option 2. | Fri |
 | B4 | Arm pins, joint names, joint ranges, link lengths, gripper opening width. | Read the KEYESTUDIO PDF, measure with a ruler, write the numbers here. | Fri |
@@ -99,7 +112,6 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
-| B10 | Does Meta's API return token counts (`resp.usage.input_tokens` / `output_tokens`) for Spark? Until settled, `meta_api.spark_cost` estimates 4 characters per token plus 1,000 tokens per image. | Check `resp.usage` on the first real Spark call (item 4) and note it here. | Thu |
 
 ---
 

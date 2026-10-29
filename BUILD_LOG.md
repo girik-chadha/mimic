@@ -22,3 +22,7 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - `sam.py`: `Box` (with match/track id), `parse_boxes`, `parse_tracks`, `find`. Saved 5 real SAM photo replies
   as fixtures ($0.0125); found photo replies share the video format and "no match" is an empty reply.
   14 offline tests, including truncated replies; boxes checked by eye on desk.jpeg.
+- B1 settled: Muse Spark 1.3 accepts images. B10 settled: replies include token counts.
+- `brain.name_objects`: Spark names the objects, SAM checks each name finds exactly 1 object, and failed names
+  go back to Spark with their match counts (max 2 retries, $0.03 retry cap). On desk.jpeg Spark said
+  "black box" (SAM: 0 matches), then "black rectangle" (1 match) on the first retry. 23 offline tests.
