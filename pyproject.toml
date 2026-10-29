@@ -18,8 +18,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest"]
 
-[tool.setuptools]
-packages = ["mimic"]
+[tool.setuptools.packages.find]
+include = ["mimic*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
