@@ -19,7 +19,7 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 
 - [x] 1. Tidy the repo into the layout in plan.md section 1 (29 Oct)
 - [x] 2. `config.py` + `meta_api.py` (cache, cost counter, budget guard) (29 Oct)
-- [ ] 3. `sam.py` with unit tests on saved real replies
+- [x] 3. `sam.py` with unit tests on saved real replies (29 Oct)
 - [ ] 4. Settle B1: can Spark see images? `brain.name_objects()`
 - [ ] 5. `plan.py` with unit tests
 - [ ] 6. `calib.py` with unit tests

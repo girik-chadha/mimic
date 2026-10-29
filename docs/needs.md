@@ -29,6 +29,15 @@ client.responses.create(model="sam-3.1", input=[{"role": "user", "content": [
 - The mask is a long encoded outline. We ignore it for now; the box centre is enough to locate a block. Meta's `meta-sam-parser` package can decode masks if we ever need outlines.
 - **One short name per object works.** On a photo of a blue lighter, a green lighter and a black rectangle, the prompts `"blue lighter"`, `"green lighter"`, `"black rectangle"` each returned exactly 1 match at the right place. See `desk.jpeg`.
 - A generic prompt (`"building"`) returns every match in the image.
+- **Reply format, checked on 5 saved replies (29 Oct), corrects the line above about `,N`:** a photo reply has
+  the same shape as a video reply. It starts with `<0f>` (frame 0); each match is its id followed by the box and
+  mask, the first with no comma: `<0f>0<|box;...|><|mask;...|>,1<|box;...|><|mask;...|>,2<|box;...`.
+  The example box above (`x1=86;y1=749`) is match 1 of the "building" reply on `test.jpg`, not the lighter.
+- **No match is an empty reply** (0 characters): `"red cup"` on `desk.jpeg` (29 Oct).
+- **Mask text uses 86 characters and never `<`, `>`, `|`, `,`, `;`, `"` or `\`** (all 6 saved replies, 323 masks,
+  29 Oct). `sam.py` relies on there being no `<` or `>`; `tests/unit/test_sam.py` re-checks every saved reply.
+- `desk.jpeg` is 1280x960. Boxes on it (29 Oct): blue lighter (255,363)-(320,583), green lighter
+  (602,374)-(677,591), black rectangle (848,414)-(969,579). Fixtures in `tests/fixtures/meta_responses/`.
 
 ### A3. SAM 3.1 on a video (tested 28 Oct)
 

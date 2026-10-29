@@ -19,3 +19,6 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   19 offline tests; budget, retry, cache and contributor guards each broken on purpose to prove the tests catch it.
 - `meta_api` hardening: `use_cache=False` for honest benchmark costs, `reset()` / `cost_so_far()` per run,
   API key replaced by *** in every raised error (and its causes), 60 s request timeout. 24 offline tests.
+- `sam.py`: `Box` (with match/track id), `parse_boxes`, `parse_tracks`, `find`. Saved 5 real SAM photo replies
+  as fixtures ($0.0125); found photo replies share the video format and "no match" is an empty reply.
+  14 offline tests, including truncated replies; boxes checked by eye on desk.jpeg.

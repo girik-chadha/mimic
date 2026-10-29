@@ -59,3 +59,20 @@ own spend limit only notifies and does not stop charges."
 Two sentences: "Each run starts its bill at zero and records the true total, and the benchmark can switch the
 cache off so its numbers are real. If anything goes wrong, the error text is scrubbed of our API key before
 it can appear on screen."
+
+## 29 Oct, item 3: sam.py, reading SAM's answers
+
+- **What:** SAM replies with text like `<0f>0<|box;x1=255;y1=363;x2=320;y2=583;w=1280;h=960|><|mask;...|>`.
+  `parse_boxes` turns that into `Box` objects (corners, image size, match id, and a `centre`).
+  `parse_tracks` does the same for videos, grouping boxes by track id, frame by frame.
+  `find(photo, "blue block")` sends the photo through `meta_api` and returns the boxes.
+- **What we learned from real replies:** photos and videos use the same format (a photo is frame 0);
+  extra matches are numbered `,1`, `,2`; no match is an empty reply.
+- **Why it is safe:** the outline (mask) text is long and random-looking, so first we checked that it never
+  contains `<` or `>`. Then we cut masks out before reading boxes, so mask text can never be mistaken for
+  a box. A reply cut off half way still gives every box that arrived complete, instead of crashing.
+- **Tests** run on real replies saved to disk, and the boxes were drawn on the photo and checked by eye.
+
+Two sentences: "SAM answers in a compact text format, and `sam.py` turns that into boxes with a centre point,
+which is where the robot will aim. We tested the parser on real SAM replies saved to disk, including
+broken and empty ones, so it is checked against what Meta actually sends."
