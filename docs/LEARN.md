@@ -26,3 +26,24 @@ Two sentences: "SAM 3.1 is our robot's eyes: give it a photo and a word like 'bl
 Two sentences: "The repo is split into the robot's code, the commands you run, and tests in three tiers:
 free offline tests, real Meta API tests, and hardware tests. Every test that touches Meta's API uses a
 real reply saved to disk, so we can test constantly without spending credits."
+
+## 29 Oct, item 2: config.py and meta_api.py
+
+- **What:** `config.py` holds every setting in one place (model names, prices, budget, folders).
+  `meta_api.call(model, content)` is the only function in the project that talks to Meta.
+- **Cache:** every reply is saved in `.cache/`, named by a hash of the model, the prompt and the file's
+  bytes. Asking the same question twice costs nothing and works offline.
+- **Cost and budget:** each call's price is worked out from Meta's price list (photos per image, videos per
+  frame with a 50-frame minimum, Spark per token) and added up. Once the run has spent `MIMIC_BUDGET_USD`,
+  the next call is refused before it is sent. Every paid call is also written to `.cache/spend_log.jsonl`.
+- **Retries:** if Meta says "busy" (429) or has a server error (5xx), wait 1, 2, then 4 seconds and try
+  again. Mistakes on our side (400) fail at once, because retrying would not help.
+- **Safety:** `-contributor` models and unknown models are refused before anything is sent.
+- **Why this way:** one door means the cache, the budget and the safety rules cannot be skipped by
+  accident. Meta's own spend limit only sends an email, so the hard stop has to be in our code.
+- **Tests:** a fake client plays Meta's part, so the tests are free and instant. I broke each guard on
+  purpose and checked that a test failed; one test was too loose and got tightened.
+
+Two sentences: "Every call to Meta goes through one function that caches answers, retries when the server
+is busy, and keeps a running bill. If a run hits its budget the next request is never sent, because Meta's
+own spend limit only notifies and does not stop charges."

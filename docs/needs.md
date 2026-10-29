@@ -90,6 +90,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
+| B10 | Does Meta's API return token counts (`resp.usage.input_tokens` / `output_tokens`) for Spark? Until settled, `meta_api.spark_cost` estimates 4 characters per token plus 1,000 tokens per image. | Check `resp.usage` on the first real Spark call (item 4) and note it here. | Thu |
 
 ---
 

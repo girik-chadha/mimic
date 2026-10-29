@@ -18,7 +18,7 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 ## Thu 29 Oct: Phase 1, see and plan (Claude Code + you)
 
 - [x] 1. Tidy the repo into the layout in plan.md section 1 (29 Oct)
-- [ ] 2. `config.py` + `meta_api.py` (cache, cost counter, budget guard)
+- [x] 2. `config.py` + `meta_api.py` (cache, cost counter, budget guard) (29 Oct)
 - [ ] 3. `sam.py` with unit tests on saved real replies
 - [ ] 4. Settle B1: can Spark see images? `brain.name_objects()`
 - [ ] 5. `plan.py` with unit tests
