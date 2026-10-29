@@ -26,3 +26,6 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - `brain.name_objects`: Spark names the objects, SAM checks each name finds exactly 1 object, and failed names
   go back to Spark with their match counts (max 2 retries, $0.03 retry cap). On desk.jpeg Spark said
   "black box" (SAM: 0 matches), then "black rectangle" (1 match) on the first retry. 23 offline tests.
+- `plan.py`: `plan_moves` sends the i-th target name to slot i; raises on an empty target, a missing or repeated
+  name, more names than slots, two targets under 1 cm apart, or two slots at the same point. Extra objects are
+  left alone and reported. 13 tests. Rename-prompt example changed to a neutral one ("red cup" -> "red mug").

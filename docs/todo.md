@@ -21,7 +21,7 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] 2. `config.py` + `meta_api.py` (cache, cost counter, budget guard) (29 Oct)
 - [x] 3. `sam.py` with unit tests on saved real replies (29 Oct)
 - [x] 4. Settle B1: can Spark see images? `brain.name_objects()` (29 Oct: yes; names checked by SAM, renamed by Spark if needed)
-- [ ] 5. `plan.py` with unit tests
+- [x] 5. `plan.py` with unit tests (29 Oct)
 - [ ] 6. `calib.py` with unit tests
 - [ ] 7. `scene.py`
 - [ ] 8. `scripts/plan_from_photos.py`, then **Gate 1** on two real photos
