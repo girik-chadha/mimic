@@ -9,7 +9,7 @@ def test_package_imports():
 
 
 def test_saved_video_reply_is_in_fixtures():
-    reply = ROOT / "tests/fixtures/meta_responses/sam_video_317f.txt"
+    reply = ROOT / "tests/fixtures/meta_responses/sam_video_green_lighter_317f.txt"
     assert reply.exists()
 
 
