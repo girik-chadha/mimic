@@ -84,6 +84,7 @@ def load_layout(path=config.LAYOUT_PATH) -> Layout
     # height correction (off by default: camera height, point under the lens, point height)
 def find_stickers(image_path: str, names: list[str]) -> list[tuple[float, float]]  # px centres
 def calibrate(image_path: str, layout: Layout) -> Calib                             # find_stickers + fit
+    # refuses while layout.json has "placeholder": true
 def read_positions(image_path: str, names: list[str], calib, layout) -> dict[str, tuple[float, float]]  # cm
 def read_target(image_path: str, names: list[str], calib, layout) -> list[str]     # names in slot order
     # every name must give exactly 1 SAM box; off the sheet, not in a slot, or two in one slot -> SceneError

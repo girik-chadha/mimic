@@ -24,7 +24,7 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] 5. `plan.py` with unit tests (29 Oct)
 - [x] 6. `calib.py` with unit tests (29 Oct)
 - [x] 7. `scene.py` (29 Oct)
-- [ ] 8. `scripts/plan_from_photos.py`, then **Gate 1** on two real photos
+- [x] 8. `scripts/plan_from_photos.py` (29 Oct); **Gate 1** on two real photos still to do (waits for photos + spend approval)
 
 ### Thu, physical jobs (you, in between)
 

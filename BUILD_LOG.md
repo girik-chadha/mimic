@@ -35,3 +35,7 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - `scene.py` + `calib/layout.json`: find stickers and calibrate from one photo; object positions in cm (exactly 1
   SAM box each, must be on the sheet); demo order by nearest slot (tolerance <= half the slot spacing); optional
   block-height correction, off by default. 18 tests with a fake SAM. plan.md 2.1 / 2.3 updated.
+- `scripts/plan_from_photos.py`: demo + mess photo in; each photo calibrated on its own (check-sticker error
+  printed, > 0.5 cm stops), loud warning if the two maps disagree by > 0.5 cm (camera bumped); Spark names,
+  slot order, positions, moves; annotated photos + plan.json in runs/. $0.15 cap per run through the budget
+  guard; refuses while layout.json is a placeholder. 8 offline end-to-end tests. Gate 1 waits for real photos.
