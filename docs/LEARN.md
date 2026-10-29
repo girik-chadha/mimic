@@ -111,3 +111,45 @@ how 'black box' became 'black rectangle' in our test."
 Two sentences: "The planner is a few lines of plain Python: the first object in your demo goes to slot 1,
 the second to slot 2, and so on, and slots start empty so moves never collide. Anything suspicious, like two
 names pointing at the same spot, stops the run with a clear message instead of moving the arm."
+
+## 29 Oct, item 6: calib.py, from pixels to centimetres
+
+### What a homography is (plain English)
+
+The camera looks at the A3 sheet from above, but never perfectly straight down. So the sheet appears as a
+slightly lopsided four-sided shape in the photo: the far edge looks shorter than the near edge, and a 1 cm
+step is a different number of pixels in different places. Pixels are not centimetres.
+
+A **homography** is a 3x3 table of numbers that undoes this, for anything lying flat on the sheet. To use it,
+take a pixel (x, y), write it as three numbers [x, y, 1], multiply by the table, and you get three numbers back.
+**Divide the first two by the third**, and the result is the position in centimetres. That last division is the
+"perspective" part: it is what makes the far side of the sheet get stretched back to its real size.
+The reverse (centimetres to pixels) uses the inverse table.
+
+### Why 4 points are enough
+
+The 3x3 table has 9 numbers, but multiplying all of them by the same amount gives the same answer (it cancels
+out in the division), so only 8 of them really matter. Each sticker we can see gives 2 facts: where it is
+across (x) and where it is up (y). 4 stickers x 2 facts = 8 facts, which is exactly enough to work out the 8
+unknowns. The one condition: no 3 of the 4 stickers may be in a straight line, or the facts repeat each other.
+It only works for things lying on the flat sheet; something sticking up (like the top of a block) sits
+slightly off the map.
+
+### Why a 5th "check" sticker, kept out of the fit
+
+With exactly 4 stickers the map always passes perfectly through all 4, so a sticker measured in the wrong
+place gives a wrong map that *looks* perfect. So there is a 5th sticker that is not used to build the map: we
+ask the map where the 5th sticker should be and compare with the ruler. More than 0.5 cm off, and the
+calibration is refused with the numbers in the message.
+We tested two other ideas first and both were worse: fitting all 5 together let the map bend to hide a 2 cm
+mistake (it showed as 0.13 cm), and checking each sticker against the other four was so sensitive that 1 pixel
+of noise looked like several cm. The 5th sticker must not be in line with two others (the exact centre is on a
+diagonal, which broke one of our tests).
+
+- **Tests** use a made-up tilted camera: a tilted A3 sheet measures 42 x 29.7 cm, a 10 cm square measures
+  10 cm on every side, and a check sticker written down 2 cm wrong is refused with the numbers.
+
+Two sentences: "The camera sees the table at an angle, so we use a homography: a 3x3 table of numbers, worked
+out from 4 stickers at known positions, that turns any pixel into centimetres on the table. A fifth sticker
+that the map never saw checks it, and if the map puts that sticker more than half a centimetre off, Mimic
+refuses to run."
