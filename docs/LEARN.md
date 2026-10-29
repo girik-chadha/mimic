@@ -47,3 +47,15 @@ real reply saved to disk, so we can test constantly without spending credits."
 Two sentences: "Every call to Meta goes through one function that caches answers, retries when the server
 is busy, and keeps a running bill. If a run hits its budget the next request is never sent, because Meta's
 own spend limit only notifies and does not stop charges."
+
+### 29 Oct, item 2 follow-up: making meta_api safe to show and honest to measure
+
+- `use_cache=False` makes a call skip the cache completely, so the benchmark measures real cost and time.
+- `reset()` sets the bill back to $0 at the start of each run; `cost_so_far()` is what goes in `summary.json`.
+- Any error is cleaned before it is raised: the API key becomes `***`, also in the error that caused it,
+  so a traceback on screen during the demo can never leak the key.
+- Every request gives up after 60 seconds, so a stuck call cannot freeze the robot.
+
+Two sentences: "Each run starts its bill at zero and records the true total, and the benchmark can switch the
+cache off so its numbers are real. If anything goes wrong, the error text is scrubbed of our API key before
+it can appear on screen."

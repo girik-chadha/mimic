@@ -4,13 +4,15 @@ call(model, content) sends a request and returns the reply text. On the way it:
 - answers from the disk cache if we asked exactly this before (free, works offline),
 - refuses to start a call once the run's budget is used up,
 - retries when the server is busy (429) or broken (5xx),
-- adds the cost of the call to the counter and to .cache/spend_log.jsonl.
+- adds the cost of the call to the counter and to .cache/spend_log.jsonl,
+- replaces the API key with *** in any error before raising it.
 """
 import argparse
 import base64
 import hashlib
 import json
 import mimetypes
+import os
 import tempfile
 import time
 
@@ -49,11 +51,13 @@ def video_url(path: str) -> str:
 
 # ---------- money ----------
 
-def spent() -> float:
+def cost_so_far() -> float:
+    """Dollars spent on paid calls since the last reset() (cache hits are free)."""
     return _spent_usd
 
 
-def reset_spend() -> None:
+def reset() -> None:
+    """Start a new run from $0. loop.run() calls this first."""
     global _spent_usd
     _spent_usd = 0.0
 
@@ -124,7 +128,8 @@ def _get_client():
     global _client
     if _client is None:
         # max_retries=0: our own retry loop below is the only one, so it is visible and tested.
-        _client = openai.OpenAI(api_key=config.api_key(), base_url=config.BASE_URL, max_retries=0)
+        _client = openai.OpenAI(api_key=config.api_key(), base_url=config.BASE_URL,
+                                timeout=config.REQUEST_TIMEOUT_S, max_retries=0)
     return _client
 
 
@@ -136,6 +141,20 @@ def _worth_retrying(error: Exception) -> bool:
     return False
 
 
+def _scrub(error: Exception) -> Exception:
+    """Replace the API key with *** in the error's text, and in any error that caused it."""
+    key = os.environ.get("META_API_KEY")
+    current = error
+    for _ in range(10):  # follow the "caused by" chain, at most 10 deep
+        if current is None or not key:
+            break
+        current.args = tuple(a.replace(key, "***") if isinstance(a, str) else a for a in current.args)
+        if isinstance(getattr(current, "message", None), str):
+            current.message = current.message.replace(key, "***")
+        current = current.__cause__ or current.__context__
+    return error
+
+
 def _send(model: str, content):
     request = content if isinstance(content, str) else [{"role": "user", "content": content}]
     for attempt in range(len(RETRY_WAITS_S) + 1):
@@ -143,12 +162,15 @@ def _send(model: str, content):
             return _get_client().responses.create(model=model, input=request)
         except Exception as error:
             if attempt == len(RETRY_WAITS_S) or not _worth_retrying(error):
-                raise
+                raise _scrub(error)
             time.sleep(RETRY_WAITS_S[attempt])
 
 
-def call(model: str, content, save_as: str | None = None) -> str:
-    """Send content (a text string, or a list of input_text / input_image / input_video parts)."""
+def call(model: str, content, save_as: str | None = None, use_cache: bool = True) -> str:
+    """Send content (a text string, or a list of input_text / input_image / input_video parts).
+
+    use_cache=False neither reads nor writes the cache, so the benchmark sees real costs and times.
+    """
     global _spent_usd
     if model.endswith("-contributor"):
         raise ValueError("Never use -contributor models: Meta may train on what we send.")
@@ -156,7 +178,7 @@ def call(model: str, content, save_as: str | None = None) -> str:
         raise ValueError(f"Unknown model {model!r}: add it and its price to config.py first.")
 
     cache_file = config.CACHE_DIR / f"{_cache_key(model, content)}.json"
-    if cache_file.exists():
+    if use_cache and cache_file.exists():
         text = json.loads(cache_file.read_text())["text"]
     else:
         if _spent_usd >= config.BUDGET_USD:
@@ -169,8 +191,9 @@ def call(model: str, content, save_as: str | None = None) -> str:
             cost, estimated = spark_cost(content, text, getattr(resp, "usage", None))
         _spent_usd += cost
         _log_spend(model, cost, estimated)
-        config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_file.write_text(json.dumps({"model": model, "text": text, "cost_usd": cost}))
+        if use_cache:
+            config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            cache_file.write_text(json.dumps({"model": model, "text": text, "cost_usd": cost}))
 
     if save_as:
         config.RESPONSES_DIR.mkdir(parents=True, exist_ok=True)
@@ -199,7 +222,7 @@ def main():
 
     text = call(args.model, content, save_as=args.save)
     print(text if len(text) <= 1500 else text[:1500] + f"\n... [{len(text)} characters in total]")
-    print(f"\ncost this run: ${spent():.4f}")
+    print(f"\ncost this run: ${cost_so_far():.4f}")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 """meta_api tests. A fake client stands in for Meta, so nothing here touches the network."""
 import base64
+import traceback
 from types import SimpleNamespace
 
 import cv2
@@ -33,9 +34,9 @@ def reply(text, usage=None):
     return SimpleNamespace(output_text=text, usage=usage)
 
 
-def http_error(error_class, status):
+def http_error(error_class, status, message="fake"):
     request = httpx2.Request("POST", "https://api.meta.ai/v1/responses")
-    return error_class("fake", response=httpx2.Response(status, request=request), body=None)
+    return error_class(message, response=httpx2.Response(status, request=request), body=None)
 
 
 def photo_content(prompt="blue lighter"):
@@ -64,7 +65,7 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setattr(meta_api, "_client", None)
     monkeypatch.setattr(meta_api.openai, "OpenAI", no_network)
     monkeypatch.setattr(meta_api.time, "sleep", lambda seconds: None)
-    meta_api.reset_spend()
+    meta_api.reset()
 
 
 def use(monkeypatch, client):
@@ -93,7 +94,7 @@ def test_second_identical_call_comes_from_cache(monkeypatch):
     second = meta_api.call("sam-3.1", photo_content())
     assert first == second == "<|box;...|>"
     assert client.calls == 1
-    assert meta_api.spent() == pytest.approx(0.0025)  # the cached answer was free
+    assert meta_api.cost_so_far() == pytest.approx(0.0025)  # the cached answer was free
 
 
 def test_different_prompt_is_not_a_cache_hit(monkeypatch):
@@ -114,12 +115,21 @@ def test_cache_holds_no_key_and_no_photo(monkeypatch):
         assert content[1]["image_url"][30:100] not in stored
 
 
+def test_use_cache_false_skips_reading_and_writing(monkeypatch):
+    client = use(monkeypatch, FakeClient(reply("a"), reply("b")))
+    assert meta_api.call("sam-3.1", photo_content(), use_cache=False) == "a"
+    assert meta_api.call("sam-3.1", photo_content(), use_cache=False) == "b"
+    assert client.calls == 2
+    assert meta_api.cost_so_far() == pytest.approx(0.005)  # both calls really paid for
+    assert not list(config.CACHE_DIR.glob("*.json"))      # nothing written to the cache
+
+
 # ---------- cost ----------
 
 def test_photo_costs_quarter_of_a_cent(monkeypatch):
     use(monkeypatch, FakeClient(reply("ok")))
     meta_api.call("sam-3.1", photo_content())
-    assert meta_api.spent() == pytest.approx(0.0025)
+    assert meta_api.cost_so_far() == pytest.approx(0.0025)
 
 
 def test_short_video_is_billed_as_50_frames(tmp_path):
@@ -136,13 +146,24 @@ def test_spark_cost_uses_token_counts_when_given(monkeypatch):
     usage = SimpleNamespace(input_tokens=1000, output_tokens=200)
     use(monkeypatch, FakeClient(reply('["red block"]', usage)))
     meta_api.call("muse-spark-1.3", "name the objects")
-    assert meta_api.spent() == pytest.approx(1000 * 1.25e-6 + 200 * 4.25e-6)
+    assert meta_api.cost_so_far() == pytest.approx(1000 * 1.25e-6 + 200 * 4.25e-6)
 
 
 def test_spark_cost_is_estimated_without_token_counts():
     cost, estimated = meta_api.spark_cost("x" * 400, "y" * 40, usage=None)
     assert estimated
     assert cost == pytest.approx(100 * 1.25e-6 + 10 * 4.25e-6)
+
+
+def test_reset_starts_a_new_run_from_zero(monkeypatch):
+    use(monkeypatch, FakeClient(reply("a"), reply("b"), reply("c")))
+    meta_api.call("sam-3.1", photo_content("one"))
+    meta_api.call("sam-3.1", photo_content("two"))
+    assert meta_api.cost_so_far() == pytest.approx(0.005)
+    meta_api.reset()
+    assert meta_api.cost_so_far() == 0
+    meta_api.call("sam-3.1", photo_content("three"))
+    assert meta_api.cost_so_far() == pytest.approx(0.0025)
 
 
 # ---------- budget guard ----------
@@ -182,7 +203,7 @@ def test_gives_up_after_three_retries(monkeypatch):
     with pytest.raises(openai.RateLimitError):
         meta_api.call("sam-3.1", photo_content())
     assert client.calls == 4
-    assert meta_api.spent() == 0  # failed calls cost nothing
+    assert meta_api.cost_so_far() == 0  # failed calls cost nothing
 
 
 def test_bad_request_is_not_retried(monkeypatch):
@@ -205,6 +226,47 @@ def test_unknown_model_is_refused(monkeypatch):
     use(monkeypatch, FakeClient())
     with pytest.raises(ValueError, match="Unknown model"):
         meta_api.call("muse-image-1.0", "hello")
+
+
+# ---------- the API key never shows up in an error ----------
+
+KEY = "test-key-abc123-never-show-me"
+
+
+def test_api_key_is_scrubbed_from_errors(monkeypatch):
+    monkeypatch.setenv("META_API_KEY", KEY)
+    use(monkeypatch, FakeClient(http_error(openai.AuthenticationError, 401,
+                                           f"Incorrect API key provided: {KEY}")))
+    with pytest.raises(openai.AuthenticationError) as caught:
+        meta_api.call("sam-3.1", photo_content())
+    shown = "".join(traceback.format_exception(caught.value))
+    assert KEY not in shown
+    assert "Incorrect API key provided: ***" in shown
+
+
+def test_api_key_is_scrubbed_from_the_error_that_caused_it(monkeypatch):
+    monkeypatch.setenv("META_API_KEY", KEY)
+    try:
+        raise ValueError(f"header was Bearer {KEY}")
+    except ValueError as inner:
+        outer = RuntimeError("request failed")
+        outer.__cause__ = inner
+    use(monkeypatch, FakeClient(outer))
+    with pytest.raises(RuntimeError) as caught:
+        meta_api.call("sam-3.1", photo_content())
+    shown = "".join(traceback.format_exception(caught.value))
+    assert KEY not in shown
+    assert "Bearer ***" in shown
+
+
+def test_client_has_60_second_timeout_and_no_sdk_retries(monkeypatch):
+    monkeypatch.setenv("META_API_KEY", KEY)
+    settings = {}
+    monkeypatch.setattr(meta_api.openai, "OpenAI", lambda **kwargs: settings.update(kwargs))
+    meta_api._get_client()
+    assert settings["timeout"] == 60
+    assert settings["max_retries"] == 0
+    assert settings["base_url"] == "https://api.meta.ai/v1"
 
 
 # ---------- saving real replies as fixtures ----------
