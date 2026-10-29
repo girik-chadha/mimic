@@ -1,0 +1,124 @@
+# Mimic: verified facts, open questions, and setup
+
+Everything in Part A was tested on Wed 28 Oct 2026 with real API calls from this laptop, or read from a source named next to it. Items in Part B are **unverified** and each has a test that settles it. When something in Part B is settled, move it to Part A with the date and the result.
+
+---
+
+## Part A: Verified
+
+### A1. Meta Model API basics (tested 28 Oct)
+
+- Base URL `https://api.meta.ai/v1`, called with the OpenAI Python SDK: `OpenAI(api_key=..., base_url="https://api.meta.ai/v1")`, then `client.responses.create(model=..., input=...)`. The reply text is `resp.output_text`.
+- `client.models.list()` works. Models visible to our key:
+  `muse-wonder-1.0`, `sam-3.1`, `muse-spark-1.3`, `muse-spark-1.2`, `muse-spark-1.1`, `muse-spark-1.3-contributor`, `muse-spark-1.2-contributor`, `muse-voice-transcribe-1.0`, `muse-image-1.0`.
+- **Never use the `-contributor` models.** Contributor mode lets Meta train on what we send.
+- The account runs on $150 of free credits. The billing page says that while free credits are in use, content may be used for product improvement. So: keep faces, people and anything private out of every photo and video we send.
+
+### A2. SAM 3.1 on a photo (tested 28 Oct)
+
+Request:
+
+```python
+client.responses.create(model="sam-3.1", input=[{"role": "user", "content": [
+    {"type": "input_text", "text": "blue lighter"},
+    {"type": "input_image", "image_url": "data:image/jpeg;base64,..."},
+]}])
+```
+
+- One match per object looks like `<|box;x1=86;y1=749;x2=225;y2=823;w=1920;h=1080|>` followed by `<|mask;...|>`. Box values are pixels; `w`, `h` are the image size. Matches are separated by `,N` where N is the match id.
+- The mask is a long encoded outline. We ignore it for now; the box centre is enough to locate a block. Meta's `meta-sam-parser` package can decode masks if we ever need outlines.
+- **One short name per object works.** On a photo of a blue lighter, a green lighter and a black rectangle, the prompts `"blue lighter"`, `"green lighter"`, `"black rectangle"` each returned exactly 1 match at the right place. See `desk.jpeg`.
+- A generic prompt (`"building"`) returns every match in the image.
+
+### A3. SAM 3.1 on a video (tested 28 Oct)
+
+Request: same as A2 but `{"type": "input_video", "video_url": "data:video/mp4;base64,..."}`. A 3.2 MB, 317-frame, 1280x720 MP4 sent as a data URL worked.
+
+- Output per frame: `<12f>0<|box;...|><|mask;...|>`. `<12f>` = frame 12. The number before `<|box` is the **track id**, stable across frames.
+- One prompt per object again: `"blue bottle"`, `"black rectangle"`, `"green lighter"` each gave 1 track seen in 315-317 of 317 frames. Camera shake moved the centres by 11-21 px.
+- **Not tested yet:** whether a track keeps its id when the object is moved or covered by a hand. Only matters if we use video (stacking). Photos are enough for the row task.
+
+### A4. Pricing and limits
+
+From Meta's pricing page (read 27 Oct) and third-party docs as marked.
+
+- SAM 3.1: $2.50 per 1,000 images; $0.20 per 1,000 video frames, minimum 50 frames billed per video request. So one photo costs $0.0025 and our 317-frame clip about $0.06.
+- Muse Spark 1.3 standard: $1.25 per 1M input tokens, $4.25 per 1M output tokens.
+- Hosted SAM: up to 15,000 frames and 16 tracked objects per frame (third-party: LearnOpenCV). Text prompts only on the hosted API (third-party: KuCoin news).
+- The spend-limit setting only sends a notification. It does not stop charges. Our code must enforce its own budget.
+
+### A5. Muse Spark 1.3, text in, JSON out (tested 28 Oct)
+
+- `client.responses.create(model="muse-spark-1.3", input="...")` returned bare JSON when told "Reply with ONLY a JSON list". It parsed first time.
+- **Lesson:** asked to plan moves, it returned one "insert" move that a real arm cannot do. Prompts must define what an action is allowed to be, and exact planning stays in Python.
+
+### A6. The laptop
+
+- Microsoft Surface Laptop 7, Snapdragon X Plus (ARM64), Windows 11 Home, 16 GB RAM.
+- Development happens in WSL2 Ubuntu (ARM64) in `~/mimic`, Python venv `.venv`.
+- USB devices and webcams are **not** visible inside WSL by default. Anything that talks to USB hardware runs from Windows, or goes over the network.
+
+### A7. The arm (from the listing and customer reviews, 28 Oct)
+
+KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected Fri 30 Oct.
+
+- ESP32 board, programmable with the Arduino toolchain: board "ESP32 Dev Module" (`esp32:esp32:esp32`) and the `ESP32Servo` library (a French reviewer, Windows, ESP32Servo 1.2.1).
+- **USB does not power the arm.** It needs 2 lithium cells, 6 AA, or a 9 V battery. We bought 8 rechargeable NiMH AA (1.2 V each, 7.2 V for 6).
+- A reviewer's gripper servo overheated on 9 V, ran cooler on 6 V, and stopped overheating once a cable stopped pulling on it.
+- Uploading worked on Windows and failed on Linux for one reviewer. It needs the Silicon Labs CP210x USB driver.
+- If an upload says "Failed to connect", hold the BOOT button during the upload.
+- Assembly has very small parts and takes an evening. One review says a part was missing.
+- Wi-Fi and Bluetooth are on the board. The listing says it can be controlled from a computer on the same Wi-Fi.
+
+### A8. Repo
+
+- Public: https://github.com/girik-chadha/mimic, first commit 28 Oct 2026.
+- `.env` (holds `META_API_KEY`) is gitignored and has never been committed.
+
+---
+
+## Part B: Open questions (settle each with its test)
+
+| # | Question | Test that settles it | When |
+|---|---|---|---|
+| B1 | Does Muse Spark 1.3 accept an image (`input_image`, same format as SAM)? | One call: demo photo + "list the objects as short colour + object names, JSON". | Thu, first task after the API module |
+| B2 | Which camera can our code trigger? iPhone-as-webcam on Windows needs a third-party app. A cheap USB webcam is the reliable route. | `capture.py` saves a sharp, overhead photo in under 3 s, ten times in a row. | Decide Thu |
+| B3 | How does WSL talk to the arm? Option 1: ESP32 joins the phone hotspot and runs a tiny HTTP server; WSL sends requests. Option 2: a small Windows-side bridge over USB serial. | Option 1 first: ESP32 prints its IP, `curl` from WSL gets a reply. If the hotspot blocks it, Option 2. | Fri |
+| B4 | Arm pins, joint names, joint ranges, link lengths, gripper opening width. | Read the KEYESTUDIO PDF, measure with a ruler, write the numbers here. | Fri |
+| B5 | Does `arduino-cli` (or Arduino IDE 2) and the CP210x driver run on Windows ARM64? | Install Thu evening; `arduino-cli board list` shows a COM port when the arm is plugged in. | Thu/Fri |
+| B6 | How precise is the arm at our table distances? | Send the same pose 10 times; the camera measures the spread of the gripper tip in mm. | Sat |
+| B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
+| B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
+| B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
+
+---
+
+## Part C: Setup
+
+### C1. Accounts and keys
+
+- Meta Model API key in `~/mimic/.env` as `META_API_KEY=...` (done).
+- GitHub `girik-chadha`, logged in with `gh` (done).
+- Baseten account and credits (Mon, only for Spark Open).
+
+### C2. Environment variables (`.env`, never committed)
+
+```
+META_API_KEY=...
+MIMIC_BUDGET_USD=1.00        # hard cap per run, enforced in code
+MIMIC_ARM_URL=http://<esp32-ip>   # once B3 is settled
+BASETEN_API_KEY=...          # Mon, optional
+```
+
+### C3. Software
+
+- WSL Python: `openai`, `python-dotenv`, `numpy`, `opencv-python-headless`, `pytest`, `requests`, later `fastapi` + `uvicorn` for the web page.
+- Windows: Arduino CLI (or Arduino IDE 2), ESP32 core (board manager URL `https://espressif.github.io/arduino-esp32/package_esp32_index.json`), `ESP32Servo` library, Silicon Labs CP210x driver, and the camera software from B2.
+
+### C4. Physical setup
+
+- White table, bright even light, no hard shadows.
+- An A3 sheet taped to the table as the work area, with 4 small coloured stickers at its corners (camera calibration) and 3-4 numbered target slots drawn on it.
+- The camera fixed directly above, 40-50 cm up, never moved during a run.
+- Blocks: solid, 2-3 cm, clearly different colours, none white or pale. Buy them after measuring the gripper opening (B4).
+- Nothing personal, no faces, in the camera's view.
