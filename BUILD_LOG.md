@@ -9,3 +9,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - Muse Spark 1.3 (muse-spark-1.3) returns parseable JSON from a text task.
 - Design decision: move order is computed in Python (exact, testable);
   Spark is used for judgement: understanding the demo and diagnosing failures.
+
+## 29 Oct 2026
+- Repo tidied into the planned layout: `mimic/` package, `scripts/spikes/` (day-2 scripts, still working),
+  `tests/` (unit / api / hw tiers + fixtures), `pyproject.toml`, `.env.example`. Saved the real 317-frame
+  SAM video reply as a test fixture.
