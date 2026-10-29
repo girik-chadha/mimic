@@ -29,3 +29,6 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - `plan.py`: `plan_moves` sends the i-th target name to slot i; raises on an empty target, a missing or repeated
   name, more names than slots, two targets under 1 cm apart, or two slots at the same point. Extra objects are
   left alone and reported. 13 tests. Rename-prompt example changed to a neutral one ("red cup" -> "red mug").
+- `calib.py`: homography from the 4 corner stickers; extra stickers are independent check points (> 0.5 cm off
+  raises `CalibrationError` with the numbers). Tested: fitting all 5 points, or leaving one out, hides or
+  amplifies errors, so the check sticker is kept out of the fit. 14 tests on a made-up tilted camera.
