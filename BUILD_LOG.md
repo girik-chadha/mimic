@@ -39,3 +39,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   printed, > 0.5 cm stops), loud warning if the two maps disagree by > 0.5 cm (camera bumped); Spark names,
   slot order, positions, moves; annotated photos + plan.json in runs/. $0.15 cap per run through the budget
   guard; refuses while layout.json is a placeholder. 8 offline end-to-end tests. Gate 1 waits for real photos.
+- Phase 2 software ahead of the arm: `firmware/mimic_arm/` (protocol J/H/?/S; clamps, eased ramps, speed limit,
+  grip relaxes after 5 s, 64-char lines, hold when idle; safety logic in `arm_logic.h`, tested with g++ in 3 builds),
+  `mimic/arm.py` (fake transport, exact command strings, Python range check), `calib/arm_limits.json` (placeholder +
+  limits_checked_by_hand: both must be right before a real move), `scripts/arm_jog.py` (dry run). A test keeps the
+  firmware and JSON limits identical. The .ino is not compiled for the ESP32 and nothing was uploaded.

@@ -40,8 +40,9 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] Assemble the arm; centre the servos during assembly
 - [ ] Measure pins, joint ranges, link lengths, gripper opening; write them into needs.md B4
 - [ ] Buy blocks that fit the gripper with ~1 cm to spare (solid, clearly different colours, not white)
-- [ ] Firmware with the command protocol over USB serial
-- [ ] Settle B3 (Wi-Fi hotspot vs Windows bridge), then `arm.py` + `arm_jog.py`
+- [ ] Firmware with the command protocol over USB serial (code + g++ logic tests done 29 Oct; not compiled for the ESP32, not uploaded)
+- [ ] Settle B3 (Wi-Fi hotspot vs Windows bridge), then the real transport for `arm.py` + `arm_jog.py` (both done with a fake transport, 29 Oct)
+- [ ] Fill `calib/arm_limits.json` **and** `firmware/mimic_arm/arm_logic.h` with conservative real numbers, jog gently, then set placeholder false / checked by hand true
 - [ ] `camera.py`, camera mounted; **Gate 2**
 
 ## Sat 31 Oct: Phase 3, aim and one pick
