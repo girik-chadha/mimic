@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mimic"
+version = "0.1.0"
+description = "Show a robot once: it rebuilds your arrangement and checks every move with a camera."
+requires-python = ">=3.11"
+dependencies = [
+    "openai",
+    "python-dotenv",
+    "numpy",
+    "opencv-python-headless",
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools]
+packages = ["mimic"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "api: calls the real Meta API (costs money, needs network)",
+    "hw: needs the arm or the camera",
+]
+# Plain `pytest` runs unit tests only. Use `pytest -m api` or `pytest -m hw` on purpose.
+addopts = "-m 'not api and not hw'"

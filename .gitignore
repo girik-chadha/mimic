@@ -1,5 +1,11 @@
 .env
 .venv/
 __pycache__/
-raw_response.txt
+*.egg-info/
+.pytest_cache/
 *.mp4
+# spike output (the saved copy lives in tests/fixtures/meta_responses/)
+raw_response.txt
+# run logs and the API response cache
+runs/
+.cache/
