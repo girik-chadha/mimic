@@ -14,3 +14,6 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - Repo tidied into the planned layout: `mimic/` package, `scripts/spikes/` (day-2 scripts, still working),
   `tests/` (unit / api / hw tiers + fixtures), `pyproject.toml`, `.env.example`. Saved the real 317-frame
   SAM video reply as a test fixture.
+- `config.py` + `meta_api.py`: one door to Meta's models with a disk cache, retries on 429/5xx,
+  a cost counter, a hard per-run budget, and `--save` to keep real replies as test fixtures.
+  19 offline tests; budget, retry, cache and contributor guards each broken on purpose to prove the tests catch it.
