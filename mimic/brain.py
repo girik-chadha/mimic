@@ -39,7 +39,7 @@ Give a new name for each of those objects. Same rules as before: "colour + objec
 2 or 3 words, and different from every other name. Do not reuse any name already tried: {tried}.
 
 Reply with ONLY a JSON object that maps each failed name to its new name, and no other text, like this:
-{{"black box": "black tile"}}"""
+{{"red cup": "red mug"}}"""
 
 
 class NamingFailed(RuntimeError):

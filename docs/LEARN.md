@@ -94,3 +94,20 @@ broken and empty ones, so it is checked against what Meta actually sends."
 Two sentences: "Spark suggests a name for each object and SAM checks it by searching the photo; a name only
 counts if it finds exactly one object. When it doesn't, Spark is told what went wrong and tries again, which is
 how 'black box' became 'black rectangle' in our test."
+
+## 29 Oct, item 5: plan.py, the move list
+
+- **What:** `plan_moves(positions, target_order, slots)` gives one `Move` per object: the first name in the
+  target goes to slot 1, the second to slot 2, and so on. Each move says where the object is now and where
+  it goes, in cm.
+- **Why so simple:** the target row starts empty, so every move goes from the mess to an empty slot and can
+  never land on another block. No clever ordering is needed, and it is exactly right every time.
+  On day 2, Spark planned a move a real arm cannot do; this is why planning is plain code.
+- **Refuses bad input with a clear message:** empty target, a name not found on the table, a name used twice,
+  more names than slots, two targets less than 1 cm apart (SAM probably found one object twice), or two
+  slots at the same point. Objects not in the target are left alone and reported so the screen can warn.
+- **Tests** check the exact list of moves, not just how many there are.
+
+Two sentences: "The planner is a few lines of plain Python: the first object in your demo goes to slot 1,
+the second to slot 2, and so on, and slots start empty so moves never collide. Anything suspicious, like two
+names pointing at the same spot, stops the run with a clear message instead of moving the arm."
