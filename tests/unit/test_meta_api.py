@@ -1,5 +1,6 @@
 """meta_api tests. A fake client stands in for Meta, so nothing here touches the network."""
 import base64
+import json
 import traceback
 from types import SimpleNamespace
 
@@ -147,6 +148,18 @@ def test_spark_cost_uses_token_counts_when_given(monkeypatch):
     use(monkeypatch, FakeClient(reply('["red block"]', usage)))
     meta_api.call("muse-spark-1.3", "name the objects")
     assert meta_api.cost_so_far() == pytest.approx(1000 * 1.25e-6 + 200 * 4.25e-6)
+
+
+def test_spend_log_records_token_counts_or_none(monkeypatch):
+    usage = SimpleNamespace(input_tokens=1000, output_tokens=200)
+    use(monkeypatch, FakeClient(reply("a", usage), reply("b")))
+    meta_api.call("muse-spark-1.3", "first")
+    meta_api.call("muse-spark-1.3", "second")
+    lines = [json.loads(line) for line in (config.CACHE_DIR / "spend_log.jsonl").read_text().splitlines()]
+    assert lines[0]["usage"] == {"input_tokens": 1000, "output_tokens": 200}
+    assert lines[0]["estimated"] is False
+    assert lines[1]["usage"] is None
+    assert lines[1]["estimated"] is True
 
 
 def test_spark_cost_is_estimated_without_token_counts():

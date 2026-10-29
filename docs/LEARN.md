@@ -76,3 +76,21 @@ it can appear on screen."
 Two sentences: "SAM answers in a compact text format, and `sam.py` turns that into boxes with a centre point,
 which is where the robot will aim. We tested the parser on real SAM replies saved to disk, including
 broken and empty ones, so it is checked against what Meta actually sends."
+
+## 29 Oct, item 4: brain.name_objects, Spark names, SAM checks
+
+- **What:** Spark looks at the demo photo and names each object as "colour + object type" ("blue lighter").
+  Then SAM searches the photo for each name. A name is only accepted if SAM finds exactly 1 object.
+  If not (0 or 2+), Spark gets the photo again with a note like `"black box": 0 matches` and gives a new name.
+  At most 2 retries per object; if it still fails, the run stops with a message listing every name tried.
+- **Why:** Spark and SAM do not always use the same words. Spark called a black tray "black box", and SAM
+  found nothing, because to SAM a "box" is something else. Instead of hard-coding names, the two models
+  check each other, and the code decides when a name is good enough (exactly 1 match).
+- **Safety:** the retries have their own cost cap ($0.03 per call), on top of the run budget. Every
+  attempt (round, name, box count) is recorded for the run log.
+- **Facts settled today:** Spark accepts images (B1), and Meta's replies include token counts (B10).
+  Spark bills hidden reasoning tokens: a 45-character answer cost 704 output tokens.
+
+Two sentences: "Spark suggests a name for each object and SAM checks it by searching the photo; a name only
+counts if it finds exactly one object. When it doesn't, Spark is told what went wrong and tries again, which is
+how 'black box' became 'black rectangle' in our test."

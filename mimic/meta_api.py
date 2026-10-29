@@ -98,10 +98,19 @@ def spark_cost(content, reply_text: str, usage) -> tuple[float, bool]:
     return cost, estimated
 
 
-def _log_spend(model: str, cost: float, estimated: bool) -> None:
+def _usage_as_dict(usage):
+    """Token counts as Meta sent them, or None if the reply had none (needs.md B10)."""
+    if usage is None:
+        return None
+    return {"input_tokens": getattr(usage, "input_tokens", None),
+            "output_tokens": getattr(usage, "output_tokens", None)}
+
+
+def _log_spend(model: str, cost: float, estimated: bool, usage=None) -> None:
     config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
     line = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "model": model,
-            "cost_usd": round(cost, 6), "estimated": estimated, "run_total_usd": round(_spent_usd, 6)}
+            "cost_usd": round(cost, 6), "estimated": estimated, "run_total_usd": round(_spent_usd, 6),
+            "usage": _usage_as_dict(usage)}
     with open(config.CACHE_DIR / "spend_log.jsonl", "a") as f:
         f.write(json.dumps(line) + "\n")
 
@@ -190,7 +199,7 @@ def call(model: str, content, save_as: str | None = None, use_cache: bool = True
         else:
             cost, estimated = spark_cost(content, text, getattr(resp, "usage", None))
         _spent_usd += cost
-        _log_spend(model, cost, estimated)
+        _log_spend(model, cost, estimated, getattr(resp, "usage", None))
         if use_cache:
             config.CACHE_DIR.mkdir(parents=True, exist_ok=True)
             cache_file.write_text(json.dumps({"model": model, "text": text, "cost_usd": cost}))

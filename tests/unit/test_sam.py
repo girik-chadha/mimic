@@ -48,6 +48,7 @@ def test_box_centre():
 
 def test_no_match_is_an_empty_reply():
     assert saved("sam_photo_desk_red_cup") == ""
+    assert saved("sam_photo_desk_black_box") == ""  # Spark's name for the black rectangle
     assert sam.parse_boxes("") == []
 
 
