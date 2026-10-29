@@ -141,8 +141,8 @@ BASETEN_API_KEY=...          # Mon, optional
 
 - White table, bright even light, no hard shadows.
 - An A3 sheet taped to the table as the work area, with 4 small coloured stickers at its corners (camera calibration) and 3-4 numbered target slots drawn on it.
-- **Plus 1 check sticker (decided 29 Oct):** somewhere off-centre, never in a straight line with any two other
-  stickers (the exact centre is on a diagonal, so not there). It is not used to build the map; `calib.fit()`
+- **Plus 1 check sticker (decided 29 Oct):** anywhere inside the corner stickers (the centre is fine). Only the
+  4 corner stickers must never have 3 in a straight line. The check sticker is not used to build the map; `calib.fit()`
   refuses the calibration if it lands more than 0.5 cm from its ruler position. Limit: a wrong *corner*
   sticker only partly shows at the check sticker (2 cm wrong at a corner shows as 0.2-1.0 cm), so Gate 1 also
   compares computed cm against a ruler. A second check sticker near another corner would tighten this.

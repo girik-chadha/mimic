@@ -60,35 +60,49 @@ Keep these names and shapes. Everything downstream depends on them.
 # mimic/sam.py
 @dataclass
 class Box:
-    x1: int; y1: int; x2: int; y2: int; w: int; h: int
+    x1: int; y1: int; x2: int; y2: int; w: int; h: int   # w, h = size of the whole image
+    id: int = 0                                          # match id (photo) / track id (video)
     @property
     def centre(self) -> tuple[float, float]: ...
 
 def parse_boxes(text: str) -> list[Box]
 def parse_tracks(text: str) -> dict[int, list[tuple[int, Box]]]   # track id -> [(frame, box)]
-def find(image_path: str, name: str) -> list[Box]                 # cached, cost-counted
+def find(image_path: str, name: str, use_cache=True) -> list[Box]  # cached, cost-counted
 
 # mimic/brain.py
-def name_objects(image_path: str) -> list[str]
+def name_objects(image_path: str, attempts: list | None = None) -> list[str]
     # Spark looks at the demo photo, returns SAM-friendly names: ["red block", "blue block", ...]
+    # each name must give exactly 1 SAM box; failures go back to Spark (max 2 retries, $0.03 cap),
+    # then NamingFailed. Every check is appended to `attempts` as {round, name, boxes}. (changed 29 Oct)
 def diagnose(before_path: str, after_path: str, move: dict, error_cm: tuple[float, float]) -> dict
     # {"problem": str, "fix": {"dx_cm": float, "dy_cm": float, "retry": bool}, "explanation": str}
     # loop.py clamps the fix to safe limits before using it
 
-# mimic/scene.py
-def read_target(image_path: str, names: list[str], calib) -> list[str]        # names in slot order
-def read_positions(image_path: str, names: list[str], calib) -> dict[str, tuple[float, float]]  # cm
+# mimic/scene.py   (changed 29 Oct: takes a Layout loaded from calib/layout.json)
+def load_layout(path=config.LAYOUT_PATH) -> Layout
+    # sticker names + cm, slots_cm, slot_tolerance_cm (<= half the slot spacing), sheet bounds,
+    # height correction (off by default: camera height, point under the lens, point height)
+def find_stickers(image_path: str, names: list[str]) -> list[tuple[float, float]]  # px centres
+def calibrate(image_path: str, layout: Layout) -> Calib                             # find_stickers + fit
+def read_positions(image_path: str, names: list[str], calib, layout) -> dict[str, tuple[float, float]]  # cm
+def read_target(image_path: str, names: list[str], calib, layout) -> list[str]     # names in slot order
+    # every name must give exactly 1 SAM box; off the sheet, not in a slot, or two in one slot -> SceneError
 
 # mimic/calib.py
 def fit(pixel_pts: list[tuple], table_pts_cm: list[tuple]) -> Calib
+    # first 4 points (corner stickers) build the map; points 5+ are check points kept out of the fit,
+    # and any more than 0.5 cm off raises CalibrationError (changed 29 Oct)
 Calib.px_to_cm(pt) -> tuple[float, float];  Calib.cm_to_px(pt) -> tuple[float, float]
+Calib.check(pixel_pt, cm_pt) -> float;  Calib.fit_report() -> float;  Calib.save(path) / Calib.load(path)
 
 # mimic/plan.py
 @dataclass
 class Move:
     name: str; from_cm: tuple[float, float]; to_cm: tuple[float, float]; slot: int
 def plan_moves(positions_cm: dict, target_order: list[str], slots_cm: list[tuple]) -> list[Move]
-    # raises ValueError if a name is missing, duplicated, or there are more names than slots
+    # raises ValueError if the target is empty, a name is missing or duplicated, there are more names
+    # than slots, two targets are under 1 cm apart, or two slots are the same point
+def extra_objects(positions_cm: dict, target_order: list[str]) -> list[str]   # left alone, reported
 
 # mimic/kinematics.py
 def to_angles(x_cm: float, y_cm: float, height: str) -> dict   # height: "hover" | "grab"
@@ -123,7 +137,9 @@ Safety in the firmware, not only in Python: every angle is clamped to the limits
 ### 2.3 Scene layout
 
 - Work area: an A3 sheet taped down. Table coordinates in cm with the origin at the sheet's bottom-left sticker.
-- Four coloured stickers at known positions = camera calibration.
+- Four coloured corner stickers at known positions = camera calibration, plus one check sticker anywhere
+  inside that the map is tested against. Sticker names and positions, slots and sheet bounds live in
+  `calib/layout.json` (changed 29 Oct).
 - **Mess area** on one side, **target row** of numbered slots on the other. Slots start empty, so a placement never lands on another block.
 - Arm base at a fixed, measured spot on the sheet.
 
