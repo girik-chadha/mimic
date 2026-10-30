@@ -1,15 +1,18 @@
 {
   "placeholder": true,
-  "note": "PLACEHOLDER numbers until the real sheet is measured (todo.md, Thu physical jobs). All positions in cm, origin at the bottom-left sticker, x to the right, y away from you. The first 4 stickers are the corners that build the map; any after that are check stickers. Set placeholder to false once the real numbers are in.",
-  "stickers": [
-    {"name": "pink sticker",       "cm": [0.0, 0.0]},
-    {"name": "orange sticker",     "cm": [38.0, 0.0]},
-    {"name": "purple sticker",     "cm": [38.0, 25.7]},
-    {"name": "yellow sticker",     "cm": [0.0, 25.7]},
-    {"name": "light blue sticker", "cm": [14.0, 18.0]}
-  ],
-  "sheet_cm": {"min": [-2.0, -2.0], "max": [40.0, 27.7]},
-  "slots_cm": [[32.0, 5.0], [32.0, 12.85], [32.0, 20.7]],
+  "note": "PROVISIONAL dot positions from the coin and paper sizes, not a ruler. All positions in cm from the bottom-left dot, x to the right, y away from you. Each photo finds the 6 dots with one SAM prompt, works out which is which, and builds its own map from the 4 corners; the 2 check dots test it. Keep every slot and block at least 4 cm from every dot. Set placeholder to false once the real numbers are in.",
+  "dot_prompt": "small coloured dot",
+  "dot_size_frac": {"min": 0.012, "max": 0.026, "note": "box's longer side / image width. Set 30 Oct from the real replies on dots_check_6a/6b: dots 19-25 px of 1280 (0.0148-0.0195); a 15 px table speck is 0.0117"},
+  "dots_cm": {
+    "bottom_left":  [0.0, 0.0],
+    "bottom_right": [37.0, 0.0],
+    "top_right":    [37.0, 24.7],
+    "top_left":     [0.0, 24.7],
+    "centre_check": [18.5, 12.4],
+    "right_check":  [34.5, 12.4]
+  },
+  "sheet_cm": {"min": [-2.5, -2.5], "max": [39.5, 27.2]},
+  "slots_cm": [[28.0, 5.0], [28.0, 12.85], [28.0, 20.7]],
   "slot_tolerance_cm": 3.0,
   "height_correction": {
     "enabled": false,

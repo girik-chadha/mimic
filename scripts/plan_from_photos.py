@@ -3,10 +3,11 @@
     python scripts/plan_from_photos.py demo.jpg mess.jpg
 
 demo.jpg: the objects arranged in the slots the way you want them.
-mess.jpg: the same objects scattered in the mess area, from the same camera spot.
+mess.jpg: the same objects scattered in the mess area. The camera may move between the photos:
+each photo calibrates itself from the 6 dots on the sheet (all 6 must be visible).
 
 Prints the names Spark chose, where each object is in cm, and the list of moves, then saves
-annotated photos and plan.json to runs/<date-time>/.
+annotated photos, each photo's labelled dots and plan.json to runs/<date-time>/.
 """
 import argparse
 import json
@@ -21,7 +22,6 @@ import cv2
 from mimic import brain, calib, config, meta_api, plan, sam, scene
 
 RUN_BUDGET_USD = 0.15     # hard cap for one run of this script
-MAX_CAMERA_SHIFT_CM = 0.5  # demo and mess maps may disagree by this much at the sheet centre
 
 # Drawing colours (OpenCV uses blue, green, red order). An object is drawn in the colour its name says.
 NAMED_COLOURS = {"red": (0, 0, 220), "blue": (220, 90, 0), "green": (0, 160, 0), "yellow": (0, 190, 230),
@@ -33,19 +33,20 @@ def say(text=""):
     print(text, flush=True)
 
 
-def check_sticker_error(c: calib.Calib) -> float | None:
-    """Worst error over the check stickers (points 5+). None if there are none."""
-    errors = [c.check(px, cm) for px, cm in zip(c.pixel_pts[4:], c.table_pts_cm[4:])]
-    return max(errors) if errors else None
+def check_dot_errors(c: calib.Calib) -> dict[str, float]:
+    """How far (cm) each check dot lands from where layout.json says it is."""
+    return {role: c.check(px, cm) for role, px, cm in zip(scene.ROLES, c.pixel_pts, c.table_pts_cm)
+            if role in scene.CHECKS}
 
 
-def calibrate_photo(label: str, photo: str, layout: scene.Layout) -> calib.Calib:
-    c = scene.calibrate(photo, layout)  # raises CalibrationError if a check sticker is > 0.5 cm off
-    error = check_sticker_error(c)
-    if error is None:
-        say(f"  {label} photo: no check sticker, so this map is unchecked")
-    else:
-        say(f"  {label} photo: check sticker error {error:.2f} cm (limit {calib.MAX_CHECK_ERROR_CM} cm)")
+def calibrate_photo(label: str, photo: str, layout: scene.Layout, out_dir: Path) -> calib.Calib:
+    labelled = out_dir / f"{label}_dots.jpg"
+    try:
+        c = scene.calibrate(photo, layout, labelled)  # stops if the dots are wrong or a check dot is > 0.5 cm off
+    finally:
+        say(f"  {label} photo: labelled dots saved to {labelled}")
+    errors = ", ".join(f"{role} {e:.2f} cm" for role, e in check_dot_errors(c).items())
+    say(f"  {label} photo: check dots {errors} (limit {calib.MAX_CHECK_ERROR_CM} cm)")
     return c
 
 
@@ -115,19 +116,11 @@ def run(demo: str, mess: str, layout_path=config.LAYOUT_PATH, out_root=config.RU
     budget_before = config.BUDGET_USD
     config.BUDGET_USD = min(config.BUDGET_USD, RUN_BUDGET_USD)
     try:
-        say("Calibration (one map per photo)")
-        demo_map = calibrate_photo("demo", demo, layout)
-        mess_map = calibrate_photo("mess", mess, layout)
-        sheet_centre = tuple((a + b) / 2 for a, b in zip(layout.sheet_min_cm, layout.sheet_max_cm))
-        shift = calib.disagreement_cm(demo_map, mess_map, sheet_centre)
-        say(f"  the two maps disagree by {shift:.2f} cm at the sheet centre")
-        if shift > MAX_CAMERA_SHIFT_CM:
-            say("")
-            say("  " + "!" * 70)
-            say(f"  WARNING: the camera seems to have moved between the photos ({shift:.2f} cm at the")
-            say(f"  sheet centre, limit {MAX_CAMERA_SHIFT_CM} cm). Each photo uses its own map, so this plan is")
-            say("  still right, but fix the camera before running the arm.")
-            say("  " + "!" * 70)
+        out_dir = Path(out_root) / time.strftime("%Y%m%d-%H%M%S")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        say("Calibration (each photo from its own dots)")
+        demo_map = calibrate_photo("demo", demo, layout, out_dir)
+        mess_map = calibrate_photo("mess", mess, layout, out_dir)
 
         attempts = []
         names = brain.name_objects(demo, attempts)
@@ -153,8 +146,6 @@ def run(demo: str, mess: str, layout_path=config.LAYOUT_PATH, out_root=config.RU
             say(f"  {m.slot}. {m.name:<20} ({m.from_cm[0]:5.1f}, {m.from_cm[1]:5.1f}) -> "
                 f"slot {m.slot} ({m.to_cm[0]:5.1f}, {m.to_cm[1]:5.1f})")
 
-        out_dir = Path(out_root) / time.strftime("%Y%m%d-%H%M%S")
-        out_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy(demo, out_dir / "demo.jpg")
         shutil.copy(mess, out_dir / "mess.jpg")
         draw_demo(demo, out_dir / "demo_annotated.jpg", demo_map, layout, names, target)
@@ -162,8 +153,7 @@ def run(demo: str, mess: str, layout_path=config.LAYOUT_PATH, out_root=config.RU
 
         result = {
             "demo": str(demo), "mess": str(mess),
-            "check_sticker_error_cm": {"demo": check_sticker_error(demo_map), "mess": check_sticker_error(mess_map)},
-            "camera_shift_cm": shift,
+            "check_dot_errors_cm": {"demo": check_dot_errors(demo_map), "mess": check_dot_errors(mess_map)},
             "names": names, "naming_attempts": attempts,
             "target_order": target,
             "positions_cm": positions,
@@ -183,7 +173,7 @@ def run(demo: str, mess: str, layout_path=config.LAYOUT_PATH, out_root=config.RU
 def main():
     parser = argparse.ArgumentParser(description="Two photos in (demo + mess), a plan out.")
     parser.add_argument("demo", help="photo of the objects arranged in the slots")
-    parser.add_argument("mess", help="photo of the same objects scattered, same camera spot")
+    parser.add_argument("mess", help="photo of the same objects scattered (the camera may have moved)")
     parser.add_argument("--layout", default=str(config.LAYOUT_PATH), help="sheet layout (default calib/layout.json)")
     args = parser.parse_args()
     try:

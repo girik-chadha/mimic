@@ -44,3 +44,11 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   `mimic/arm.py` (fake transport, exact command strings, Python range check), `calib/arm_limits.json` (placeholder +
   limits_checked_by_hand: both must be right before a real move), `scripts/arm_jog.py` (dry run). A test keeps the
   firmware and JSON limits identical. The .ino is not compiled for the ESP32 and nothing was uploaded.
+
+## 30 Oct 2026
+- Calibration redesign: the sheet has 6 dots found with one SAM prompt ("small coloured dot"), because SAM cannot
+  tell similar sticker colours apart. Every photo calibrates itself: 4 corner dots build the map (roles worked
+  out from position, trying 4 rotations), 2 check dots test it (0.5 cm). No saved camera map; the camera may move.
+  Labelled photo of the dots saved for checking by eye. 2 real SAM replies saved ($0.005): 6a calibrates
+  (right check 0.49 cm), 6b is refused (0.56 cm) with the provisional dot positions. Known limit: mirror images
+  are read upside down until the check dots move off the middle lines (todo blocker before Gate 3).

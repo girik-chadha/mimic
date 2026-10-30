@@ -25,11 +25,11 @@ spec.loader.exec_module(script)
 
 SHEET_CM = [(-2, -2), (40, -2), (40, 27.7), (-2, 27.7)]
 SHEET_PX = [(300, 950), (1650, 980), (1400, 150), (520, 130)]
-STICKERS = ["pink sticker", "orange sticker", "purple sticker", "yellow sticker", "light blue sticker"]
-STICKERS_CM = [(0, 0), (38, 0), (38, 25.7), (0, 25.7), (14, 18)]
+DOT_PROMPT = "small coloured dot"
+DOTS_CM = [(0, 0), (37, 0), (37, 24.7), (0, 24.7), (18.5, 12.4), (34.5, 12.4)]  # as in calib/layout.json
 
-# Demo: blocks sit in the slots in the order blue, green, red. Mess: scattered on the left.
-DEMO_CM = {"red block": (32.3, 20.4), "blue block": (31.8, 5.2), "green block": (32.1, 13.1)}
+# Demo: blocks sit in the slots (x = 28) in the order blue, green, red. Mess: scattered on the left.
+DEMO_CM = {"red block": (28.3, 20.4), "blue block": (27.8, 5.2), "green block": (28.1, 13.1)}
 MESS_CM = {"red block": (5, 4), "blue block": (12, 20), "green block": (8, 12.5)}
 SPARK_REPLY = '["red block", "blue block", "green block"]'
 
@@ -43,23 +43,25 @@ def make_camera(shift_px=(0, 0)):
     return to_px
 
 
-def box(to_px, pt_cm):
+def box(to_px, pt_cm, size=40):
     x, y = to_px(pt_cm)
-    return Box(round(x) - 20, round(y) - 20, round(x) + 20, round(y) + 20, 1920, 1080)
+    half = size // 2
+    return Box(round(x) - half, round(y) - half, round(x) + half, round(y) + half, 1920, 1080)
 
 
 class Scene:
     """Two blank photos plus a fake SAM that knows where everything is in each of them."""
 
-    def __init__(self, tmp_path, monkeypatch, mess_shift_px=(0, 0), mess_sticker_cm=None):
+    def __init__(self, tmp_path, monkeypatch, mess_shift_px=(0, 0), mess_dots_cm=None):
         self.demo = str(tmp_path / "demo.jpg")
         self.mess = str(tmp_path / "mess.jpg")
         for path in (self.demo, self.mess):
             cv2.imwrite(path, np.full((1080, 1920, 3), 235, np.uint8))
         demo_cam, mess_cam = make_camera(), make_camera(mess_shift_px)
-        mess_stickers = mess_sticker_cm or STICKERS_CM
-        self.boxes = {self.demo: {n: [box(demo_cam, cm)] for n, cm in zip(STICKERS, STICKERS_CM)},
-                      self.mess: {n: [box(mess_cam, cm)] for n, cm in zip(STICKERS, mess_stickers)}}
+        mess_dots = mess_dots_cm or DOTS_CM
+        # dots are 30 px across in a 1920-wide photo: inside layout.json's dot size range
+        self.boxes = {self.demo: {DOT_PROMPT: [box(demo_cam, cm, size=30) for cm in DOTS_CM]},
+                      self.mess: {DOT_PROMPT: [box(mess_cam, cm, size=30) for cm in mess_dots]}}
         self.boxes[self.demo].update({n: [box(demo_cam, cm)] for n, cm in DEMO_CM.items()})
         self.boxes[self.mess].update({n: [box(mess_cam, cm)] for n, cm in MESS_CM.items()})
         self.budget_seen = []
@@ -95,13 +97,14 @@ def test_full_run_prints_the_plan_and_saves_the_run(tmp_path, monkeypatch, capsy
         assert math.dist(result["positions_cm"][name], pt) < 0.1
     assert "Spark named: red block, blue block, green block" in out
     assert "Target order (slot 1 first): blue block, green block, red block" in out
-    assert "1. blue block" in out and "-> slot 1 ( 32.0,   5.0)" in out
-    assert "demo photo: check sticker error 0.0" in out
-    assert "mess photo: check sticker error 0.0" in out
-    assert "WARNING" not in out
+    assert "1. blue block" in out and "-> slot 1 ( 28.0,   5.0)" in out
+    assert "demo photo: check dots centre_check 0.0" in out
+    assert "mess photo: check dots centre_check 0.0" in out
 
     out_dir = s.out_root / next(s.out_root.iterdir()).name
-    for f in ["demo.jpg", "mess.jpg", "demo_annotated.jpg", "mess_annotated.jpg", "plan.json"]:
+    assert f"labelled dots saved to {out_dir / 'demo_dots.jpg'}" in out
+    for f in ["demo.jpg", "mess.jpg", "demo_annotated.jpg", "mess_annotated.jpg", "demo_dots.jpg",
+              "mess_dots.jpg", "plan.json"]:
         assert (out_dir / f).exists(), f
     saved = json.loads((out_dir / "plan.json").read_text())
     assert saved["target_order"] == result["target_order"]
@@ -122,22 +125,22 @@ def test_placeholder_layout_refuses_before_any_sam_call(tmp_path, monkeypatch):
     assert s.budget_seen == []  # nothing was asked of SAM
 
 
-def test_bad_check_sticker_on_the_mess_photo_stops_the_run(tmp_path, monkeypatch, capsys):
-    wrong = STICKERS_CM[:4] + [(16, 18)]  # check sticker seen 2 cm away from where layout.json says
-    s = Scene(tmp_path, monkeypatch, mess_sticker_cm=wrong)
-    with pytest.raises(calib.CalibrationError, match="check sticker 5 is 2.0"):
+def test_bad_check_dot_on_the_mess_photo_stops_the_run(tmp_path, monkeypatch, capsys):
+    wrong = DOTS_CM[:5] + [(32.5, 12.4)]  # right check dot seen 2 cm away from where layout.json says
+    s = Scene(tmp_path, monkeypatch, mess_dots_cm=wrong)
+    with pytest.raises(calib.CalibrationError, match="right_check 2.00 cm off"):
         s.run()
     out = capsys.readouterr().out
-    assert "demo photo: check sticker error 0.0" in out  # the demo photo was fine and was reported
-    assert not s.out_root.exists()  # no plan saved
+    assert "demo photo: check dots centre_check 0.0" in out  # the demo photo was fine and was reported
+    assert "mess photo: labelled dots saved to" in out       # the bad photo's dots can be checked by eye
+    assert not list(s.out_root.glob("*/plan.json"))           # no plan saved
 
 
-def test_bumped_camera_warns_loudly_but_still_plans(tmp_path, monkeypatch, capsys):
+def test_camera_may_move_between_photos(tmp_path, monkeypatch, capsys):
     s = Scene(tmp_path, monkeypatch, mess_shift_px=(40, 15))
     result = s.run()
     out = capsys.readouterr().out
-    assert "WARNING: the camera seems to have moved between the photos" in out
-    assert result["camera_shift_cm"] > 0.5
+    assert "WARNING" not in out
     for name, pt in MESS_CM.items():  # each photo has its own map, so positions are still right
         assert math.dist(result["positions_cm"][name], pt) < 0.1
 

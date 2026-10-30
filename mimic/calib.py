@@ -1,10 +1,10 @@
-"""Pixels <-> table centimetres, from coloured stickers on the A3 sheet.
+"""Pixels <-> table centimetres, from dots drawn on the A3 sheet.
 
 The camera sees the flat sheet at a slight angle, so equal distances on the table are not equal
 in pixels. A homography is a 3x3 grid of numbers that undoes that: it takes any pixel on the sheet
-to its position in cm (origin at the bottom-left sticker), and back again.
+to its position in cm (origin at the bottom-left dot), and back again.
 
-fit() builds the map from the first 4 stickers (the corners). Any stickers after those are check
+fit() builds the map from the first 4 points (the corner dots). Any points after those are check
 points: they are NOT used to build the map, so how far off they land is an honest test of it.
 If a check point lands more than 0.5 cm from where it was measured, fit() raises CalibrationError.
 """
@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 
 MAX_CHECK_ERROR_CM = 0.5
-MIN_TRIANGLE_CM2 = 1.0  # any 3 corner stickers must make a real triangle, not a line
+MIN_TRIANGLE_CM2 = 1.0  # any 3 corner dots must make a real triangle, not a line
 
 
 class CalibrationError(ValueError):
@@ -48,12 +48,12 @@ class Calib:
         return math.dist(self.px_to_cm(pixel_pt), cm_pt)
 
     def fit_report(self) -> float:
-        """The worst error in cm over all stickers. The 4 corners are always ~0; check points are the real test."""
+        """The worst error in cm over all points. The 4 corners are always ~0; check points are the real test."""
         return max(self.check(p, c) for p, c in zip(self.pixel_pts, self.table_pts_cm))
 
     def save(self, path) -> None:
         data = {"H": self.H.tolist(), "pixel_pts": self.pixel_pts, "table_pts_cm": self.table_pts_cm,
-                "note": "first 4 points are the corner stickers that build the map; the rest are check points"}
+                "note": "first 4 points are the corner dots that build the map; the rest are check points"}
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
 
@@ -64,29 +64,24 @@ class Calib:
         return cls(data["H"], data["pixel_pts"], data["table_pts_cm"])
 
 
-def disagreement_cm(a: Calib, b: Calib, pt_cm) -> float:
-    """How far apart two maps put the same table point: to pixels with map `a`, back to cm with map `b`.
-    Two photos from a camera that has not moved give about 0."""
-    return math.dist(b.px_to_cm(a.cm_to_px(pt_cm)), pt_cm)
-
-
 def _triangle_area(a, b, c) -> float:
     return abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) / 2
 
 
-def fit(pixel_pts: list[tuple], table_pts_cm: list[tuple]) -> Calib:
-    """First 4 points: corner stickers that build the map. Points 5 and up: check stickers."""
+def fit(pixel_pts: list[tuple], table_pts_cm: list[tuple], names: list[str] | None = None) -> Calib:
+    """First 4 points: corner dots that build the map. Points 5 and up: check points.
+    `names` (one per point) are used in error messages, e.g. "right_check is 0.62 cm off"."""
     if len(pixel_pts) != len(table_pts_cm):
         raise ValueError(f"{len(pixel_pts)} pixel points but {len(table_pts_cm)} table points.")
     if len(pixel_pts) < 4:
-        raise ValueError(f"Need at least 4 stickers, got {len(pixel_pts)}.")
+        raise ValueError(f"Need at least 4 points, got {len(pixel_pts)}.")
     for a, b, c in combinations(table_pts_cm[:4], 3):
         if _triangle_area(a, b, c) < MIN_TRIANGLE_CM2:
-            raise ValueError(f"Corner stickers {a}, {b}, {c} are in a straight line: no map is possible.")
+            raise ValueError(f"Corner points {a}, {b}, {c} are in a straight line: no map is possible.")
 
     H, _ = cv2.findHomography(np.array(pixel_pts[:4], dtype=float), np.array(table_pts_cm[:4], dtype=float), 0)
     if H is None:
-        raise ValueError("OpenCV could not fit a map to these 4 corner stickers.")
+        raise ValueError("OpenCV could not fit a map to these 4 corner points.")
     calib = Calib(H, pixel_pts, table_pts_cm)
 
     problems = []
@@ -94,10 +89,11 @@ def fit(pixel_pts: list[tuple], table_pts_cm: list[tuple]) -> Calib:
         error = calib.check(px, cm)
         if error > MAX_CHECK_ERROR_CM:
             mapped = calib.px_to_cm(px)
-            problems.append(f"check sticker {n} is {error:.2f} cm off: pixel ({px[0]:.0f}, {px[1]:.0f}) "
+            label = names[n - 1] if names else f"check point {n}"
+            problems.append(f"{label} is {error:.2f} cm off: pixel ({px[0]:.0f}, {px[1]:.0f}) "
                             f"maps to ({mapped[0]:.2f}, {mapped[1]:.2f}) cm but was measured at "
                             f"({cm[0]:.2f}, {cm[1]:.2f}) cm")
     if problems:
         raise CalibrationError(f"Calibration failed (limit {MAX_CHECK_ERROR_CM} cm): " + "; ".join(problems)
-                               + ". Re-measure that sticker and the corner stickers.")
+                               + ". Re-measure that point and the corner points.")
     return calib

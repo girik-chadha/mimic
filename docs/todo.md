@@ -25,12 +25,13 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] 6. `calib.py` with unit tests (29 Oct)
 - [x] 7. `scene.py` (29 Oct)
 - [x] 8. `scripts/plan_from_photos.py` (29 Oct); **Gate 1** on two real photos still to do (waits for photos + spend approval)
+- [x] 8b. Calibration redesign: 6 dots, one SAM prompt, every photo calibrates itself (roles by position, 4 rotations, 2 check dots); real replies on dots_check_6a/6b saved as fixtures (30 Oct)
 
 ### Thu, physical jobs (you, in between)
 
-- [ ] Make the work area: A3 sheet taped down, 4 small coloured stickers at the corners, plus 1 check sticker anywhere inside them. Measure every sticker's position in cm from the bottom-left one and write them, the slot centres and the sheet edges into `calib/layout.json` (it holds placeholders now)
+- [ ] Make the work area: A3 sheet taped down, 6 dots (4 corners + 2 check dots), slots at least 4 cm from every dot. Measure every dot's position in cm from the bottom-left one with a ruler and write them, the slot centres and the sheet edges into `calib/layout.json` (provisional numbers now)
 - [ ] Draw 3 numbered target slots on one side; leave the other side as the mess area
-- [ ] Take two photos from the same fixed spot: `demo.jpg` (objects in your chosen order in the slots) and `mess.jpg` (scattered in the mess area)
+- [ ] Take two photos (the camera may move between them; all 6 dots visible; objects at least 4 cm from every dot): `gate1_demo.jpg` (objects in your chosen order in the slots) and `gate1_mess.jpg` (scattered in the mess area)
 - [ ] Decide the camera (needs.md B2): cheap USB webcam, or a phone webcam app that works on Windows
 - [ ] Evening: install Arduino CLI or IDE 2, the ESP32 core, `ESP32Servo`, and the CP210x driver on Windows (B5)
 - [ ] Post a first clip or photo on X (SAM boxes on your desk)
@@ -47,7 +48,12 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 
 ## Sat 31 Oct: Phase 3, aim and one pick
 
-- [ ] Calibration from the 4 stickers; gripper tip sticker
+- [ ] **BLOCKER before Gate 3 (Girik):** move both check dots to the sheet edges, off the middle lines (about
+  (34.5, 18) and (3, 8) cm), cover the old ones, and retake the dot photos. Today both check dots are on the
+  middle line, so a mirror-image photo would be read upside down. **Then Claude:** add the mirror orders to
+  `scene.assign_roles`, an ambiguity stop when a mirror and a non-mirror order both fit, and a mirror test.
+- [ ] Keep every block at least 4 cm from every dot (a covered dot stops the run)
+- [ ] Gripper tip marker
 - [ ] Precision test B6
 - [ ] Kinematics (maths, or taught-pose grid by midday if the maths is off)
 - [ ] `pick` / `place` with the aim check and learned offsets; **Gate 3**
