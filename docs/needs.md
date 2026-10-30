@@ -39,6 +39,18 @@ client.responses.create(model="sam-3.1", input=[{"role": "user", "content": [
 - `desk.jpeg` is 1280x960. Boxes on it (29 Oct): blue lighter (255,363)-(320,583), green lighter
   (602,374)-(677,591), black rectangle (848,414)-(969,579). Fixtures in `tests/fixtures/meta_responses/`.
 
+### A2b. SAM 3.1 finds the calibration dots (tested 29-30 Oct)
+
+- Colour names do not work for small dots: SAM cannot tell red from orange or blue from purple (Girik, 29 Oct).
+- **One prompt finds them all:** `"small coloured dot"` returned exactly 5 boxes on `dots_check.jpg` (Girik, 29 Oct)
+  and exactly 6 on each of `dots_check_6a.jpg` and `dots_check_6b.jpg` (30 Oct), every box a dot, no specks.
+  `"dot"` returned 7, including two table specks outside the sheet (Girik, 29 Oct).
+- Dot boxes are 19-25 px (longer side) in a 1280-wide photo, i.e. 0.0148-0.0195 of the width, in both photos.
+  A table speck was 15 px (0.0117). `layout.json` keeps 0.012-0.026.
+- With the provisional dot positions, the right check dot lands at x = 34.98 cm (6a) and 35.06 cm (6b), against
+  34.5 in layout.json: 6a calibrates (0.49 cm), 6b is refused (0.56 cm). Both photos agree, which points at the
+  provisional number; the ruler measurement replaces it.
+
 ### A3. SAM 3.1 on a video (tested 28 Oct)
 
 Request: same as A2 but `{"type": "input_video", "video_url": "data:video/mp4;base64,..."}`. A 3.2 MB, 317-frame, 1280x720 MP4 sent as a data URL worked.
@@ -144,12 +156,15 @@ BASETEN_API_KEY=...          # Mon, optional
   the table, the blocks and the camera. Always send `H` before switching off, so the next jump is small.
 
 - White table, bright even light, no hard shadows.
-- An A3 sheet taped to the table as the work area, with 4 small coloured stickers at its corners (camera calibration) and 3-4 numbered target slots drawn on it.
-- **Plus 1 check sticker (decided 29 Oct):** anywhere inside the corner stickers (the centre is fine). Only the
-  4 corner stickers must never have 3 in a straight line. The check sticker is not used to build the map; `calib.fit()`
-  refuses the calibration if it lands more than 0.5 cm from its ruler position. Limit: a wrong *corner*
-  sticker only partly shows at the check sticker (2 cm wrong at a corner shows as 0.2-1.0 cm), so Gate 1 also
-  compares computed cm against a ruler. A second check sticker near another corner would tighten this.
-- The camera fixed directly above, 40-50 cm up, never moved during a run.
+- An A3 sheet taped to the table as the work area, with 6 dots drawn on it (changed 30 Oct): 4 corner dots and
+  2 check dots, plus 3-4 numbered target slots. Each photo finds all 6 dots ("small coloured dot"), works out which
+  is which by position, builds its own map from the corners and checks it with the 2 check dots (0.5 cm limit).
+  Only the 4 corners must never have 3 in a straight line. Limit: a wrong *corner* position only partly shows at
+  the check dots, so Gate 1 also compares computed cm against a ruler.
+- **Known limit until the check dots move (30 Oct):** both check dots are on the sheet's middle line, so a photo
+  flipped top-to-bottom (a mirror image) fits within ~0.1 cm and would be read upside down. Only rotations are
+  tried for now. Blocker in todo.md before Gate 3.
+- **Keep every block at least 4 cm from every dot:** a covered dot stops the run (each photo needs all 6).
+- The camera looks down from 40-50 cm. It may move between photos: every photo calibrates itself.
 - Blocks: solid, 2-3 cm, clearly different colours, none white or pale. Buy them after measuring the gripper opening (B4).
 - Nothing personal, no faces, in the camera's view.

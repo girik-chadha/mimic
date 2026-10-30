@@ -213,3 +213,24 @@ calibration against a spare sticker and refuses to run if the numbers do not add
 Two sentences: "The arm speaks four one-line commands, and every safety rule (joint limits, speed limit, grip
 timeout) lives in a small C++ file that we test on the laptop, so the rules are proven before the arm is even
 plugged in. Python checks the same limits first, and a test makes sure the two copies of the numbers never differ."
+
+## 30 Oct: every photo calibrates itself from 6 dots
+
+- **What changed:** coloured stickers with names ("red sticker") failed, because SAM cannot tell red from orange.
+  Now the sheet has 6 plain dots, and one prompt, "small coloured dot", finds them all. Which dot is which comes
+  from *where* they are: the 4 outside dots are the corners, and we try each of the 4 ways the photo could be
+  turned, keeping the one where the 2 check dots land where they should.
+- **Why every photo calibrates itself:** the camera is allowed to move between photos. Each photo finds its own
+  dots and builds its own map, so a bumped camera cannot quietly spoil the numbers.
+- **Safety checks:** exactly 6 dots (after dropping anything too small, like a speck, or too big, like a block);
+  both check dots within 0.5 cm; if two different turns both fit, stop. A labelled photo with every dot named
+  is saved, so the roles can be checked by eye.
+- **Real result:** on two real photos from different heights, one calibrated (right check dot 0.49 cm off) and one
+  was refused (0.56 cm). Both put that dot about 0.5 cm right of the provisional number, so the number is what is
+  wrong; a ruler measurement fixes it. We did not loosen the limit to make it pass.
+- **Known limit:** both check dots sit on the middle line, so a mirror-image photo would be read upside down.
+  Moving them off the middle lines (todo, before Gate 3) fixes it.
+
+Two sentences: "Six dots drawn on the sheet let every photo work out its own pixel-to-centimetre map, so the camera
+can move freely; four dots build the map and two more check it to within half a centimetre. When the check
+fails, Mimic refuses the photo instead of guessing, which is exactly what happened on one of our real test photos."

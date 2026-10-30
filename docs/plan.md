@@ -17,7 +17,7 @@ mimic/                     the Python package
   sam.py                   parse SAM output (boxes, video tracks); find(image, name)
   brain.py                 Spark calls: name_objects(photo), diagnose(before, after, move)
   scene.py                 read_target(photo) -> ordered names; read_positions(photo) -> px
-  calib.py                 pixel <-> table centimetres (homography from 4 stickers)
+  calib.py                 pixel <-> table centimetres (homography from 4 corner dots)
   plan.py                  plan_moves(positions_cm, target_order, slots_cm) -> moves
   kinematics.py            table cm -> joint angles (maths or taught-pose grid)
   arm.py                   Arm: move(angles), grip(), home(), status()
@@ -29,7 +29,6 @@ firmware/
 scripts/
   plan_from_photos.py      Gate 1 demo: two photos in, plan out
   arm_jog.py               move one joint at a time from the terminal
-  calibrate.py             camera calibration from the 4 stickers
   run_mimic.py             the full loop
   benchmark.py             N runs, prints success rate, retries, cost
   spikes/                  day-2 test scripts, kept as a record (sam_test.py, ...)
@@ -80,18 +79,21 @@ def diagnose(before_path: str, after_path: str, move: dict, error_cm: tuple[floa
 
 # mimic/scene.py   (changed 29 Oct: takes a Layout loaded from calib/layout.json)
 def load_layout(path=config.LAYOUT_PATH) -> Layout
-    # sticker names + cm, slots_cm, slot_tolerance_cm (<= half the slot spacing), sheet bounds,
+    # dot positions by role, dot prompt + size range, slots_cm, slot_tolerance_cm (<= half the slot spacing), sheet bounds,
     # height correction (off by default: camera height, point under the lens, point height)
-def find_stickers(image_path: str, names: list[str]) -> list[tuple[float, float]]  # px centres
-def calibrate(image_path: str, layout: Layout) -> Calib                             # find_stickers + fit
-    # refuses while layout.json has "placeholder": true
+def find_dots(image_path: str, layout: Layout) -> (centres, dropped)   # one SAM call, size filter
+def assign_roles(dots_px: list, layout: Layout) -> list                # 6 centres -> ROLES order
+def calibrate(image_path: str, layout: Layout, labelled_path=None) -> Calib
+    # (changed 30 Oct) every photo calibrates itself: exactly 6 dots, roles by position (4 rotations),
+    # map from the 4 corners, both check dots within 0.5 cm; saves a labelled photo.
+    # Refuses while layout.json has "placeholder": true. No saved camera map; the camera may move.
 def read_positions(image_path: str, names: list[str], calib, layout) -> dict[str, tuple[float, float]]  # cm
 def read_target(image_path: str, names: list[str], calib, layout) -> list[str]     # names in slot order
     # every name must give exactly 1 SAM box; off the sheet, not in a slot, or two in one slot -> SceneError
 
 # mimic/calib.py
 def fit(pixel_pts: list[tuple], table_pts_cm: list[tuple]) -> Calib
-    # first 4 points (corner stickers) build the map; points 5+ are check points kept out of the fit,
+    # first 4 points (corner dots) build the map; points 5+ are check points kept out of the fit,
     # and any more than 0.5 cm off raises CalibrationError (changed 29 Oct)
 Calib.px_to_cm(pt) -> tuple[float, float];  Calib.cm_to_px(pt) -> tuple[float, float]
 Calib.check(pixel_pt, cm_pt) -> float;  Calib.fit_report() -> float;  Calib.save(path) / Calib.load(path)
@@ -149,10 +151,12 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
 
 ### 2.3 Scene layout
 
-- Work area: an A3 sheet taped down. Table coordinates in cm with the origin at the sheet's bottom-left sticker.
-- Four coloured corner stickers at known positions = camera calibration, plus one check sticker anywhere
-  inside that the map is tested against. Sticker names and positions, slots and sheet bounds live in
-  `calib/layout.json` (changed 29 Oct).
+- Work area: an A3 sheet taped down. Table coordinates in cm with the origin at the sheet's bottom-left dot.
+- Six dots drawn on the sheet (changed 30 Oct): 4 corner dots build each photo's map, 2 check dots test it.
+  SAM finds all 6 with one prompt ("small coloured dot"); which dot is which comes from where they are, not
+  their colour. Dot positions by role, slots and sheet bounds live in `calib/layout.json`.
+- **Keep every block and slot at least 4 cm from every dot:** a covered dot stops the run, because each photo
+  needs all 6 dots to calibrate itself.
 - **Mess area** on one side, **target row** of numbered slots on the other. Slots start empty, so a placement never lands on another block.
 - Arm base at a fixed, measured spot on the sheet.
 
@@ -188,7 +192,7 @@ Tasks, in order:
 
 Tests: all `unit` tests green with no network; the `api` test for B1 run once and its result recorded.
 
-**Exit (Gate 1):** from two real photos of the sticker sheet, `plan_from_photos.py` prints the right order, uses names chosen by Spark, and the cm positions are within 1 cm of a ruler measurement.
+**Exit (Gate 1):** from two real photos of the dot sheet, `plan_from_photos.py` prints the right order, uses names chosen by Spark, and the cm positions are within 1 cm of a ruler measurement.
 
 ### Phase 2: Arm bring-up (Gate 2, Fri 30 Oct)
 
@@ -205,7 +209,8 @@ Tests: `unit` tests for the command strings `arm.py` sends (fake transport). `hw
 
 ### Phase 3: Aim, pick and place one block (Gate 3, Sat 31 Oct)
 
-1. `scripts/calibrate.py`: one photo, find the 4 stickers with SAM, fit and save `calib/camera.json`.
+1. (changed 30 Oct) No separate calibration step or saved map: every photo calibrates itself from its 6 dots
+   (`scene.calibrate`). First, the blocker in todo.md: move the check dots off the middle lines.
 2. Put a bright sticker on the gripper tip so SAM can find it ("gripper marker").
 3. Settle needs.md B6: precision test (same pose 10 times).
 4. `kinematics.py`. Try the maths first (base rotation plus a two-link arm). If it is not accurate enough by midday, switch to a **taught-pose grid**: jog the tip to ~12 points on the sheet, record the angles, interpolate between them. Both are explainable; the grid is often more accurate on cheap arms.
