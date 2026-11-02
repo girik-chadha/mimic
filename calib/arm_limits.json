@@ -5,7 +5,7 @@
   "pins": {"base": 16, "shoulder": 17, "elbow": 2, "grip": 4},
   "ranges_deg": {"base": [0, 180], "shoulder": [80, 180], "elbow": [30, 120]},
   "grip_open_deg": 90,
-  "grip_closed_limit_deg": 120,
+  "grip_closed_limit_deg": 140,
   "home_deg": {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90},
   "min_ms_per_degree": 10,
   "max_grip_hold_s": 5

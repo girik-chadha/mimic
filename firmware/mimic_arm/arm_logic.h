@@ -19,7 +19,7 @@
 #define LIMITS_CHECKED_BY_HAND 1
 #endif
 #define GRIP_OPEN 90
-#define GRIP_CLOSED_LIMIT 120      // never close further than this (the grip servo overheats)
+#define GRIP_CLOSED_LIMIT 140      // never close further than this (the grip servo overheats; kit's own limit 150)
 #define MIN_MS_PER_DEGREE 10       // speed limit: a move of 20 degrees takes at least 200 ms
 #define MAX_GRIP_HOLD_MS 5000      // a closed grip relaxes after this long
 #define MAX_LINE 64                // longer command lines are rejected

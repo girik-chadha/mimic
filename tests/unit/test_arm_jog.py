@@ -41,7 +41,7 @@ def test_grip_home_status_stop(fake):
     assert jog.handle(a, "grip open") == "grip open"
     assert jog.handle(a, "status") == "{'base': 90, 'shoulder': 90, 'elbow': 90, 'grip': 90, 'locked': False}"
     assert jog.handle(a, "stop") == "stopped"
-    assert t.sent == ["H", "J 90 90 90 120 500", "J 90 90 90 90 500", "?", "S"]
+    assert t.sent == ["H", "J 90 90 90 140 500", "J 90 90 90 90 500", "?", "S"]
 
 
 def test_step_past_a_limit_is_refused_and_not_sent(fake):

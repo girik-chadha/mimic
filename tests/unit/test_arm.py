@@ -67,7 +67,7 @@ def test_committed_limits_are_unlocked_with_the_kit_ranges_for_the_first_powered
     limits = committed_limits()
     assert limits.placeholder is False and limits.limits_checked_by_hand is True
     assert limits.ranges_deg == {"base": (0, 180), "shoulder": (80, 180), "elbow": (30, 120)}
-    assert (limits.grip_open_deg, limits.grip_closed_limit_deg) == (90, 120)
+    assert (limits.grip_open_deg, limits.grip_closed_limit_deg) == (90, 140)   # 140 since 3 Nov (kit's own: 150)
     assert limits.home_deg == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
 
 
@@ -156,7 +156,7 @@ def test_grip_close_and_open_keep_the_rest_of_the_pose():
     a.move({"base": 100, "shoulder": 80, "elbow": 95, "grip": 90}, ms=800)
     a.grip(closed=True)
     a.grip(closed=False)
-    assert t.sent[-2:] == ["J 100 80 95 120 500", "J 100 80 95 90 500"]
+    assert t.sent[-2:] == ["J 100 80 95 140 500", "J 100 80 95 90 500"]   # 50 degrees * 10 ms = 500 ms
 
 
 def test_stop_sends_S_and_forgets_the_pose():
@@ -174,7 +174,7 @@ def test_stop_sends_S_and_forgets_the_pose():
     ({"base": 181, "shoulder": 90, "elbow": 90, "grip": 90}, "base 181 degrees is outside its range 0-180"),
     ({"base": 90, "shoulder": 79, "elbow": 90, "grip": 90}, "shoulder 79 degrees is outside its range 80-180"),
     ({"base": 90, "shoulder": 90, "elbow": 121, "grip": 90}, "elbow 121 degrees is outside its range 30-120"),
-    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 121}, "grip 121 degrees is outside its range 90-120"),
+    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 141}, "grip 141 degrees is outside its range 90-140"),
     ({"base": 90, "shoulder": 90, "elbow": 90}, "needs exactly these joints"),
     ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "wrist": 90}, "needs exactly these joints"),
 ])

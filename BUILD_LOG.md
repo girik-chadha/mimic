@@ -110,3 +110,6 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   sync test; `arm_lock.py unlock`; `test_committed_limits_are_locked` updated on purpose, and the lock-guard tests now
   build their own locked limits so they keep testing the guard. Unlocked firmware compiled (300,937 bytes, servo
   code included) and copied to C:\Users\girik\mimic_firmware\mimic_arm. Not uploaded.
+- Grip closed limit 120 -> 140 in both `arm_limits.json` and `arm_logic.h` (kit's own limit 150): a 19 mm die needs
+  the jaws closer than 120 allows; the gap per degree is unmeasured. Sync test green; firmware recompiled and
+  copied to Windows. Not uploaded.
