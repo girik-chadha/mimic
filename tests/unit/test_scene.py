@@ -146,10 +146,48 @@ def test_five_dots_stop(monkeypatch):
         calibrate_with(monkeypatch, dot_boxes()[:5])
 
 
-def test_seven_dots_stop(monkeypatch):
-    extra = dot_box(camera((10, 20)))
-    with pytest.raises(SceneError, match="Found 7 dots, need exactly 6"):
-        calibrate_with(monkeypatch, dot_boxes() + [extra])
+# ---------- more than 6 dot-sized boxes: pick the 6 that fit ----------
+# (Until 2 Nov, 7 dot-sized boxes always stopped the run. Now the best-fitting 6 are kept.)
+
+CLAW_MARKER = (10, 20)     # a sticker on the claw tip, lying on the sheet
+TABLE_SPECK = (44, -4)     # off the sheet
+DOT_LIKE_BLOCK = (30, 6)   # a small block that SAM calls a dot
+
+
+@pytest.mark.parametrize("extras", [[CLAW_MARKER], [CLAW_MARKER, TABLE_SPECK],
+                                    [CLAW_MARKER, TABLE_SPECK, DOT_LIKE_BLOCK]])
+def test_seven_eight_or_nine_candidates_find_the_right_six(monkeypatch, extras):
+    boxes = dot_boxes() + [dot_box(camera(cm)) for cm in extras]
+    c = calibrate_with(monkeypatch, boxes)
+    for seen_px, role in zip(c.pixel_pts, scene.ROLES):
+        assert math.dist(seen_px, camera(DOTS_CM[role])) <= 1, role
+    assert c.fit_report() < 0.05
+
+
+def test_extras_are_listed_as_leftovers():
+    pts = [camera(cm) for cm in DOTS_CM.values()] + [camera(CLAW_MARKER), camera(TABLE_SPECK)]
+    ordered, leftovers = scene.choose_dots(pts, make_layout())
+    assert len(ordered) == 6
+    assert sorted(leftovers) == sorted([camera(CLAW_MARKER), camera(TABLE_SPECK)])
+
+
+def test_two_equally_good_sets_stop(monkeypatch):
+    # a second dot-sized thing a few millimetres from the top-right dot: either could be that corner
+    near_corner = (37.1, 24.7)
+    with pytest.raises(SceneError, match="Two different sets of 6 dots fit the layout equally well"):
+        calibrate_with(monkeypatch, dot_boxes() + [dot_box(camera(near_corner))])
+
+
+def test_extras_with_no_good_six_stop(monkeypatch):
+    wrong = dict(DOTS_CM, right_check=(31.5, 12.4))  # layout says 3 cm off from where the dot really is
+    with pytest.raises(CalibrationError, match="Found 7 dot-sized boxes, but no 6 of them fit"):
+        calibrate_with(monkeypatch, dot_boxes() + [dot_box(camera(CLAW_MARKER))], make_layout(dots_cm=wrong))
+
+
+def test_more_than_twelve_candidates_stop(monkeypatch):
+    extras = [dot_box(camera((5 + 2 * i, 18))) for i in range(7)]  # 13 in all
+    with pytest.raises(SceneError, match="Found 13 dot-sized boxes, more than 12"):
+        calibrate_with(monkeypatch, dot_boxes() + extras)
 
 
 def test_tiny_speck_is_dropped_by_size(monkeypatch):
@@ -164,10 +202,10 @@ def test_block_is_not_mistaken_for_a_dot(monkeypatch):
     assert c.fit_report() < 0.05
 
 
-def test_dot_sized_speck_off_the_sheet_stops(monkeypatch):
-    speck = dot_box(camera((44, -4)), size=20)
-    with pytest.raises(SceneError, match="Found 7 dots"):
-        calibrate_with(monkeypatch, dot_boxes() + [speck])
+def test_dot_sized_speck_off_the_sheet_is_left_out(monkeypatch):
+    speck = dot_box(camera(TABLE_SPECK), size=20)
+    c = calibrate_with(monkeypatch, dot_boxes() + [speck])
+    assert c.fit_report() < 0.05
 
 
 def test_dots_dropped_for_size_are_listed(monkeypatch):

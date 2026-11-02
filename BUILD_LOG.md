@@ -76,3 +76,10 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   prints success rate, attempts per block, worst error, cost per run); shared setup checks in `loop.load_and_check`.
 - README drafted: pitch, the four-job table, safety, honest status, benchmark placeholders (no results claimed),
   related work (Instant Policy, Vosylius and Johns, arXiv 2411.12633).
+- First-powered-session tools, all tested against fakes (no hardware, nothing uploaded, arm_limits.json still
+  locked): robust dot finding (best 6 of up to 12 dot-sized boxes, stop if two sets fit equally),
+  `scripts/first_moves.py` (each direction stops at its first n; proposal = approved minus 5 degrees, never
+  arm_limits.json), `scripts/grip_test.py` (2-degree steps, opens between asks, lift test within the grip timer),
+  `scripts/repeatability.py` (spread, backlash from alternating approaches, verdict vs the 1.5 cm tolerance, $0.10
+  cap), `mimic/session.py` (s at any prompt or Ctrl+C sends S; the bridge sends S on Ctrl+C). 36 new tests;
+  equal-fit stop broken on purpose once. needs.md C7: the first-power checklist.

@@ -6,6 +6,7 @@ Type one command per line:
     base +5        shoulder -3        elbow +10        (degrees, one joint at a time)
     grip open      grip close
     home           status             stop             quit
+    s (or Ctrl+C)  stop the arm and exit
 
 --dry-run prints every line that would be sent, without an arm. Without --dry-run it talks to the
 real arm through the Windows serial bridge, but only once calib/arm_limits.json is no longer a
@@ -15,9 +16,10 @@ import argparse
 import sys
 
 from mimic import arm as arm_module
-from mimic.arm import JOINTS, Arm, ArmError, FakeTransport
+from mimic import session
+from mimic.arm import JOINTS, Arm, ArmError
 
-HELP = "commands: base|shoulder|elbow|grip +N/-N, grip open, grip close, home, status, stop, quit"
+HELP = "commands: base|shoulder|elbow|grip +N/-N, grip open, grip close, home, status, stop, quit, s (stop + exit)"
 MIN_STEP_MS = 400
 
 
@@ -48,10 +50,7 @@ def handle(arm: Arm, line: str) -> str:
 
 
 def make_arm(dry_run: bool, limits) -> Arm:
-    if dry_run:
-        return Arm(FakeTransport(limits, echo=print), limits)
-    arm_module.refuse_unchecked_limits(limits)  # checked BEFORE the bridge (and the serial port) is opened
-    return Arm(arm_module.SerialBridgeTransport(), limits)
+    return session.connect(dry_run, limits)  # a real arm is refused while locked, before the bridge opens
 
 
 def main():
@@ -65,13 +64,7 @@ def main():
         sys.exit(1)
     print("DRY RUN: nothing is sent to an arm." if args.dry_run else "")
     print(HELP)
-    try:
-        for line in sys.stdin:
-            if line.strip().lower() in ("quit", "q", "exit"):
-                break
-            print(handle(arm, line))
-    finally:
-        arm.transport.close()  # the real bridge sends S when it is closed
+    sys.exit(session.guarded(arm, lambda: session.command_loop(lambda line: handle(arm, line), sys.stdin)))
 
 
 if __name__ == "__main__":

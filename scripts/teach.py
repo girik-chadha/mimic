@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 
 from mimic import arm as arm_module
-from mimic import config, kinematics
-from mimic.arm import JOINTS, Arm, ArmError, FakeTransport
+from mimic import config, kinematics, session
+from mimic.arm import JOINTS, Arm, ArmError
 from mimic.kinematics import ARM_JOINTS, KinematicsError, TaughtPoint
 
 JOG_STEPS = (1, 2, 5, 10)
@@ -30,7 +30,7 @@ HELP = """commands:
   save clear                          save the current pose as camera_clear (arm out of the photo)
   list                                show what is saved
   finish                              check the grid and mark it as taught (asks for yes)
-  home | status | stop | quit"""
+  home | status | stop | quit         s (or Ctrl+C) stops the arm and exits"""
 
 
 class Teacher:
@@ -123,10 +123,7 @@ class Teacher:
 
 
 def make_arm(dry_run: bool, limits) -> Arm:
-    if dry_run:
-        return Arm(FakeTransport(limits, echo=print), limits)
-    arm_module.refuse_unchecked_limits(limits)  # checked BEFORE the bridge (and the serial port) is opened
-    return Arm(arm_module.SerialBridgeTransport(), limits)
+    return session.connect(dry_run, limits)  # a real arm is refused while locked, before the bridge opens
 
 
 def main():
@@ -142,16 +139,10 @@ def main():
     if args.dry_run and not grid_path.exists():
         grid_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(kinematics.POSE_GRID_PATH, grid_path)
-    teacher = Teacher(arm, grid_path)
+    teacher = Teacher(arm, grid_path, ask=session.ask)
     print(("DRY RUN: nothing is sent to an arm. " if args.dry_run else "") + f"Saving to {grid_path}")
     print(HELP)
-    try:
-        for line in sys.stdin:
-            if line.strip().lower() in ("quit", "q", "exit"):
-                break
-            print(teacher.handle(line))
-    finally:
-        arm.transport.close()
+    sys.exit(session.guarded(arm, lambda: session.command_loop(teacher.handle, sys.stdin)))
 
 
 if __name__ == "__main__":

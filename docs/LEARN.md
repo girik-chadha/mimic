@@ -302,3 +302,22 @@ is logged."
 Two sentences: "Our first test on the real board was deliberately read-only: with the batteries off, the arm answered
 over USB and refused every move, proving the link and the safety lock before anything could move. The benchmark will
 give the numbers we quote, with the cache switched off so the cost per run is real."
+
+## 2 Nov: tools for the first powered session
+
+- **Finding the dots with extras in the photo:** a claw marker or a speck can look like a dot. With more than six
+  dot-sized boxes, Mimic tries every group of six and keeps the one whose two check dots land where they should.
+  If two groups fit equally well, it refuses the photo instead of guessing.
+- **first_moves.py:** finds each joint's safe range the careful way: tiny slow moves from home (5 degrees, then 10,
+  then 15 ...), you say y or n after each, and each direction stops at the first n. It proposes the range you approved
+  minus 5 degrees, and never changes the real limits file: you copy it over after reading it.
+- **grip_test.py:** closes the claw on a cube 2 degrees at a time. It opens again between steps, because the firmware
+  lets go of any grip held for 5 s and you need time to answer. Then it lifts the cube, holds it 2 s and puts it down.
+- **repeatability.py:** sends the same pose ten times, coming from alternate sides, and photographs a sticker on the
+  claw. The spread (standard deviation) says how much a correction can be trusted: under 0.5 cm, correct fully;
+  over 1 cm, correct only part of each miss. The gap between the two sides is backlash, play in the gears.
+- **One way to stop everything:** type s at any prompt or press Ctrl+C, and S (stop) is sent to the arm.
+
+Two sentences: "Before the arm does any real work, three guided scripts measure it with me watching: how far each
+joint can safely go, how tightly the claw must close to hold a cube, and how repeatably it reaches the same spot. Every
+step is small, slow and stoppable with one key, and nothing changes the real safety limits without me copying it over."

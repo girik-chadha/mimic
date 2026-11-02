@@ -6,7 +6,7 @@ Started from WSL by mimic.arm.SerialBridgeTransport, roughly:
 It prints READY once the port is open, then for every command line it reads on stdin it writes the
 line to the arm at 115200 baud and prints the arm's one-line reply (or TIMEOUT). Lines from the
 ESP32 that are not replies (boot messages) go to stderr as "ignored: ...". When stdin closes, or on
-any error, it sends S (stop) and exits. If the port cannot be opened it prints "ERROR <reason>".
+any error, or on Ctrl+C, it sends S (stop) and exits. If the port cannot be opened it prints "ERROR <reason>".
 
 Only the standard library and pyserial: Windows Python does not have the rest of the project.
 --fake pretends to be a locked arm, so this script can be tested without hardware.
@@ -153,6 +153,8 @@ def main():
         sys.exit(1)
     try:
         bridge(port, iter(sys.stdin.readline, ""), sys.stdout, sys.stderr, args.reply_timeout)
+    except KeyboardInterrupt:  # Ctrl+C: bridge() has already sent S on its way out
+        sys.exit(130)
     finally:
         port.close()
 

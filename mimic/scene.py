@@ -24,6 +24,8 @@ from mimic.calib import fit as fit_calib
 ROLES = ["bottom_left", "bottom_right", "top_right", "top_left", "centre_check", "right_check"]
 CORNERS, CHECKS = ROLES[:4], ROLES[4:]
 MIN_DOT_CLEARANCE_CM = 4.0  # slots (and so blocks) must stay this far from every dot
+MAX_DOT_CANDIDATES = 12     # more dot-sized boxes than this: something is badly wrong in the view
+EQUAL_FIT_CM = 0.1          # two sets of dots this close in fit count as "equally good": refuse
 
 
 class SceneError(ValueError):
@@ -127,12 +129,11 @@ def _check_errors(corner_px: list, check_px: list, layout: Layout) -> list[float
     return [calib.check(px, layout.dots_cm[role]) for px, role in zip(check_px, CHECKS)]
 
 
-def assign_roles(dots_px: list, layout: Layout) -> list[tuple[float, float]]:
-    """Six dot centres in any order -> the same centres in ROLES order.
+def _tries(dots_px: list, layout: Layout) -> list[tuple]:
+    """Every way of naming six dots: (worst check error, turn, centres in ROLES order, check errors), best first.
 
     The 4 outermost dots are the corners. Walking round them anticlockwise, try each one as bottom-left
-    (4 rotations), and both ways of matching the 2 inner dots to the 2 check dots. Keep the try whose check
-    dots land closest to where layout.json says they are.
+    (4 rotations), and both ways of matching the 2 inner dots to the 2 check dots: 8 orders in all.
     Mirror images are not tried yet (see docs/todo.md: the check dots must first move off the middle lines).
     """
     outer = cv2.convexHull(np.array(dots_px, dtype=np.float32), returnPoints=False).flatten().tolist()
@@ -141,31 +142,79 @@ def assign_roles(dots_px: list, layout: Layout) -> list[tuple[float, float]]:
                          "outside. Is a check dot outside the corner dots, or a corner dot missing?")
     corners = _anticlockwise([dots_px[i] for i in outer])
     inner = [p for i, p in enumerate(dots_px) if i not in outer]
-
     tries = []
     for turn in range(4):
         corner_px = corners[turn:] + corners[:turn]
         for check_px in (inner, inner[::-1]):
             errors = _check_errors(corner_px, check_px, layout)
             tries.append((max(errors), turn, corner_px + check_px, errors))
-    tries.sort(key=lambda t: t[0])
-    best_error, best_turn, best_order, best_errors = tries[0]
+    return sorted(tries, key=lambda t: t[0])
 
+
+def _refuse_two_turns(tries: list) -> None:
+    best_turn = tries[0][1]
+    if [t for t in tries if t[1] != best_turn][0][0] <= MAX_CHECK_ERROR_CM:
+        raise SceneError("Two different ways of naming the dots both fit, so the photo cannot be read safely. "
+                         "The check dots must not be symmetric.")
+
+
+def assign_roles(dots_px: list, layout: Layout) -> list[tuple[float, float]]:
+    """Exactly six dot centres in any order -> the same centres in ROLES order."""
+    tries = _tries(dots_px, layout)
+    best_error, _, best_order, best_errors = tries[0]
     if best_error > MAX_CHECK_ERROR_CM:
         details = ", ".join(f"{role} {e:.2f} cm off" for role, e in zip(CHECKS, best_errors))
         raise CalibrationError(f"No way of naming the dots fits: the best has {details} (limit "
                                f"{MAX_CHECK_ERROR_CM} cm). Are the dot positions in layout.json right?")
-    other_turns = [t for t in tries if t[1] != best_turn]
-    if other_turns[0][0] <= MAX_CHECK_ERROR_CM:
-        raise SceneError("Two different ways of naming the dots both fit, so the photo cannot be read safely. "
-                         "The check dots must not be symmetric.")
+    _refuse_two_turns(tries)
     return best_order
+
+
+def choose_dots(candidates: list, layout: Layout) -> tuple[list, list]:
+    """Dot-sized centres (6 to 12) -> (the 6 dots in ROLES order, the leftovers).
+
+    With exactly 6, this is assign_roles. With more (a claw marker, a table speck, a block that looks like a dot),
+    every set of 6 is tried in its 8 orders, and the set whose check dots land within 0.5 cm is kept.
+    If another set fits just as well (worst check error within 0.1 cm of the best), the photo is refused.
+    """
+    if len(candidates) < len(ROLES):
+        raise SceneError(f"Found {len(candidates)} dots, need exactly {len(ROLES)}: {_list(candidates)}.")
+    if len(candidates) == len(ROLES):
+        return assign_roles(candidates, layout), []
+    if len(candidates) > MAX_DOT_CANDIDATES:
+        raise SceneError(f"Found {len(candidates)} dot-sized boxes, more than {MAX_DOT_CANDIDATES}: "
+                         f"{_list(candidates)}. Clear the sheet of small things that look like dots.")
+    fits = []
+    for chosen in combinations(range(len(candidates)), len(ROLES)):
+        try:
+            tries = _tries([candidates[i] for i in chosen], layout)
+        except SceneError:
+            continue  # these six do not have 4 outer corners
+        if tries[0][0] <= MAX_CHECK_ERROR_CM:
+            fits.append((tries[0][0], chosen, tries))
+    if not fits:
+        raise CalibrationError(f"Found {len(candidates)} dot-sized boxes, but no 6 of them fit the layout "
+                               f"(check dots within {MAX_CHECK_ERROR_CM} cm): {_list(candidates)}.")
+    fits.sort(key=lambda f: f[0])
+    if len(fits) > 1 and fits[1][0] - fits[0][0] <= EQUAL_FIT_CM:
+        a, b = set(fits[0][1]), set(fits[1][1])
+        clash = [candidates[i] for i in sorted(a ^ b)]
+        raise SceneError(f"Two different sets of 6 dots fit the layout equally well ({fits[0][0]:.2f} and "
+                         f"{fits[1][0]:.2f} cm); they differ at {_list(clash)}. Is something dot-sized touching a dot?")
+    _, chosen, tries = fits[0]
+    _refuse_two_turns(tries)
+    return tries[0][2], [candidates[i] for i in range(len(candidates)) if i not in chosen]
+
+
+def _list(points: list) -> str:
+    return ", ".join(f"({x:.0f}, {y:.0f})" for x, y in points) or "none"
 
 
 # ---------- calibrating one photo ----------
 
-def draw_dots(image_path: str, dots_px: list, out_path, calib: Calib | None = None) -> None:
-    """Save the photo with each dot circled and named by its role (or '?' if the roles are not known)."""
+def draw_dots(image_path: str, dots_px: list, out_path, calib: Calib | None = None, leftovers=()) -> None:
+    """Save the photo with each dot circled and named by its role (or '?' if the roles are not known).
+    Dot-sized boxes that were not used (leftovers) are marked with an x."""
     img = cv2.imread(str(image_path))
     if img is None:
         return
@@ -177,6 +226,10 @@ def draw_dots(image_path: str, dots_px: list, out_path, calib: Calib | None = No
         cv2.circle(img, (int(x), int(y)), int(18 * scale), (0, 0, 255), 2)
         cv2.putText(img, label, (int(x + 22 * scale), int(y + 6 * scale)), cv2.FONT_HERSHEY_SIMPLEX,
                     0.6 * scale, (0, 0, 255), max(1, int(2 * scale)))
+    for x, y in leftovers:
+        cv2.drawMarker(img, (int(x), int(y)), (0, 140, 255), cv2.MARKER_TILTED_CROSS, int(24 * scale), 2)
+        cv2.putText(img, "x not a dot", (int(x + 16 * scale), int(y - 10 * scale)), cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5 * scale, (0, 140, 255), max(1, int(scale)))
     if calib:
         corners = np.array([[int(x), int(y)] for x, y in dots_px[:4]], dtype=np.int32)
         cv2.polylines(img, [corners], True, (0, 160, 0), 1)
@@ -191,13 +244,15 @@ def calibrate(image_path: str, layout: Layout, labelled_path=None) -> Calib:
     refuse_placeholder(layout)
     dots, dropped = find_dots(image_path, layout)
     try:
-        if len(dots) != len(ROLES):
-            found = ", ".join(f"({x:.0f}, {y:.0f})" for x, y in dots) or "none"
-            too = (f" Dropped for size: " + ", ".join(f"({b.centre[0]:.0f}, {b.centre[1]:.0f}) "
-                   f"{dot_size(b):.4f}" for b in dropped) + ".") if dropped else ""
-            raise SceneError(f"Found {len(dots)} dots, need exactly {len(ROLES)}: {found}.{too} "
-                             "Is a dot covered or out of view, or is something dot-sized near the sheet?")
-        ordered = assign_roles(dots, layout)
+        try:
+            ordered, leftovers = choose_dots(dots, layout)
+        except SceneError as error:
+            if len(dots) < len(ROLES) and dropped:
+                error.args = (f"{error} Dropped for size: " + ", ".join(
+                    f"({b.centre[0]:.0f}, {b.centre[1]:.0f}) {dot_size(b):.4f}" for b in dropped) + ".",)
+            if len(dots) < len(ROLES):
+                error.args = (f"{error} Is a dot covered or out of view?",)
+            raise
         calib = fit_calib(ordered, [layout.dots_cm[r] for r in ROLES], names=ROLES)
     except (SceneError, CalibrationError) as error:
         if labelled_path:
@@ -205,7 +260,7 @@ def calibrate(image_path: str, layout: Layout, labelled_path=None) -> Calib:
             error.args = (f"{error} Labelled photo: {labelled_path}",)
         raise
     if labelled_path:
-        draw_dots(image_path, ordered, labelled_path, calib)
+        draw_dots(image_path, ordered, labelled_path, calib, leftovers)
     return calib
 
 

@@ -149,3 +149,17 @@ def test_bridge_that_exits_raises():
     with pytest.raises(ArmError, match="stopped|not usable"):
         t.send("?")
     t.close()
+
+
+def test_ctrl_c_makes_the_bridge_send_S_and_exit(tmp_path):
+    import signal
+    import subprocess
+    command, log = fake_bridge(tmp_path)
+    bridge = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    assert bridge.stdout.readline().strip() == "READY"
+    bridge.stdin.write("?\n")
+    bridge.stdin.flush()
+    assert bridge.stdout.readline().strip() == "A 90 90 90 90 L"
+    bridge.send_signal(signal.SIGINT)  # what Ctrl+C does
+    assert bridge.wait(timeout=5) == 130
+    assert log.read_text().splitlines() == ["?", "S"]

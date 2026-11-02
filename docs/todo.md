@@ -55,7 +55,9 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
   `scene.assign_roles`, an ambiguity stop when a mirror and a non-mirror order both fit, and a mirror test.
 - [ ] Keep every block at least 4 cm from every dot (a covered dot stops the run)
 - [ ] Gripper tip marker
-- [ ] Precision test B6
+- [x] First-powered-session tools, tested with fakes (2 Nov): `first_moves.py`, `grip_test.py`, `repeatability.py`, robust dot finding, s / Ctrl+C stop everywhere
+- [ ] First powered session (needs.md C7): ranges with `first_moves.py`, copy into both files, upload; `grip_test.py`
+- [ ] Precision test B6: `repeatability.py`
 - [x] Kinematics: taught-pose grid (`kinematics.py`, `calib/pose_grid.json`, `scripts/teach.py`), tested with fakes (2 Nov)
 - [x] `pick` / `place` (`motion.py`), planned grip hold checked against max_grip_hold_s, tested with fakes (2 Nov)
 - [ ] Teach the real grid: 6-8 points covering every slot and the whole mess area, plus grip and camera_clear (needs.md C6)

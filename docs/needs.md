@@ -164,7 +164,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | # | Question | Test that settles it | When |
 |---|---|---|---|
 | B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). | Read the KEYESTUDIO PDF, jog each joint gently, measure with a ruler, write the numbers here. | Fri |
-| B6 | How precise is the arm at our table distances? | Send the same pose 10 times; the camera measures the spread of the gripper tip in mm. | Sat |
+| B6 | How precise is the arm at our table distances? | `scripts/repeatability.py --pose B S E G`: the same pose 10 times from alternating sides, the camera measures the claw-tip marker; spread (mean, standard deviation, max), backlash, verdict against the 1.5 cm tolerance. | First powered session |
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
@@ -215,6 +215,46 @@ BASETEN_API_KEY=...          # Mon, optional
 - The camera looks down from 40-50 cm. It may move between photos: every photo calibrates itself.
 - Blocks: solid, 2-3 cm, clearly different colours, none white or pale. Buy them after measuring the gripper opening (B4).
 - Nothing personal, no faces, in the camera's view.
+
+### C7. First powered session (scripts written 2 Nov against fakes; not run on hardware yet)
+
+In every script, **s** at any prompt or **Ctrl+C** sends S (stop) and exits. If anything buzzes, strains or
+smells: switch the batteries off.
+
+**Before power**
+1. Write the kit's own joint ranges (KEYESTUDIO docs, B4) into **both** `calib/arm_limits.json` and
+   `firmware/mimic_arm/arm_logic.h`, home 90 for every joint, a conservative grip closed limit. `.venv/bin/pytest`
+   (the sync test must pass).
+2. `python scripts/arm_lock.py unlock` (type yes). For this session the hand check is earned by `first_moves.py`
+   itself (step 8). Update `test_committed_limits_are_locked` in the same commit.
+3. Copy the firmware and upload with the **batteries disconnected** (USB only), needs.md C5.
+
+**Power on**
+4. Clear the area: nothing within the arm's reach, cables free, sheet and blocks out of the way.
+5. Connect the batteries **last**, with a hand on the switch. **Expect every servo to jump to 90 degrees (home)** the
+   moment power arrives: normal, because a hobby servo cannot report where it is.
+
+**Ranges**
+6. `python scripts/first_moves.py`: base, then shoulder, then elbow; +5, -5, +10, -10 ... from home, slowly, never
+   past the range in arm_limits.json and never more than 45 degrees from home (`--max-delta` to widen; so the base
+   stays within 45-135). Answer y/n after each move; each direction stops at its first n. Watch for the shoulder:
+   it may only have about 10 degrees below home. Note which joint and direction lifts the claw (for step 9).
+7. It writes `calib/arm_limits_proposed.json`: each direction's largest approved step minus 5 degrees. It never
+   edits `calib/arm_limits.json`.
+8. **A completed first_moves session is the "checked by hand" step:** the proposal has
+   `limits_checked_by_hand: true`. Review it, copy the ranges into **both** files, run the tests, switch the batteries
+   off, upload, batteries back on.
+
+**Grip and repeatability**
+9. `python scripts/grip_test.py --lift "shoulder -4"` (one or more joints, 10 degrees in total at most). At home with
+   the claw open, place the cube while nothing is sent, press Enter. It closes in 2-degree steps (opening again
+   between steps, because of the 5 s grip timer) and asks "did it hold?"; at the first y it lifts, holds 2 s, lowers
+   and opens. The angle that held goes into the proposal as `grip_hold_deg`.
+10. Put the gripper marker on the claw tip. `python scripts/repeatability.py --pose B S E G` (a pose that hides no
+    dot; `--target X Y` from a ruler is optional). Cost cap $0.10. Verdict: 2 x standard deviation under 0.5 cm, full
+    corrections are fine; over 1 cm, apply only part of each miss.
+
+**Switch off:** home first (`arm_jog`: `home`), then the batteries.
 
 ### C6. Teaching the pose grid (scripts/teach.py)
 

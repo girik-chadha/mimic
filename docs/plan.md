@@ -83,6 +83,9 @@ def load_layout(path=config.LAYOUT_PATH) -> Layout
     # height correction (off by default: camera height, point under the lens, point height)
 def find_dots(image_path: str, layout: Layout) -> (centres, dropped)   # one SAM call, size filter
 def assign_roles(dots_px: list, layout: Layout) -> list                # 6 centres -> ROLES order
+def choose_dots(candidates: list, layout: Layout) -> (ordered, leftovers)   # (2 Nov) 6-12 dot-sized boxes:
+    # every set of 6 in its 8 orders; keep the set whose check dots land within 0.5 cm; stop if another set
+    # fits within 0.1 cm of the best, or if there are more than 12
 def calibrate(image_path: str, layout: Layout, labelled_path=None) -> Calib
     # (changed 30 Oct) every photo calibrates itself: exactly 6 dots, roles by position (4 rotations),
     # map from the 4 corners, both check dots within 0.5 cm; saves a labelled photo.
