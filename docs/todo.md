@@ -41,9 +41,9 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] Assemble the arm; centre the servos during assembly
 - [ ] Measure pins, joint ranges, link lengths, gripper opening; write them into needs.md B4
 - [ ] Buy blocks that fit the gripper with ~1 cm to spare (solid, clearly different colours, not white)
-- [ ] Firmware with the command protocol over USB serial (code + g++ logic tests 29 Oct; compiles for the ESP32 with no warnings 2 Nov; not uploaded)
+- [x] Firmware with the command protocol over USB serial (code + g++ logic tests 29 Oct; compiled 2 Nov; locked firmware uploaded and answering 2 Nov)
 - [x] B3 chosen: Windows serial bridge (`scripts/serial_bridge.py`, `SerialBridgeTransport`), tested without hardware (2 Nov)
-- [ ] Upload the locked firmware (needs.md C5), batteries disconnected, then `python scripts/arm_check.py`: B3 moves to Part A when it passes
+- [x] Arm link: locked firmware uploaded, `scripts/arm_check.py` passed on the real board (`?`, `S` OK; `J`, `H` refused); B3 settled (2 Nov, needs.md A10)
 - [ ] Fill `calib/arm_limits.json` **and** `firmware/mimic_arm/arm_logic.h` with conservative real numbers, jog gently, then set placeholder false / checked by hand true
 - [ ] `camera.py`, camera mounted; **Gate 2**
 

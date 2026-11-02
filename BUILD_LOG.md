@@ -69,3 +69,10 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   corrected retries within +-2 cm, FAIL after 2 retries, run log, $0.15 cap, diagnose hook), `camera.py`
   (iVCam via Windows ffmpeg) and `scripts/run_mimic.py`. B2 decided. 36 new tests with a fake world;
   hold-time check broken on purpose once. Nothing run on hardware, no API calls.
+- **First test on the real board passed:** locked firmware uploaded; `scripts/arm_check.py` through the Windows
+  serial bridge got `A 90 90 90 90 L` for `?`, `OK` for `S`, and `ERR limits not measured` for `J` and `H`.
+  B3 settled (needs.md A10). No servo driven yet.
+- `scripts/benchmark.py` (N runs, cache off via `meta_api.cache_enabled`, waits for the blocks to be reset,
+  prints success rate, attempts per block, worst error, cost per run); shared setup checks in `loop.load_and_check`.
+- README drafted: pitch, the four-job table, safety, honest status, benchmark placeholders (no results claimed),
+  related work (Instant Policy, Vosylius and Johns, arXiv 2411.12633).

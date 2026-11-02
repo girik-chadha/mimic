@@ -15,13 +15,7 @@ from mimic.arm import Arm, ArmError
 
 def main() -> int:
     try:
-        layout = scene.load_layout()
-        grid = kinematics.load_grid()
-        limits = arm_module.load_limits()
-        scene.refuse_placeholder(layout)
-        grid.check_ready()
-        grid.check_against(limits)
-        arm_module.refuse_unchecked_limits(limits)  # before the bridge opens the serial port
+        layout, grid, limits = loop.load_and_check()  # before the bridge opens the serial port
     except (ArmError, scene.SceneError, kinematics.KinematicsError) as error:
         print(f"STOPPED before opening anything: {error}")
         return 1

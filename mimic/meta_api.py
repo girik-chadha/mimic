@@ -31,6 +31,7 @@ SPARK_TOKENS_PER_IMAGE_GUESS = 1000  # only used if the reply has no token count
 
 _client = None
 _spent_usd = 0.0
+cache_enabled = True  # the benchmark sets this to False, so every call in a run is real
 
 
 # ---------- turning files into something we can send ----------
@@ -179,6 +180,7 @@ def call(model: str, content, save_as: str | None = None, use_cache: bool = True
     """Send content (a text string, or a list of input_text / input_image / input_video parts).
 
     use_cache=False neither reads nor writes the cache, so the benchmark sees real costs and times.
+    Setting meta_api.cache_enabled = False does the same for every call, wherever it comes from.
     """
     global _spent_usd
     if model.endswith("-contributor"):
@@ -186,6 +188,7 @@ def call(model: str, content, save_as: str | None = None, use_cache: bool = True
     if model not in (config.SAM_MODEL, config.SPARK_MODEL):
         raise ValueError(f"Unknown model {model!r}: add it and its price to config.py first.")
 
+    use_cache = use_cache and cache_enabled
     cache_file = config.CACHE_DIR / f"{_cache_key(model, content)}.json"
     if use_cache and cache_file.exists():
         text = json.loads(cache_file.read_text())["text"]

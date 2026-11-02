@@ -288,3 +288,17 @@ Two sentences: "Mimic learns where to reach by being shown a handful of spots, t
 places, photographs and measures the result in centimetres, retrying with a correction if it missed by more than
 1.5 cm. Every safety rule (taught area, grip time, cost cap) is checked before the arm moves, and every attempt
 is logged."
+
+## 2 Nov: first contact with the real board, and the benchmark
+
+- **The link works on real hardware.** With the batteries disconnected (so nothing could move), the laptop talked
+  to the ESP32 through the Windows bridge: it answered `?` with `A 90 90 90 90 L` (locked), accepted `S`, and
+  refused `J` and `H`. That proves the bridge, the cable, the protocol and the firmware's lock in one go.
+- **The benchmark** runs the whole loop several times with the cache off, so every API call is real and the cost
+  per run is honest. Between runs it waits for you to reset the blocks. It reports the success rate, average
+  attempts per block, worst error and cost per run. A run that crashes ends the benchmark rather than carrying on.
+- **README:** no results are claimed until the benchmark has run on the real arm.
+
+Two sentences: "Our first test on the real board was deliberately read-only: with the batteries off, the arm answered
+over USB and refused every move, proving the link and the safety lock before anything could move. The benchmark will
+give the numbers we quote, with the cache switched off so the cost per run is real."

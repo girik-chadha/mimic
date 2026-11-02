@@ -140,6 +140,18 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 - **Not yet done (needs the camera):** the B2 test from the plan, ten sharp overhead photos in a row in under 3 s each.
 - Never commit camera frames with people in them.
 
+### A10. Laptop-to-arm link (B3, settled 2 Nov)
+
+- **WSL talks to the arm through a Windows-side bridge** over USB serial: `scripts/serial_bridge.py` runs on Windows
+  Python 3.14.6 with pyserial 3.5, started from WSL by `mimic.arm.SerialBridgeTransport`. It finds the CP210x
+  (COM7, USB 10C4:EA60) by its USB ID, sets DTR/RTS low before opening, waits 2 s and discards boot text, time-limits
+  every reply and sends S when it closes. (Option 1, Wi-Fi HTTP, was not needed.)
+- **Read-only test on the real board passed (2 Nov),** locked firmware uploaded from PowerShell, batteries
+  disconnected, USB only, `python scripts/arm_check.py`: `?` -> `A 90 90 90 90 L`, `S` -> `OK`,
+  `J 90 90 90 90 800` -> `ERR limits not measured`, `H` -> `ERR limits not measured`.
+  So the bridge, the serial link, the protocol and the firmware's lock all work on the real hardware.
+  No servo has been driven yet.
+
 ### A8. Repo
 
 - Public: https://github.com/girik-chadha/mimic, first commit 28 Oct 2026.
@@ -151,7 +163,6 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 
 | # | Question | Test that settles it | When |
 |---|---|---|---|
-| B3 | How does WSL talk to the arm? **Chosen 2 Nov: Option 2**, `scripts/serial_bridge.py` on Windows Python (3.14.6, pyserial 3.5), started from WSL by `SerialBridgeTransport`; finds the CP210x (COM7) by USB ID, sets DTR/RTS low before opening, waits 2 s and discards boot text. (Option 1, Wi-Fi HTTP, not pursued.) | `python scripts/arm_check.py` with batteries disconnected: `?` -> `A 90 90 90 90 L`, `S` -> `OK`, `J` and `H` -> `ERR limits not measured`. Moves to Part A when it passes. | Mon |
 | B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). | Read the KEYESTUDIO PDF, jog each joint gently, measure with a ruler, write the numbers here. | Fri |
 | B6 | How precise is the arm at our table distances? | Send the same pose 10 times; the camera measures the spread of the gripper tip in mm. | Sat |
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |

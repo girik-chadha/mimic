@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 from mimic import arm as arm_module
-from mimic import brain, config, meta_api, motion, plan, scene
+from mimic import brain, config, kinematics, meta_api, motion, plan, scene
 
 RUN_BUDGET_USD = 0.15
 PASS_CM = 1.5
@@ -35,6 +35,19 @@ def choose_correction(slot, measured, previous, before_photo, after_photo, move)
     def clamp(value):
         return max(-MAX_CORRECTION_CM, min(MAX_CORRECTION_CM, value))
     return (clamp(previous[0] + slot[0] - measured[0]), clamp(previous[1] + slot[1] - measured[1]))
+
+
+def load_and_check():
+    """Load the sheet layout, pose grid and arm limits, and check them all, before anything is opened
+    (no serial port, no camera, no API call). Used by scripts/run_mimic.py and scripts/benchmark.py."""
+    layout = scene.load_layout()
+    grid = kinematics.load_grid()
+    limits = arm_module.load_limits()
+    scene.refuse_placeholder(layout)
+    grid.check_ready()
+    grid.check_against(limits)
+    arm_module.refuse_unchecked_limits(limits)
+    return layout, grid, limits
 
 
 def preflight(arm, layout, grid, limits) -> None:

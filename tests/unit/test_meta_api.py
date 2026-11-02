@@ -168,6 +168,15 @@ def test_spark_cost_is_estimated_without_token_counts():
     assert cost == pytest.approx(100 * 1.25e-6 + 10 * 4.25e-6)
 
 
+def test_cache_can_be_switched_off_for_every_call(monkeypatch):
+    monkeypatch.setattr(meta_api, "cache_enabled", False)
+    client = use(monkeypatch, FakeClient(reply("a"), reply("b")))
+    assert meta_api.call("sam-3.1", photo_content()) == "a"   # default use_cache=True, but switched off
+    assert meta_api.call("sam-3.1", photo_content()) == "b"
+    assert client.calls == 2
+    assert not list(config.CACHE_DIR.glob("*.json"))
+
+
 def test_reset_starts_a_new_run_from_zero(monkeypatch):
     use(monkeypatch, FakeClient(reply("a"), reply("b"), reply("c")))
     meta_api.call("sam-3.1", photo_content("one"))
