@@ -33,7 +33,7 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] Draw 3 numbered target slots on one side; leave the other side as the mess area
 - [ ] Take two photos (the camera may move between them; all 6 dots visible; objects at least 4 cm from every dot): `gate1_demo.jpg` (objects in your chosen order in the slots) and `gate1_mess.jpg` (scattered in the mess area)
 - [ ] Decide the camera (needs.md B2): cheap USB webcam, or a phone webcam app that works on Windows
-- [ ] Evening: install Arduino CLI or IDE 2, the ESP32 core, `ESP32Servo`, and the CP210x driver on Windows (B5)
+- [x] Evening: install Arduino CLI or IDE 2, the ESP32 core, `ESP32Servo`, and the CP210x driver on Windows (B5; compile + upload work from PowerShell, by 2 Nov)
 - [ ] Post a first clip or photo on X (SAM boxes on your desk)
 
 ## Fri 30 Oct: Phase 2, arm bring-up
@@ -41,7 +41,7 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] Assemble the arm; centre the servos during assembly
 - [ ] Measure pins, joint ranges, link lengths, gripper opening; write them into needs.md B4
 - [ ] Buy blocks that fit the gripper with ~1 cm to spare (solid, clearly different colours, not white)
-- [ ] Firmware with the command protocol over USB serial (code + g++ logic tests done 29 Oct; not compiled for the ESP32, not uploaded)
+- [ ] Firmware with the command protocol over USB serial (code + g++ logic tests 29 Oct; compiles for the ESP32 with no warnings 2 Nov; not uploaded)
 - [ ] Settle B3 (Wi-Fi hotspot vs Windows bridge), then the real transport for `arm.py` + `arm_jog.py` (both done with a fake transport, 29 Oct)
 - [ ] Fill `calib/arm_limits.json` **and** `firmware/mimic_arm/arm_logic.h` with conservative real numbers, jog gently, then set placeholder false / checked by hand true
 - [ ] `camera.py`, camera mounted; **Gate 2**

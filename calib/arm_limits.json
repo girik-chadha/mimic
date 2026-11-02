@@ -1,8 +1,8 @@
 {
   "placeholder": true,
   "limits_checked_by_hand": false,
-  "note": "PLACEHOLDER numbers until the arm is measured (needs.md B4). Must match firmware/mimic_arm/arm_logic.h (a unit test checks). Real moves need placeholder false AND limits_checked_by_hand true. Start with conservative ranges from the KEYESTUDIO PDF, then widen by jogging.",
-  "pins": {"base": 4, "shoulder": 5, "elbow": 18, "grip": 19},
+  "note": "PLACEHOLDER numbers until the arm is measured (needs.md B4). Must match firmware/mimic_arm/arm_logic.h (a unit test checks). Real moves need placeholder false AND limits_checked_by_hand true. Start with conservative ranges from the KEYESTUDIO PDF, then widen by jogging. Pins (2 Nov) are from the kit's sample code, untested on this arm.",
+  "pins": {"base": 16, "shoulder": 17, "elbow": 2, "grip": 4},
   "ranges_deg": {"base": [70, 110], "shoulder": [70, 110], "elbow": [70, 110]},
   "grip_open_deg": 90,
   "grip_closed_limit_deg": 120,

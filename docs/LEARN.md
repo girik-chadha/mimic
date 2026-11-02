@@ -234,3 +234,17 @@ plugged in. Python checks the same limits first, and a test makes sure the two c
 Two sentences: "Six dots drawn on the sheet let every photo work out its own pixel-to-centimetre map, so the camera
 can move freely; four dots build the map and two more check it to within half a centimetre. When the check
 fails, Mimic refuses the photo instead of guessing, which is exactly what happened on one of our real test photos."
+
+## 2 Nov: the firmware compiles for the real board
+
+- **What:** the same firmware that was tested on the laptop now compiles for the ESP32 with the official Arduino
+  tools (run on Windows, started from WSL). No changes were needed and there were no warnings, because all the
+  logic had already been compiled and tested with g++ as plain C++.
+- **Pinned versions** (ESP32 core 2.0.12, ESP32Servo 1.2.1) are written down, because newer versions changed how
+  servos are driven, and a surprise upgrade mid-hackathon could break a working build.
+- **Safety unchanged:** the pins are filled in, but the limits are still placeholders, so the firmware refuses
+  every move until the arm is measured and checked by hand.
+
+Two sentences: "The firmware compiled for the real ESP32 first time, because every rule in it had already been
+compiled and tested on the laptop as plain C++. The exact tool versions are pinned so the build cannot change
+under us before the deadline."

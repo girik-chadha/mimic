@@ -23,7 +23,7 @@
 #define MAX_GRIP_HOLD_MS 5000      // a closed grip relaxes after this long
 #define MAX_LINE 64                // longer command lines are rejected
 
-const int PINS[4] = {4, 5, 18, 19};          // base, shoulder, elbow, grip
+const int PINS[4] = {16, 17, 2, 4};          // base, shoulder, elbow, grip (kit sample code, untested)
 const int MIN_ANGLE[3] = {70, 70, 70};       // base, shoulder, elbow
 const int MAX_ANGLE[3] = {110, 110, 110};    // base, shoulder, elbow
 const int HOME[4] = {90, 90, 90, 90};        // base, shoulder, elbow, grip

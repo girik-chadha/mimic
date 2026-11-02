@@ -105,6 +105,24 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 - Assembly has very small parts and takes an evening. One review says a part was missing.
 - Wi-Fi and Bluetooth are on the board. The listing says it can be controlled from a computer on the same Wi-Fi.
 
+### A7b. Arm toolchain and power (settled 2 Nov; B5)
+
+- **B5: yes.** `arduino-cli` and the CP210x driver work on Windows 11 ARM64: Girik compiled and uploaded from
+  PowerShell. From WSL, the Windows `arduino-cli.exe` compiles our sketch:
+  `"/mnt/c/Program Files/Arduino CLI/arduino-cli.exe" compile --fqbn esp32:esp32:esp32 "$(wslpath -w firmware/mimic_arm)"`
+  (run it from a folder under `/mnt/c`, or Windows `cmd.exe` prints harmless "UNC paths are not supported" lines).
+- **Pinned versions:** arduino-cli 1.5.1, ESP32 core `esp32:esp32` **2.0.12**, `ESP32Servo` **1.2.1**, board
+  `esp32:esp32:esp32` (ESP32 Dev Module). Newer versions exist (core 3.3.12, ESP32Servo 3.2.1); do not upgrade
+  during the event: the 2.0.12 + 1.2.1 pair is the one that works. (Core 3.x changed the PWM
+  functions ESP32Servo uses, per the ESP32 core 3.0 migration notes; not tested here.)
+- `firmware/mimic_arm` compiles with these versions, with no warnings (2 Nov): 300,877 bytes (22%) of flash,
+  21,988 bytes (6%) of RAM. Not uploaded yet.
+- **The servo ports need battery power.** USB powers the ESP32 board, but USB alone does not move the servos.
+- **Pins (from the kit's sample code, untested on our arm):** base GPIO 16, shoulder 17, elbow 2, grip 4.
+  In `calib/arm_limits.json` and `arm_logic.h` (a unit test keeps them equal). GPIO 2 is also the board's LED
+  and a boot-mode pin on many ESP32 boards; the kit uses it, but if uploads start failing with the servos
+  connected, that is the first thing to check.
+
 ### A8. Repo
 
 - Public: https://github.com/girik-chadha/mimic, first commit 28 Oct 2026.
@@ -118,8 +136,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 |---|---|---|---|
 | B2 | Which camera can our code trigger? iPhone-as-webcam on Windows needs a third-party app. A cheap USB webcam is the reliable route. | `capture.py` saves a sharp, overhead photo in under 3 s, ten times in a row. | Decide Thu |
 | B3 | How does WSL talk to the arm? Option 1: ESP32 joins the phone hotspot and runs a tiny HTTP server; WSL sends requests. Option 2: a small Windows-side bridge over USB serial. | Option 1 first: ESP32 prints its IP, `curl` from WSL gets a reply. If the hotspot blocks it, Option 2. | Fri |
-| B4 | Arm pins, joint names, joint ranges, link lengths, gripper opening width. | Read the KEYESTUDIO PDF, measure with a ruler, write the numbers here. | Fri |
-| B5 | Does `arduino-cli` (or Arduino IDE 2) and the CP210x driver run on Windows ARM64? | Install Thu evening; `arduino-cli board list` shows a COM port when the arm is plugged in. | Thu/Fri |
+| B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). | Read the KEYESTUDIO PDF, jog each joint gently, measure with a ruler, write the numbers here. | Fri |
 | B6 | How precise is the arm at our table distances? | Send the same pose 10 times; the camera measures the spread of the gripper tip in mm. | Sat |
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |

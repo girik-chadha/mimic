@@ -9,8 +9,9 @@
 // Every safety rule (clamps, speed limit, grip timer, placeholder lock) is in arm_logic.h, which is
 // tested on the laptop. This file only reads the serial port and drives the servos.
 //
-// Status 29 Oct: written but NOT compiled for the ESP32 and NOT uploaded. Pins and limits are
-// placeholders until the arm is measured (needs.md B4).
+// Status 2 Nov: compiles for esp32:esp32:esp32 (ESP32 core 2.0.12, ESP32Servo 1.2.1, no warnings).
+// NOT uploaded yet. Pins are from the kit's sample code (untested on this arm); limits are placeholders
+// until the arm is measured (needs.md B4). The servo ports need battery power: USB alone does not move them.
 //
 // Power-on: a hobby servo cannot report its position, so attach() makes every joint jump to HOME.
 // Keep HOME a safe pose, and always send H before switching off so the jump at the next start is small.

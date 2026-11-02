@@ -52,3 +52,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   Labelled photo of the dots saved for checking by eye. 2 real SAM replies saved ($0.005): 6a calibrates
   (right check 0.49 cm), 6b is refused (0.56 cm) with the provisional dot positions. Known limit: mirror images
   are read upside down until the check dots move off the middle lines (todo blocker before Gate 3).
+
+## 2 Nov 2026
+- Firmware compiles for the ESP32 (`esp32:esp32:esp32`, core 2.0.12, ESP32Servo 1.2.1) with the Windows
+  arduino-cli run from WSL: no errors, no warnings, 22% of flash. Not uploaded.
+- Pins set from the kit's sample code (base 16, shoulder 17, elbow 2, grip 4), untested; limits still placeholders.
