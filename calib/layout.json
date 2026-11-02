@@ -12,7 +12,10 @@
     "right_check":  [34.5, 12.4]
   },
   "sheet_cm": {"min": [-2.5, -2.5], "max": [39.5, 27.2]},
-  "slots_cm": [[28.0, 5.0], [28.0, 12.85], [28.0, 20.7]],
+  "slots_cm": [[20.0, 20.0], [26.0, 20.0], [32.0, 20.0]],
+  "mess_area_cm": {"min": [5.0, 17.0], "max": [13.0, 24.0]},
+  "reach_cm": {"base": [18.5, 30.0], "min": 6.0, "max": 20.0,
+               "note": "PLACEHOLDER: the arm sits just outside the top edge of the sheet; it cannot reach right under its base (min) or further than max"},
   "slot_tolerance_cm": 3.0,
   "height_correction": {
     "enabled": false,

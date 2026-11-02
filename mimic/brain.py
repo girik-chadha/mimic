@@ -3,10 +3,13 @@
 name_objects(photo) -> ["red block", "blue block", ...]  names SAM can search for.
     Spark proposes names, SAM checks each one finds exactly 1 object, and any name that
     fails goes back to Spark with the match counts, up to 2 times.
-diagnose(...) comes in Phase 4.
+diagnose(before, after, move, miss) -> {"problem", "fix", "explanation"}
+    Spark looks at the photos before and after a missed placement and says what went wrong.
+    Its fix is advice only: loop.choose_correction checks it and decides.
 """
 import json
 import logging
+import math
 import re
 
 from mimic import config, meta_api, sam
@@ -152,3 +155,87 @@ def name_objects(image_path: str, attempts: list | None = None) -> list[str]:
         problems.append(f"object {i + 1} (first named {history[i][0][0]!r}): tried {tries}")
     raise NamingFailed("No name that SAM finds exactly once after "
                        f"{MAX_RETRIES} retries. " + "; ".join(problems))
+
+
+# ---------- diagnosing a missed placement ----------
+
+PROBLEMS = ("slipped", "dropped", "knocked", "missed_aim", "not_found", "other")
+DIAGNOSE_RESERVE_USD = 0.02   # a two-photo Spark call costs about $0.01; never let diagnosis hit the run's cap
+EXPLANATION_MAX_CHARS = 300
+
+DIAGNOSE_PROMPT = """You are checking a small robot arm that puts blocks into slots drawn on a sheet of paper.
+Photo 1 was taken before the move, photo 2 after it.
+The robot tried to put the {name} into slot {slot}. The camera measured where it landed: {distance:.1f} cm from the
+slot centre, {dx:+.1f} cm in x and {dy:+.1f} cm in y.
+
+Directions on the sheet: +x points from the bottom-left dot towards the bottom-right dot (usually to the right in
+the photo); +y points from the bottom-left dot towards the top-left dot (usually up in the photo).
+
+What went wrong? Choose one problem:
+- slipped: it was put down in the right place but slid after the claw let go
+- dropped: it fell from the claw before reaching the slot
+- knocked: the arm or the block bumped it, or another block, out of place
+- missed_aim: the arm put it down in the wrong place
+- not_found: you cannot see the {name} in photo 2
+- other: anything else
+
+Then suggest a fix: how far to move the robot's aim for the next try, in cm. Example: if the block landed 1 cm too
+far in +x, a fix of dx_cm -1.0 corrects it; a fix in +x would make it worse.
+The fix is advice only. The robot's own code checks it, never moves the aim more than 2 cm, and decides whether to
+use it.
+
+Reply with ONLY a JSON object and no other text, like this:
+{{"problem": "missed_aim", "fix": {{"dx_cm": -1.0, "dy_cm": 0.0, "retry": true}},
+ "explanation": "One or two short sentences in plain English for the person watching."}}"""
+
+
+class DiagnosisError(ValueError):
+    pass
+
+
+def _number(value, what: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise DiagnosisError(f"{what} is not a number: {value!r}")
+    return float(value)
+
+
+def parse_diagnosis(reply: str) -> dict:
+    """Spark's reply -> {"problem", "fix": {"dx_cm", "dy_cm", "retry"}, "explanation"}, or DiagnosisError."""
+    try:
+        data = _json_in(reply, r"\{.*\}", "object")
+    except ValueError as error:
+        raise DiagnosisError(str(error)) from error
+    if not isinstance(data, dict):
+        raise DiagnosisError(f"Expected a JSON object, got: {data!r}")
+    problem = str(data.get("problem", "")).strip().lower()
+    if problem not in PROBLEMS:
+        raise DiagnosisError(f"Unknown problem {problem!r}; expected one of {PROBLEMS}")
+    fix = data.get("fix")
+    if not isinstance(fix, dict) or not isinstance(fix.get("retry"), bool):
+        raise DiagnosisError(f"The fix needs dx_cm, dy_cm and retry (true/false): {fix!r}")
+    explanation = data.get("explanation")
+    if not isinstance(explanation, str) or not explanation.strip():
+        raise DiagnosisError("No explanation in the reply.")
+    return {"problem": problem,
+            "fix": {"dx_cm": _number(fix.get("dx_cm"), "dx_cm"), "dy_cm": _number(fix.get("dy_cm"), "dy_cm"),
+                    "retry": fix["retry"]},
+            "explanation": " ".join(explanation.split())[:EXPLANATION_MAX_CHARS]}
+
+
+def diagnose_content(before_path: str, after_path: str, move, error_cm) -> list:
+    text = DIAGNOSE_PROMPT.format(name=move.name, slot=move.slot, distance=math.hypot(*error_cm),
+                                  dx=error_cm[0], dy=error_cm[1])
+    return [{"type": "input_text", "text": text},
+            {"type": "input_image", "image_url": meta_api.image_url(before_path)},
+            {"type": "input_image", "image_url": meta_api.image_url(after_path)}]
+
+
+def diagnose(before_path: str, after_path: str, move, error_cm) -> dict:
+    """One Spark call with both photos and the measured miss. Raises DiagnosisError if the run's cost cap
+    is too close to afford it, or if the reply is not a usable diagnosis."""
+    spent, cap = meta_api.cost_so_far(), config.BUDGET_USD
+    if spent + DIAGNOSE_RESERVE_USD > cap:
+        raise DiagnosisError(f"skipped: the run's cost cap is close (${spent:.3f} of ${cap:.2f} spent)")
+    reply = meta_api.call(config.SPARK_MODEL, diagnose_content(before_path, after_path, move, error_cm))
+    return parse_diagnosis(reply)
+

@@ -158,3 +158,65 @@ def test_real_spark_rename_reply():
 def test_rename_reply_must_cover_every_failed_name():
     with pytest.raises(ValueError, match="no new name"):
         brain.parse_renames('{"something else": "red block"}', ["black box"])
+
+
+# ---------- diagnose: Spark explains a missed placement ----------
+
+from types import SimpleNamespace  # noqa: E402
+
+MOVE = SimpleNamespace(name="red block", slot=2)
+VALID = '{"problem": "slipped", "fix": {"dx_cm": -0.5, "dy_cm": 0.0, "retry": true}, "explanation": "It slid right."}'
+
+
+def fake_spark(monkeypatch, reply):
+    sent = []
+
+    def call(model, content, use_cache=True):
+        sent.append((model, content))
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
+
+    monkeypatch.setattr(meta_api, "call", call)
+    return sent
+
+
+def test_diagnose_sends_both_photos_and_the_measured_miss(monkeypatch):
+    sent = fake_spark(monkeypatch, VALID)
+    advice = brain.diagnose(DESK, DESK, MOVE, (1.0, -0.4))
+    assert advice == {"problem": "slipped", "fix": {"dx_cm": -0.5, "dy_cm": 0.0, "retry": True},
+                      "explanation": "It slid right."}
+    model, content = sent[0]
+    assert model == "muse-spark-1.3"
+    assert [part["type"] for part in content] == ["input_text", "input_image", "input_image"]
+    text = content[0]["text"]
+    assert "red block into slot 2" in text and "+1.0 cm in x and -0.4 cm in y" in text
+    assert "+x points from the bottom-left dot towards the bottom-right dot" in text
+    assert "The fix is advice only" in text and "decides whether to" in text
+
+
+@pytest.mark.parametrize("reply, problem", [
+    ("I think it slipped.", "No JSON object"),
+    ('{"problem": "slipped", "fix": {"dx_cm": -0.5, "dy_cm": 0}', "not valid JSON"),   # cut off half way
+    ('{"problem": "gremlins", "fix": {"dx_cm": 0, "dy_cm": 0, "retry": true}, "explanation": "x"}', "Unknown problem"),
+    ('{"problem": "slipped", "fix": {"dx_cm": "left", "dy_cm": 0, "retry": true}, "explanation": "x"}', "not a number"),
+    ('{"problem": "slipped", "fix": {"dx_cm": 0, "dy_cm": 0, "retry": "yes"}, "explanation": "x"}', "retry"),
+    ('{"problem": "slipped", "fix": {"dx_cm": 0, "dy_cm": 0, "retry": true}, "explanation": ""}', "No explanation"),
+])
+def test_unusable_diagnoses_are_rejected(reply, problem):
+    with pytest.raises(brain.DiagnosisError, match=problem):
+        brain.parse_diagnosis(reply)
+
+
+def test_long_explanations_are_trimmed():
+    long = VALID.replace("It slid right.", "word " * 200)
+    assert len(brain.parse_diagnosis(long)["explanation"]) == brain.EXPLANATION_MAX_CHARS
+
+
+def test_diagnosis_is_skipped_when_the_cost_cap_is_close(monkeypatch):
+    sent = fake_spark(monkeypatch, VALID)
+    monkeypatch.setattr(config, "BUDGET_USD", 0.15)
+    monkeypatch.setattr(meta_api, "cost_so_far", lambda: 0.14)
+    with pytest.raises(brain.DiagnosisError, match="cost cap is close"):
+        brain.diagnose(DESK, DESK, MOVE, (1.0, 0.0))
+    assert sent == []

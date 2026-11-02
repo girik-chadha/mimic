@@ -73,9 +73,11 @@ def name_objects(image_path: str, attempts: list | None = None) -> list[str]
     # Spark looks at the demo photo, returns SAM-friendly names: ["red block", "blue block", ...]
     # each name must give exactly 1 SAM box; failures go back to Spark (max 2 retries, $0.03 cap),
     # then NamingFailed. Every check is appended to `attempts` as {round, name, boxes}. (changed 29 Oct)
-def diagnose(before_path: str, after_path: str, move: dict, error_cm: tuple[float, float]) -> dict
-    # {"problem": str, "fix": {"dx_cm": float, "dy_cm": float, "retry": bool}, "explanation": str}
-    # loop.py clamps the fix to safe limits before using it
+def diagnose(before_path: str, after_path: str, move, error_cm: tuple[float, float]) -> dict   # (2 Nov)
+    # one Spark call with both photos and the measured miss
+    # {"problem": slipped|dropped|knocked|missed_aim|not_found|other,
+    #  "fix": {"dx_cm": float, "dy_cm": float, "retry": bool}, "explanation": str (<= 300 chars)}
+    # DiagnosisError on an unusable reply, or if spent + $0.02 would pass the run's cost cap
 
 # mimic/scene.py   (changed 29 Oct: takes a Layout loaded from calib/layout.json)
 def load_layout(path=config.LAYOUT_PATH) -> Layout
@@ -145,7 +147,9 @@ def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=RUNS_D
     # summary: success, moves, attempts, max_error_cm, cost_usd, seconds, error. $0.15 cap.
     # pick from the latest photo; PASS within 1.5 cm; else aim = slot - total miss (each axis within
     # +-2 cm), pick it up from where it landed, at most 2 retries, then FAIL and go on.
-def choose_correction(slot, measured, previous, before_photo, after_photo, move)   # brain.diagnose hook
+def choose_correction(slot, measured, previous, before_photo, after_photo, move) -> (correction, info)
+    # (2 Nov) Spark's fix is advice: ignored if over 2 cm on an axis, or pointing the same way as a miss
+    # over 0.5 cm, or if diagnosis failed; then the numeric correction is used. Total limited to +-2 cm.
 ```
 
 ### 2.2 Firmware command protocol
@@ -181,7 +185,11 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
 - **Keep every block and slot at least 4 cm from every dot:** a covered dot stops the run, because each photo
   needs all 6 dots to calibrate itself.
 - **Mess area** on one side, **target row** of numbered slots on the other. Slots start empty, so a placement never lands on another block.
-- Arm base at a fixed, measured spot on the sheet.
+- Arm base at a fixed, measured spot just outside the **top** edge of the sheet (placeholder (18.5, 30) cm).
+  `reach_cm` in `layout.json`: what it can reach (placeholder 6-20 cm from the base: not right under the base,
+  not further than 20 cm). `mess_area_cm`: the rectangle where blocks are scattered. Slots and the mess area must
+  be inside the reach and at least 4 cm from every dot (changed 2 Nov). `scripts/teach_plan.py` lists the points
+  to teach: slots, then the mess area's centre and corners.
 
 ### 2.4 Run log (every run, `runs/<YYYYMMDD-HHMMSS>/`)
 

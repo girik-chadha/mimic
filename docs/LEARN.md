@@ -321,3 +321,21 @@ give the numbers we quote, with the cache switched off so the cost per run is re
 Two sentences: "Before the arm does any real work, three guided scripts measure it with me watching: how far each
 joint can safely go, how tightly the claw must close to hold a cube, and how repeatably it reaches the same spot. Every
 step is small, slow and stoppable with one key, and nothing changes the real safety limits without me copying it over."
+
+## 2 Nov: Spark explains a miss, and the code decides
+
+- **Diagnosis:** when a block misses its slot, Spark sees the photos before and after, plus the measured miss in
+  cm, and answers in JSON: what went wrong (slipped, dropped, knocked, missed aim, not found), a suggested fix, and
+  one or two plain sentences for the person watching. The prompt tells Spark its fix is only advice.
+- **The code decides:** Spark's fix is thrown out if it is bigger than 2 cm, or if it points the same way the block
+  missed (if the block landed 1 cm right, moving the aim right would make it worse). Then, or if Spark's reply is
+  unusable, Mimic uses its own numeric correction. Whatever is chosen, the total stays within 2 cm of the slot.
+  Diagnosis is skipped if it would push the run past its cost cap.
+- **Report:** after a run, `report.py` makes one web page with every attempt, its photo, the miss, the decision and
+  Spark's explanation, plus a side-by-side picture of your demo and Mimic's result for the video.
+- **Teach plan:** `teach_plan.py` says which spots to teach (the slots, then the middle and corners of the mess
+  area) and refuses any spot the arm cannot reach from its base.
+
+Two sentences: "When a placement misses, Spark looks at the before and after photos and explains in plain English what
+went wrong, and suggests a fix. Mimic's own code checks that fix against the measurement and only uses it if it is
+small and points the right way, so the AI advises but never steers the arm on its own."

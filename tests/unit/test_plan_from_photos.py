@@ -28,8 +28,8 @@ SHEET_PX = [(300, 950), (1650, 980), (1400, 150), (520, 130)]
 DOT_PROMPT = "small coloured dot"
 DOTS_CM = [(0, 0), (37, 0), (37, 24.7), (0, 24.7), (18.5, 12.4), (34.5, 12.4)]  # as in calib/layout.json
 
-# Demo: blocks sit in the slots (x = 28) in the order blue, green, red. Mess: scattered on the left.
-DEMO_CM = {"red block": (28.3, 20.4), "blue block": (27.8, 5.2), "green block": (28.1, 13.1)}
+# Demo: blocks sit in the slots (y = 20) in the order blue, green, red. Mess: scattered on the left.
+DEMO_CM = {"red block": (32.3, 20.2), "blue block": (19.8, 20.1), "green block": (26.1, 19.9)}
 MESS_CM = {"red block": (5, 4), "blue block": (12, 20), "green block": (8, 12.5)}
 SPARK_REPLY = '["red block", "blue block", "green block"]'
 
@@ -97,7 +97,7 @@ def test_full_run_prints_the_plan_and_saves_the_run(tmp_path, monkeypatch, capsy
         assert math.dist(result["positions_cm"][name], pt) < 0.1
     assert "Spark named: red block, blue block, green block" in out
     assert "Target order (slot 1 first): blue block, green block, red block" in out
-    assert "1. blue block" in out and "-> slot 1 ( 28.0,   5.0)" in out
+    assert "1. blue block" in out and "-> slot 1 ( 20.0,  20.0)" in out
     assert "demo photo: check dots centre_check 0.0" in out
     assert "mess photo: check dots centre_check 0.0" in out
 

@@ -168,6 +168,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
+| B11 | Does Muse Spark 1.3 accept **two** images in one call (`brain.diagnose` sends before and after)? B1 only showed one works. | One real `diagnose` call on two saved photos (approved, about $0.01); check the reply parses. Until then a failure falls back to the numeric correction. | 2 Nov |
 
 ---
 

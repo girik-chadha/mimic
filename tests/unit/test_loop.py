@@ -9,6 +9,7 @@ made-up tilted camera as the other scene tests.
 import dataclasses
 import json
 import math
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -23,7 +24,7 @@ SHEET_CM = [(-2, -2), (40, -2), (40, 27.7), (-2, 27.7)]
 SHEET_PX = [(300, 950), (1650, 980), (1400, 150), (520, 130)]
 CM_TO_PX = cv2.getPerspectiveTransform(np.float32(SHEET_CM), np.float32(SHEET_PX))
 
-DEMO = {"blue block": (28.0, 5.1), "green block": (28.2, 12.8), "red block": (27.9, 20.6)}  # slots 1, 2, 3
+DEMO = {"blue block": (20.1, 20.0), "green block": (26.2, 19.8), "red block": (31.9, 20.2)}  # slots 1, 2, 3
 MESS = {"red block": (5.0, 4.0), "blue block": (12.0, 20.0), "green block": (8.0, 9.0)}
 GRAB_ELBOW = 100
 
@@ -79,8 +80,14 @@ class Rig:
         self.out_root = tmp_path / "runs"
         self.said = []
         self.fail_sam_at = None
+        self.diagnoses = []          # Spark's replies to diagnose calls, in order (none left: an unusable reply)
         monkeypatch.setattr(sam, "find", self.find)
-        monkeypatch.setattr(meta_api, "call", lambda model, content, use_cache=True: '["red block", "blue block", "green block"]')
+        monkeypatch.setattr(meta_api, "call", self.spark)
+
+    def spark(self, model, content, use_cache=True):
+        if isinstance(content, list) and len(content) == 3:   # text + two photos: a diagnose call
+            return self.diagnoses.pop(0) if self.diagnoses else "no idea"
+        return '["red block", "blue block", "green block"]'
 
     def capture(self, path):
         clear = self.grid.camera_clear
@@ -194,3 +201,81 @@ def test_same_direction_misses_warn_that_the_arm_or_sheet_moved(tmp_path, monkey
     rig.world.release_misses = [(2.5, 0.0), (2.5, 0.0), (2.5, 0.3), (2.5, 0.3)]  # moves 1 and 2 both off to the right
     rig.run()
     assert any("missed the same way" in line for line in rig.said)
+
+
+# ---------- Spark's diagnosis of a miss ----------
+
+def diagnosis(dx, dy, problem="missed_aim", explanation="It landed to the right of the slot."):
+    return json.dumps({"problem": problem, "fix": {"dx_cm": dx, "dy_cm": dy, "retry": True}, "explanation": explanation})
+
+
+def test_sparks_fix_is_used_logged_and_explained(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch)
+    rig.world.release_misses = [(2.5, 0.0), (2.5, 0.0)]
+    rig.diagnoses = [diagnosis(-1.8, 0.0)]
+    rig.run()
+    first = rig.attempts()[0]
+    assert first["correction_source"] == "spark" and first["problem"] == "missed_aim"
+    assert first["next_correction_cm"] == pytest.approx([-1.8, 0.0])
+    assert first["explanation"] == "It landed to the right of the slot."
+    assert "  Spark: It landed to the right of the slot. (missed_aim)" in rig.said
+    assert any(line.startswith("  -> using Spark's fix") for line in rig.said)
+
+
+def test_unusable_diagnosis_falls_back_to_the_numeric_correction(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch)
+    rig.world.release_misses = [(2.5, 0.0), (2.5, 0.0)]
+    rig.diagnoses = ["sorry, I cannot tell"]
+    rig.run()
+    first = rig.attempts()[0]
+    assert first["correction_source"] == "numeric"
+    assert first["fallback_reason"].startswith("no usable diagnosis")
+    assert first["next_correction_cm"][0] == pytest.approx(-2.0)
+
+
+# ---------- choose_correction: the code decides ----------
+
+SLOT = (20.0, 20.0)
+MOVE = SimpleNamespace(name="red block", slot=1)
+
+
+def advice(dx, dy):
+    return lambda before, after, move, miss: {"problem": "missed_aim", "explanation": "x",
+                                               "fix": {"dx_cm": dx, "dy_cm": dy, "retry": True}}
+
+
+def test_worked_example_block_landed_1_cm_right_so_a_fix_pointing_right_is_wrong():
+    landed_right = (21.0, 20.0)
+    correction, info = loop.choose_correction(SLOT, landed_right, (0.0, 0.0), "b", "a", MOVE, advice(+1.0, 0.0))
+    assert info["correction_source"] == "numeric"
+    assert "points the same way the block missed" in info["fallback_reason"]
+    assert correction == pytest.approx((-1.0, 0.0))              # the numeric correction: aim 1 cm left
+    correction, info = loop.choose_correction(SLOT, landed_right, (0.0, 0.0), "b", "a", MOVE, advice(-0.8, 0.0))
+    assert info["correction_source"] == "spark" and correction == pytest.approx((-0.8, 0.0))
+
+
+def test_out_of_range_fix_is_ignored_not_trimmed():
+    correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (0.0, 0.0), "b", "a", MOVE, advice(-3.5, 0.0))
+    assert info["correction_source"] == "numeric" and "over 2 cm" in info["fallback_reason"]
+    assert correction == pytest.approx((-1.0, 0.0))
+
+
+def test_total_correction_stays_within_2_cm_whoever_suggests_it():
+    # Spark: -1.5 so far plus a further -1.5 would be -3.0; limited to -2
+    correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (-1.5, 0.0), "b", "a", MOVE, advice(-1.5, 0.0))
+    assert info["correction_source"] == "spark" and correction == pytest.approx((-2.0, 0.0))
+
+    def unusable(*args):
+        raise ValueError("no JSON")
+    # numeric: -1.5 so far minus a 4 cm miss would be -5.5; limited to -2
+    correction, info = loop.choose_correction(SLOT, (24.0, 20.0), (-1.5, 0.0), "b", "a", MOVE, unusable)
+    assert info["correction_source"] == "numeric" and correction == pytest.approx((-2.0, 0.0))
+
+
+def test_a_failing_diagnosis_never_stops_the_run():
+    def broken(*args):
+        raise RuntimeError("API timed out")
+    correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (0.0, 0.0), "b", "a", MOVE, broken)
+    assert info["fallback_reason"] == "no usable diagnosis: API timed out"
+    assert correction == pytest.approx((-1.0, 0.0))
+

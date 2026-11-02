@@ -117,6 +117,21 @@ def test_slot_too_close_to_a_dot_is_refused(tmp_path):
         scene.load_layout(tmp_path / "layout.json")
 
 
+def test_mess_area_too_close_to_a_dot_is_refused(tmp_path):
+    data = json.loads(config.LAYOUT_PATH.read_text())
+    data["mess_area_cm"] = {"min": [5.0, 10.0], "max": [16.0, 20.0]}  # 2.5 cm from the centre check dot
+    (tmp_path / "layout.json").write_text(json.dumps(data))
+    with pytest.raises(SceneError, match="mess area is only 2.5 cm from the centre_check dot"):
+        scene.load_layout(tmp_path / "layout.json")
+
+
+def test_committed_layout_is_inside_the_reach():
+    layout = scene.load_layout(config.LAYOUT_PATH)
+    (x0, y0), (x1, y1) = layout.mess_area_cm
+    for point in layout.slots_cm + [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]:
+        assert scene.reach_problem(point, layout.reach_cm) is None, point
+
+
 # ---------- every photo calibrates itself from its 6 dots ----------
 
 def test_six_dots_get_the_right_roles(monkeypatch):

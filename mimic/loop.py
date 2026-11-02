@@ -23,18 +23,58 @@ RUN_BUDGET_USD = 0.15
 PASS_CM = 1.5
 MAX_CORRECTION_CM = 2.0
 MAX_TRIES = 3  # the first try plus 2 retries
+WRONG_WAY_MIN_MISS_CM = 0.5  # a Spark fix pointing the same way as a miss bigger than this is ignored
 
 
-def choose_correction(slot, measured, previous, before_photo, after_photo, move) -> tuple[float, float]:
-    """How far from the slot to aim next time, in sheet cm: the opposite of the total miss so far,
-    at most 2 cm each way on x and on y.
+def _clamp(value: float) -> float:
+    return max(-MAX_CORRECTION_CM, min(MAX_CORRECTION_CM, value))
 
-    HOOK (Phase 4/5): brain.diagnose(before_photo, after_photo, move, miss) goes here, to explain a
-    miss (dropped, knocked, slipped) and suggest a fix; its fix must be clamped the same way.
+
+def reject_fix(fix: dict, miss) -> str | None:
+    """Why Spark's fix must not be used, or None if it may be. The code decides, not Spark."""
+    for axis, value, missed in (("x", fix["dx_cm"], miss[0]), ("y", fix["dy_cm"], miss[1])):
+        if abs(value) > MAX_CORRECTION_CM:
+            return f"Spark's fix {value:+.1f} cm in {axis} is over {MAX_CORRECTION_CM:.0f} cm"
+        if abs(missed) > WRONG_WAY_MIN_MISS_CM and value * missed > 0:
+            return (f"Spark's fix {value:+.1f} cm in {axis} points the same way the block missed "
+                    f"({missed:+.1f} cm), so it would make the miss worse")
+    return None
+
+
+def choose_correction(slot, measured, previous, before_photo, after_photo, move,
+                      diagnose=brain.diagnose) -> tuple[tuple[float, float], dict]:
+    """How far from the slot to aim next time, in sheet cm, and what was decided.
+
+    Spark looks at the photos and explains the miss. Its fix is used only if it passes reject_fix;
+    otherwise (or if Spark's reply is unusable) the numeric correction is used: the opposite of the
+    total miss so far. Either way the total is limited to 2 cm each way on x and on y.
     """
-    def clamp(value):
-        return max(-MAX_CORRECTION_CM, min(MAX_CORRECTION_CM, value))
-    return (clamp(previous[0] + slot[0] - measured[0]), clamp(previous[1] + slot[1] - measured[1]))
+    miss = (measured[0] - slot[0], measured[1] - slot[1])
+    numeric = (previous[0] - miss[0], previous[1] - miss[1])
+    info = {"correction_source": "numeric", "problem": None, "explanation": None, "spark_fix": None,
+            "fallback_reason": None}
+    try:
+        advice = diagnose(before_photo, after_photo, move, miss)
+    except Exception as error:  # unusable reply, API error, or the cost cap is close
+        info["fallback_reason"] = f"no usable diagnosis: {error}"
+        return (_clamp(numeric[0]), _clamp(numeric[1])), info
+    info.update(problem=advice["problem"], explanation=advice["explanation"], spark_fix=advice["fix"])
+    reason = reject_fix(advice["fix"], miss)
+    if reason:
+        info["fallback_reason"] = reason
+        return (_clamp(numeric[0]), _clamp(numeric[1])), info
+    info["correction_source"] = "spark"
+    return (_clamp(previous[0] + advice["fix"]["dx_cm"]), _clamp(previous[1] + advice["fix"]["dy_cm"])), info
+
+
+def _say_decision(info: dict, correction, say) -> None:
+    if info["explanation"]:
+        say(f"  Spark: {info['explanation']} ({info['problem']})")
+    if info["correction_source"] == "spark":
+        say(f"  -> using Spark's fix: aiming ({correction[0]:+.1f}, {correction[1]:+.1f}) cm from the slot")
+    else:
+        say(f"  -> {info['fallback_reason']}; using the numeric correction: aiming "
+            f"({correction[0]:+.1f}, {correction[1]:+.1f}) cm from the slot")
 
 
 def load_and_check():
@@ -115,9 +155,9 @@ def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=config
                 result = "PASS" if passed else ("RETRY" if attempt < MAX_TRIES else "FAIL")
                 if attempt == 1:
                     first_misses.append(None if passed else miss)
-                next_correction = None
+                next_correction, decision = None, {}
                 if not passed and attempt < MAX_TRIES:
-                    next_correction = choose_correction(move.to_cm, measured, correction, before, latest, move)
+                    next_correction, decision = choose_correction(move.to_cm, measured, correction, before, latest, move)
                 summary["attempts"] += 1
                 with open(attempts_path, "a") as f:
                     f.write(json.dumps({
@@ -125,8 +165,11 @@ def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=config
                         "from_cm": from_cm, "aim_cm": aim, "measured_cm": measured,
                         "miss_cm": {"dx": round(miss[0], 2), "dy": round(miss[1], 2), "distance": round(error_cm, 2)},
                         "result": result, "next_correction_cm": next_correction, "planned_grip_hold_s": hold_s,
-                        "photo": Path(latest).name, "cost_so_far_usd": round(meta_api.cost_so_far(), 4)}) + "\n")
+                        "photo": Path(latest).name, "cost_so_far_usd": round(meta_api.cost_so_far(), 4),
+                        "time_s": round(time.monotonic() - started, 1), **decision}) + "\n")
                 say(f"  {move.name} -> slot {move.slot}, try {attempt}: missed by {error_cm:.1f} cm -> {result}")
+                if next_correction:
+                    _say_decision(decision, next_correction, say)
                 if passed:
                     break
                 if next_correction:

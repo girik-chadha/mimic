@@ -83,3 +83,11 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   `scripts/repeatability.py` (spread, backlash from alternating approaches, verdict vs the 1.5 cm tolerance, $0.10
   cap), `mimic/session.py` (s at any prompt or Ctrl+C sends S; the bridge sends S on Ctrl+C). 36 new tests;
   equal-fit stop broken on purpose once. needs.md C7: the first-power checklist.
+- `brain.diagnose`: one Spark call with the before and after photos and the measured miss; JSON problem, fix and
+  plain-English explanation; the prompt says the fix is advice only. `loop.choose_correction` uses Spark's fix
+  only if it is within 2 cm and does not point the same way as the miss; otherwise (or on a bad reply, an API
+  error, or a nearly spent budget) the numeric correction; total limited to +-2 cm. Logged and printed.
+- `scripts/report.py` (one self-contained report.html per run + summary.png for the video),
+  `scripts/teach_plan.py` (points to teach: slots, mess centre, mess corners; refuses points out of reach).
+  layout.json: arm base just outside the top edge, reach 6-20 cm, mess area; placeholders re-derived to sit
+  inside the reach and 4 cm from every dot. 26 new tests; +-2 cm clamp broken on purpose once.

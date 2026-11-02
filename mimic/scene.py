@@ -50,6 +50,8 @@ class Layout:
     sheet_max_cm: tuple[float, float]
     height: HeightCorrection | None = None  # None = correction off
     placeholder: bool = False               # True until the real sheet has been measured
+    mess_area_cm: tuple | None = None       # ((x_min, y_min), (x_max, y_max)): where blocks are scattered
+    reach_cm: dict | None = None            # {"base": (x, y), "min": cm, "max": cm}: what the arm can reach
 
 
 def load_layout(path=config.LAYOUT_PATH) -> Layout:
@@ -73,6 +75,9 @@ def load_layout(path=config.LAYOUT_PATH) -> Layout:
         sheet_max_cm=tuple(data["sheet_cm"]["max"]),
         height=height,
         placeholder=data["placeholder"],
+        mess_area_cm=(tuple(data["mess_area_cm"]["min"]), tuple(data["mess_area_cm"]["max"])),
+        reach_cm={"base": tuple(data["reach_cm"]["base"]), "min": data["reach_cm"]["min"],
+                  "max": data["reach_cm"]["max"]},
     )
     _check_slot_tolerance(layout.slots_cm, layout.slot_tolerance_cm)
     for n, slot in enumerate(layout.slots_cm, start=1):
@@ -80,7 +85,33 @@ def load_layout(path=config.LAYOUT_PATH) -> Layout:
             if math.dist(slot, dot) < MIN_DOT_CLEARANCE_CM:
                 raise SceneError(f"Slot {n} is only {math.dist(slot, dot):.1f} cm from the {role} dot: a block "
                                  f"there would cover it. Keep slots at least {MIN_DOT_CLEARANCE_CM} cm from every dot.")
+    (x0, y0), (x1, y1) = layout.mess_area_cm
+    if not (x0 < x1 and y0 < y1):
+        raise SceneError(f"mess_area_cm min {layout.mess_area_cm[0]} must be below and left of max {layout.mess_area_cm[1]}.")
+    for role, dot in layout.dots_cm.items():
+        gap = distance_to_rectangle(dot, layout.mess_area_cm)
+        if gap < MIN_DOT_CLEARANCE_CM:
+            raise SceneError(f"The mess area is only {gap:.1f} cm from the {role} dot: a scattered block could "
+                             f"cover it. Keep the mess area at least {MIN_DOT_CLEARANCE_CM} cm from every dot.")
+    if not 0 <= layout.reach_cm["min"] < layout.reach_cm["max"]:
+        raise SceneError("reach_cm needs 0 <= min < max.")
     return layout
+
+
+def distance_to_rectangle(point, rectangle) -> float:
+    """0 inside the rectangle, otherwise the distance to its nearest edge or corner."""
+    (x0, y0), (x1, y1) = rectangle
+    return math.hypot(max(x0 - point[0], 0, point[0] - x1), max(y0 - point[1], 0, point[1] - y1))
+
+
+def reach_problem(point, reach: dict) -> str | None:
+    """Why the arm cannot reach this point, or None if it can."""
+    distance = math.dist(point, reach["base"])
+    if distance > reach["max"]:
+        return f"{distance:.1f} cm from the arm's base, {distance - reach['max']:.1f} cm beyond its {reach['max']} cm reach"
+    if distance < reach["min"]:
+        return f"{distance:.1f} cm from the arm's base, too close (it cannot reach within {reach['min']} cm)"
+    return None
 
 
 def refuse_placeholder(layout: Layout) -> None:
