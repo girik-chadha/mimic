@@ -266,3 +266,25 @@ under us before the deadline."
 Two sentences: "WSL cannot see USB, so a small Windows-side script owns the arm's serial port and passes one line at
 a time between it and our code, with a time limit on every reply and a stop command whenever it closes. Until the
 arm's limits are measured, the firmware keeps every servo switched off, and lifting that lock is one deliberate command."
+
+## 2 Nov: pick, place, check, correct (built against fakes)
+
+- **Kinematics without maths:** we never compute angles from arm lengths. You teach 6-8 spots on the sheet by
+  jogging the arm there and saving its angles ("hover" above a block, "grab" low enough to close on it). For any
+  other spot, Mimic blends the angles of the nearest taught spots, closer ones counting more. It refuses spots
+  outside the area you taught.
+- **Pick and place:** eight planned moves (hover, lower, close, lift, travel, lower, release, lift). Before moving,
+  it adds up how long the grip will be closed; over 4.5 s (the servo's 5 s limit minus a margin) it refuses.
+- **The loop:** photo of your demo, photo of the mess, then for each block: pick it from where the latest photo
+  says it is, place it, move the arm out of the picture, photo, measure. Within 1.5 cm is a pass. Otherwise it
+  aims the other way by the miss (never more than 2 cm), picks the block up from where it landed and tries again,
+  up to twice. Every attempt is logged with the photo, the miss and the cost.
+- **Why this works with a cheap arm:** the camera measures every placement, so small errors in the taught grid
+  are corrected by the next try, as long as the error is steady. A one-off slip overshoots once and is fixed on
+  the third try; that is where Spark's diagnosis will plug in.
+- **Camera:** the phone (iVCam) is grabbed by Windows ffmpeg; a dark, tiny or missing photo is refused.
+
+Two sentences: "Mimic learns where to reach by being shown a handful of spots, then for each block it picks,
+places, photographs and measures the result in centimetres, retrying with a correction if it missed by more than
+1.5 cm. Every safety rule (taught area, grip time, cost cap) is checked before the arm moves, and every attempt
+is logged."

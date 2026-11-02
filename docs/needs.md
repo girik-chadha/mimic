@@ -127,6 +127,19 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
   and a boot-mode pin on many ESP32 boards; the kit uses it, but if uploads start failing with the servos
   connected, that is the first thing to check.
 
+### A9. The camera (B2, decided 2 Nov)
+
+- **iPhone + iVCam.** The phone runs iVCam; on Windows it is a webcam called `e2eSoft iVCam`. WSL cannot see
+  webcams, so `mimic/camera.py` runs Windows ffmpeg (winget `Gyan.FFmpeg` 9.0.2; full path in `config.py`, override
+  with `MIMIC_FFMPEG` in `.env`, because the winget folder name contains the version):
+  `ffmpeg.exe -f dshow -i video="e2eSoft iVCam" -frames:v 15 -update 1 -q:v 2 <photo as a Windows path>`
+  (15 frames so the exposure settles; the last one is kept). 10 s timeout.
+- A photo is refused (`CameraError`) if ffmpeg fails, no file appears, it is nearly black (average brightness
+  under 20/255), or it is smaller than 1280x720. Girik's test photo through iVCam (`ivcam_sheet.jpg`, not
+  committed) is 1280x720 with average brightness 140, so iVCam must stay at 1280x720 or more.
+- **Not yet done (needs the camera):** the B2 test from the plan, ten sharp overhead photos in a row in under 3 s each.
+- Never commit camera frames with people in them.
+
 ### A8. Repo
 
 - Public: https://github.com/girik-chadha/mimic, first commit 28 Oct 2026.
@@ -138,7 +151,6 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 
 | # | Question | Test that settles it | When |
 |---|---|---|---|
-| B2 | Which camera can our code trigger? iPhone-as-webcam on Windows needs a third-party app. A cheap USB webcam is the reliable route. | `capture.py` saves a sharp, overhead photo in under 3 s, ten times in a row. | Decide Thu |
 | B3 | How does WSL talk to the arm? **Chosen 2 Nov: Option 2**, `scripts/serial_bridge.py` on Windows Python (3.14.6, pyserial 3.5), started from WSL by `SerialBridgeTransport`; finds the CP210x (COM7) by USB ID, sets DTR/RTS low before opening, waits 2 s and discards boot text. (Option 1, Wi-Fi HTTP, not pursued.) | `python scripts/arm_check.py` with batteries disconnected: `?` -> `A 90 90 90 90 L`, `S` -> `OK`, `J` and `H` -> `ERR limits not measured`. Moves to Part A when it passes. | Mon |
 | B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). | Read the KEYESTUDIO PDF, jog each joint gently, measure with a ruler, write the numbers here. | Fri |
 | B6 | How precise is the arm at our table distances? | Send the same pose 10 times; the camera measures the spread of the gripper tip in mm. | Sat |
@@ -192,6 +204,19 @@ BASETEN_API_KEY=...          # Mon, optional
 - The camera looks down from 40-50 cm. It may move between photos: every photo calibrates itself.
 - Blocks: solid, 2-3 cm, clearly different colours, none white or pale. Buy them after measuring the gripper opening (B4).
 - Nothing personal, no faces, in the camera's view.
+
+### C6. Teaching the pose grid (scripts/teach.py)
+
+- Teach **6-8 points** (at least 4 are required) covering **every slot and the whole mess area**. The arm is only
+  ever sent inside the **hull** of the taught points (the shape you get by stretching a rubber band around them),
+  plus 1 cm; anywhere else is refused.
+- At each point: jog (steps of 1, 2, 5 or 10 degrees, or `set <joint> <angle>`) until the gripper is above the
+  spot, `save hover x y`; lower until it can close on a block, `save grab x y`. Also `save grip_open`,
+  `save grip_closed`, and `save clear` for **camera_clear**: a pose that keeps the arm out of the photo, with no dot
+  or block covered (the arm goes there before every photo). Then `finish`.
+- **The arm base must never move relative to the sheet** after teaching: the grid is tied to the sheet. If it
+  moves, re-teach. Two moves in a row missing the same way print a warning.
+- Practise first with `python scripts/teach.py --dry-run` (saves to `runs/pose_grid_dryrun.json`).
 
 ### C5. Uploading the firmware, and lifting the arm's lock
 

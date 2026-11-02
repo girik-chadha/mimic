@@ -56,12 +56,16 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] Keep every block at least 4 cm from every dot (a covered dot stops the run)
 - [ ] Gripper tip marker
 - [ ] Precision test B6
-- [ ] Kinematics (maths, or taught-pose grid by midday if the maths is off)
-- [ ] `pick` / `place` with the aim check and learned offsets; **Gate 3**
+- [x] Kinematics: taught-pose grid (`kinematics.py`, `calib/pose_grid.json`, `scripts/teach.py`), tested with fakes (2 Nov)
+- [x] `pick` / `place` (`motion.py`), planned grip hold checked against max_grip_hold_s, tested with fakes (2 Nov)
+- [ ] Teach the real grid: 6-8 points covering every slot and the whole mess area, plus grip and camera_clear (needs.md C6)
+- [ ] **Gate 3** on the real arm
 
 ## Sun 1 Nov: Phase 4, the full loop
 
-- [ ] `loop.py`, run log, retries, `diagnose()`
+- [x] `loop.py`, run log, retries (with a hook for `diagnose()`), `camera.py` (iVCam via ffmpeg), `scripts/run_mimic.py`: built and tested with fakes (2 Nov)
+- [ ] B2 camera test on the real camera: ten sharp overhead photos in a row
+- [ ] `brain.diagnose()` in the `choose_correction` hook
 - [ ] **Gate 4 at 21:00**: 3 blocks, 3 runs out of 5. Otherwise shrink the task.
 
 ## Mon 2 Nov: Phase 5, demo quality (freeze 18:00)

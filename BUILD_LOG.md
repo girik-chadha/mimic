@@ -63,3 +63,9 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   files at once). Firmware while locked: no servo attached or written, `?` ends with L. 25 new tests, all without
   hardware. Firmware copied to C:\Users\girik\mimic_firmware and compiled there; nothing uploaded.
 - Correction: ESP32Servo 1.2.1 fails under `--warnings all` (unused variable in the library); use default warnings.
+- Pick-and-place software against fakes: `kinematics.py` (taught-pose grid, 1/d^2 blend, refuses outside the
+  taught hull + 1 cm), `scripts/teach.py`, `motion.py` (planned grip hold checked against max_grip_hold_s before
+  anything moves), `loop.py` (photo before every check with the arm at camera_clear, PASS within 1.5 cm,
+  corrected retries within +-2 cm, FAIL after 2 retries, run log, $0.15 cap, diagnose hook), `camera.py`
+  (iVCam via Windows ffmpeg) and `scripts/run_mimic.py`. B2 decided. 36 new tests with a fake world;
+  hold-time check broken on purpose once. Nothing run on hardware, no API calls.

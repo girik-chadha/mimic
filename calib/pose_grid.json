@@ -1,0 +1,8 @@
+{
+  "placeholder": true,
+  "note": "Taught poses, filled in with scripts/teach.py. Teach 6-8 points covering every slot and the whole mess area: the arm only goes inside the hull of the taught points (plus a 1 cm margin). Positions in sheet cm from the bottom-left dot. hover = above the blocks, clear of everything; grab = low enough to close on a block. camera_clear = a pose that keeps the arm out of the photo (no dot or block covered). finish in teach.py sets placeholder to false.",
+  "grip_open": null,
+  "grip_closed": null,
+  "camera_clear": null,
+  "points": []
+}

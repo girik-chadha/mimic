@@ -28,6 +28,13 @@ RUNS_DIR = ROOT / "runs"
 LAYOUT_PATH = ROOT / "calib" / "layout.json"  # stickers, slots, sheet size
 ARM_LIMITS_PATH = ROOT / "calib" / "arm_limits.json"  # pins, joint ranges, grip limit
 
+# The phone camera (needs.md A9): iVCam on Windows, read by Windows ffmpeg (installed with winget).
+# The winget folder name contains the version, so it can be overridden in .env after an upgrade.
+FFMPEG_PATH = os.environ.get("MIMIC_FFMPEG") or (
+    "/mnt/c/Users/girik/AppData/Local/Microsoft/WinGet/Packages/"
+    "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-9.0.2-full_build/bin/ffmpeg.exe")
+CAMERA_DEVICE = "e2eSoft iVCam"
+
 
 def api_key() -> str:
     key = os.environ.get("META_API_KEY")

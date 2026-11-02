@@ -107,8 +107,18 @@ def plan_moves(positions_cm: dict, target_order: list[str], slots_cm: list[tuple
     # than slots, two targets are under 1 cm apart, or two slots are the same point
 def extra_objects(positions_cm: dict, target_order: list[str]) -> list[str]   # left alone, reported
 
-# mimic/kinematics.py
-def to_angles(x_cm: float, y_cm: float, height: str) -> dict   # height: "hover" | "grab"
+# mimic/kinematics.py   (2 Nov: taught-pose grid, calib/pose_grid.json)
+PoseGrid.to_angles(x_cm, y_cm, height) -> dict   # height "hover" | "grab"; base, shoulder, elbow
+    # 1/d^2 blend of the 4 nearest taught points, exact at a taught point; refuses outside the hull of the
+    # taught points + 1 cm, and while the grid is a placeholder (< 4 complete points, no grip/camera_clear)
+PoseGrid.check_against(limits)                   # every taught angle inside arm_limits.json
+
+# mimic/motion.py   (2 Nov)
+def plan_pick_and_place(grid, limits, start, from_cm, to_cm) -> (steps, hold_s)
+    # hover, lower, close, lift, travel, lower, release, lift; MotionError if the planned grip hold
+    # (close -> release) is over max_grip_hold_s - 0.5 s, before anything moves
+def pick_and_place(arm, grid, limits, from_cm, to_cm) -> hold_s   # prints the planned hold time
+def go_camera_clear(arm, grid, limits)                            # a normal move out of the photo
 
 # mimic/arm.py   (29 Oct: limits from calib/arm_limits.json; transport = anything with send(line) -> reply, is_real)
 class Arm:
@@ -124,11 +134,15 @@ class SerialBridgeTransport:                             # (2 Nov) the real arm 
     def send(self, line: str) -> str                     # ArmError on any timeout; then refuses further commands
     def close(self) -> None                              # the bridge sends S and exits
 
-# mimic/camera.py
-def capture(path: str) -> str
+# mimic/camera.py   (2 Nov: iVCam via Windows ffmpeg, needs.md A9)
+def capture(path: str) -> str   # CameraError: ffmpeg fails / > 10 s, no file, nearly black, < 1280x720
 
-# mimic/loop.py
-def run(demo_photo: str | None = None) -> dict   # summary: success, attempts, errors_cm, cost_usd, seconds
+# mimic/loop.py   (2 Nov)
+def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=RUNS_DIR) -> dict
+    # summary: success, moves, attempts, max_error_cm, cost_usd, seconds, error. $0.15 cap.
+    # pick from the latest photo; PASS within 1.5 cm; else aim = slot - total miss (each axis within
+    # +-2 cm), pick it up from where it landed, at most 2 retries, then FAIL and go on.
+def choose_correction(slot, measured, previous, before_photo, after_photo, move)   # brain.diagnose hook
 ```
 
 ### 2.2 Firmware command protocol
@@ -219,7 +233,9 @@ Tests: `unit` tests for the command strings `arm.py` sends (fake transport). `hw
    (`scene.calibrate`). First, the blocker in todo.md: move the check dots off the middle lines.
 2. Put a bright sticker on the gripper tip so SAM can find it ("gripper marker").
 3. Settle needs.md B6: precision test (same pose 10 times).
-4. `kinematics.py`. Try the maths first (base rotation plus a two-link arm). If it is not accurate enough by midday, switch to a **taught-pose grid**: jog the tip to ~12 points on the sheet, record the angles, interpolate between them. Both are explainable; the grid is often more accurate on cheap arms.
+4. `kinematics.py`: **taught-pose grid chosen (2 Nov), no arm maths.** Teach 6-8 points with `scripts/teach.py`
+   covering every slot and the whole mess area (the arm only goes inside their hull + 1 cm), plus grip_open,
+   grip_closed and camera_clear.
 5. `pick(cm)` and `place(cm)`: hover, lower, grip or release, lift.
 6. Aim check: after moving to hover, the camera measures the tip against the target and corrects once. Save learned offsets in `calib/offsets.json`, so the arm gets better with practice.
 
