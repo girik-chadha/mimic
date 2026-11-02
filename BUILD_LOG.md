@@ -113,3 +113,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - Grip closed limit 120 -> 140 in both `arm_limits.json` and `arm_logic.h` (kit's own limit 150): a 19 mm die needs
   the jaws closer than 120 allows; the gap per degree is unmeasured. Sync test green; firmware recompiled and
   copied to Windows. Not uploaded.
+- Staggered start-up: the firmware switches the servos on one at a time, 400 ms apart (base, shoulder, elbow,
+  claw), from `servos_to_attach()` in arm_logic.h (g++ tested; locked: never). g++ test that no 20 ms tick moves a
+  joint more than 3 degrees. Recompiled (301,081 bytes), Windows copy refreshed. Not uploaded.
+- needs.md C7 revised: post-upload `arm_jog.py status` check, pose the arm by hand first, unplug USB before
+  connecting the batteries (so the start-up is staggered), GPIO 2 upload note, write down which way lifts the claw.

@@ -381,3 +381,15 @@ three photos agree that one provisional dot position is half a centimetre off, w
 Two sentences: "We unlocked the arm with the kit's own ranges only for a supervised first session, in which a script
 measures the real safe ranges with small, slow moves. Nothing is uploaded automatically; the person at the arm does
 it with the batteries off and a hand on the switch."
+
+### 3 Nov: a gentler start-up
+
+- When the arm is switched on, each servo jumps to its home angle, because a hobby servo cannot say where it is. Four
+  jumping at once can pull the battery voltage down far enough to restart the board, which would make them all jump
+  again. So the firmware now switches them on one at a time, 0.4 s apart. It only helps when the board starts with
+  the batteries connected, which is why the checklist says to unplug USB, connect the batteries, then plug USB in.
+- Every other movement is ramped: at most 100 degrees per second on average, easing in and out, and a test checks
+  that no 20 ms step moves a joint more than 3 degrees.
+
+Two sentences: "The arm's servos now wake up one at a time instead of all at once, so the battery is never asked
+for four jumps together. After that every move is ramped and speed-limited, which a test checks step by step."

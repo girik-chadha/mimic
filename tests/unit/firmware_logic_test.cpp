@@ -67,6 +67,9 @@ static void test_refused() {
   arm_init(a);
   CHECK(!limits_ok(), "limits are not ok with these flags");
   CHECK(!servos_enabled(), "locked: servos are not enabled (never attached, no angle written)");
+  bool none = true;
+  for (unsigned long t = 0; t <= 10000; t += 100) none = none && servos_to_attach(t) == 0;
+  CHECK(none, "locked: the staggered start-up never attaches a servo");
   CHECK(strstr(send(a, "?", 0), " L") != NULL, "locked: ? ends with L");
   CHECK(strcmp(send(a, "J 95 95 95 95 800", 0), "ERR limits not measured") == 0, "J refused");
   CHECK(strcmp(send(a, "H", 0), "ERR limits not measured") == 0, "H refused");
@@ -75,6 +78,36 @@ static void test_refused() {
 }
 
 // ---------- limits ready: moves, clamps, ramps, timers ----------
+
+static void test_staggered_start() {
+  CHECK(servos_to_attach(0) == 1, "start-up: the base is switched on at once");
+  CHECK(servos_to_attach(ATTACH_GAP_MS - 1) == 1, "start-up: still only the base just before 400 ms");
+  CHECK(servos_to_attach(ATTACH_GAP_MS) == 2, "start-up: the shoulder at 400 ms");
+  CHECK(servos_to_attach(2 * ATTACH_GAP_MS) == 3, "start-up: the elbow at 800 ms");
+  CHECK(servos_to_attach(3 * ATTACH_GAP_MS) == 4, "start-up: the claw at 1200 ms");
+  CHECK(servos_to_attach(60000) == 4, "start-up: never more than 4");
+}
+
+static void test_ramp_speed() {
+  // Even a J sent with 0 ms is slowed to MIN_MS_PER_DEGREE, and the ease-in/ease-out peak is 1.5x the average
+  // speed, so no 20 ms tick may move a joint more than 1.5 * 20 / MIN_MS_PER_DEGREE degrees.
+  ArmState a;
+  arm_init(a);
+  char line[64];
+  snprintf(line, sizeof line, "J %d %d %d %d 0", MIN_ANGLE[0], MAX_ANGLE[1], MIN_ANGLE[2], HOME[3]);
+  send(a, line, 0);
+  float worst = 0, before[4] = {a.now[0], a.now[1], a.now[2], a.now[3]};
+  for (unsigned long t = 20; t <= 5000; t += 20) {
+    tick(a, t);
+    for (int j = 0; j < 4; j++) {
+      float step = fabsf(a.now[j] - before[j]);
+      if (step > worst) worst = step;
+      before[j] = a.now[j];
+    }
+  }
+  CHECK(worst <= 1.5f * 20 / MIN_MS_PER_DEGREE + 0.01f, "ramp: no 20 ms tick moves a joint more than 3 degrees");
+  CHECK(near(a.now[0], MIN_ANGLE[0]) && !a.moving, "ramp: the fast J still arrives");
+}
 
 static void test_unlocked_status() {
   ArmState a;
@@ -202,6 +235,8 @@ int main() {
   printf("limits flags: placeholder=%d checked_by_hand=%d\n", LIMITS_ARE_PLACEHOLDER, LIMITS_CHECKED_BY_HAND);
   test_always();
   if (limits_ok()) {
+    test_staggered_start();
+    test_ramp_speed();
     test_unlocked_status();
     test_clamps();
     test_ramp();

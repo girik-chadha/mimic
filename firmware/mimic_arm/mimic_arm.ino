@@ -17,8 +17,10 @@
 //
 // While locked (placeholder limits, or not checked by hand) no servo is attached and no angle is ever
 // written: the servos get no signal. Only ? and S work; J and H reply ERR limits not measured.
-// Once unlocked, at power-on a hobby servo cannot report its position, so attach() makes every joint jump
-// to HOME. Keep HOME a safe pose, and always send H before switching off so the jump at the next start is small.
+// Once unlocked, at start-up the servos are switched on one at a time, 400 ms apart (base, shoulder, elbow,
+// claw: servos_to_attach() in arm_logic.h). A hobby servo cannot report its position, so each one jumps to HOME
+// as it is switched on. Keep HOME a safe pose, and always send H before switching off so the next jump is small.
+// Every J and H after that is ramped (arm_logic.h: start_move and tick).
 #include <ESP32Servo.h>
 #include "arm_logic.h"
 
@@ -28,22 +30,30 @@ char line[MAX_LINE + 1];
 int line_len = 0;
 bool line_too_long = false;
 unsigned long last_tick = 0;
+unsigned long started_ms = 0;
+int attached = 0;  // how many servos are switched on so far (base first, claw last)
+
+// Switch on any servo that is due (servos_to_attach is 0 while locked, so then this never attaches anything).
+void attach_due_servos() {
+  int due = servos_to_attach(millis() - started_ms);
+  while (attached < due) {
+    servos[attached].setPeriodHertz(50);
+    servos[attached].attach(PINS[attached], 500, 2400);
+    servos[attached].write((int)lroundf(arm.now[attached]));
+    attached++;
+  }
+}
 
 void write_servos() {
   if (!servos_enabled()) return;  // locked: never write an angle
-  for (int j = 0; j < 4; j++) servos[j].write((int)lroundf(arm.now[j]));
+  for (int j = 0; j < attached; j++) servos[j].write((int)lroundf(arm.now[j]));
 }
 
 void setup() {
   Serial.begin(115200);
   arm_init(arm);
-  if (servos_enabled()) {  // locked: never attach, so the pins send no signal at all
-    for (int j = 0; j < 4; j++) {
-      servos[j].setPeriodHertz(50);
-      servos[j].attach(PINS[j], 500, 2400);
-    }
-    write_servos();
-  }
+  started_ms = millis();
+  attach_due_servos();  // the base now; the others follow from loop(), 400 ms apart
 }
 
 void loop() {
@@ -71,6 +81,7 @@ void loop() {
   unsigned long now = millis();
   if (now - last_tick >= 20) {
     last_tick = now;
+    attach_due_servos();
     tick(arm, now);
     write_servos();  // writes where the arm is now; with no move running that is the same angle again
   }

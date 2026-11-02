@@ -32,6 +32,7 @@ const int HOME[4] = {90, 90, 90, 90};        // base, shoulder, elbow, grip
 #define GRIP_CLOSED_THRESHOLD 5    // the grip counts as closed once it is this far from open
 #define HOME_MS 1500               // how long H takes (at least; the speed limit can make it longer)
 #define RELAX_MS 500               // how long relaxing the grip takes (at least)
+#define ATTACH_GAP_MS 400          // at start-up the servos are switched on one at a time, this far apart
 
 struct ArmState {
   float now[4];    // where each joint is right now, in degrees
@@ -49,6 +50,15 @@ inline bool limits_ok() { return !LIMITS_ARE_PLACEHOLDER && LIMITS_CHECKED_BY_HA
 // While locked, the servos are never attached and no angle is ever written to them: they get no signal
 // at all and stay limp wherever they are. mimic_arm.ino asks this before touching any servo.
 inline bool servos_enabled() { return limits_ok(); }
+
+// Staggered start-up: how many servos should be switched on (attached) this long after start-up.
+// Base at once, then shoulder at 400 ms, elbow at 800 ms, claw at 1200 ms, so their first jumps to HOME do not
+// all draw current at the same moment (a battery dip could reset the board). While locked: none, ever.
+inline int servos_to_attach(unsigned long ms_since_start) {
+  if (!servos_enabled()) return 0;
+  unsigned long due = ms_since_start / ATTACH_GAP_MS + 1;
+  return due > 4 ? 4 : (int)due;
+}
 
 // Keep an angle inside its joint's range. For the grip, the range is open .. closed limit.
 inline int clamp_joint(int joint, int angle) {
