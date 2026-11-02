@@ -71,6 +71,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] B11: one real two-photo Spark call: accepted, $0.0207, but it described a block that was not there (needs.md A5c) (2 Nov)
 - [x] Decided (2 Nov): Spark's fix logged only (`MIMIC_USE_SPARK_FIX=1` to use it), consistency check, at most 2 diagnoses per run, $0.30 full-run cap; prompt fixed (not_found on the no-block photos)
 - [ ] Test `diagnose` on real before/after photos with a block in them (Girik, 3 Nov)
+- [x] Dot check on a real iVCam frame with the arm in place: 6 dots found; dot_size_frac max 0.030 (3 Nov)
+- [ ] Ruler-measure the dots: three photos put the right check dot at ~35.0 cm, not 34.5 (needs.md A2b)
 - [ ] Measure the arm's base position, its reach, and the mess area into `calib/layout.json`
 - [ ] **Gate 4 at 21:00**: 3 blocks, 3 runs out of 5. Otherwise shrink the task.
 

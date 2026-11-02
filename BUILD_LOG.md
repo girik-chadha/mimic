@@ -98,3 +98,10 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   $0.03, at most 2 diagnoses per run, full-run cap $0.30. Prompt rule "If you cannot see the block in photo 2, answer
   not_found. Do not repeat the measured miss." plus `seen_offset_cm`: second real call ($0.0194) on the no-block
   photos now answers not_found. Consistency check broken on purpose once.
+
+## 3 Nov 2026
+- Dot check on a real iVCam frame with the arm in place: SAM found exactly the 6 dots (25-33 px). dot_size_frac max
+  raised 0.026 -> 0.030 (the orange dot had 0.2 px of margin; a 19 mm die, ~38 px, is now a candidate the dot finder
+  leaves out). With the provisional dot numbers this frame is refused on the right check dot (0.57 cm): a third photo
+  putting it at ~35.0 cm, not 34.5. Real reply saved as a fixture ($0.0025); `ivcam_arm.jpg` and `ivcam_sheet.jpg`
+  committed (checked by Girik: no people or screens).

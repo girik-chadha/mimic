@@ -411,3 +411,32 @@ def test_real_replies_have_six_dot_sized_boxes_and_nothing_else():
         sizes = [scene.dot_size(b) for b in boxes]
         assert len(boxes) == 6, stem
         assert all(lo <= s <= hi for s in sizes), (stem, sizes)
+
+
+def test_a_38_px_die_is_kept_as_a_candidate_and_then_left_out(monkeypatch):
+    # The fake camera's photos are 1920 px wide, so a die that is 38 px on a 1280-px frame (fraction 0.0297) is 57 px.
+    die_px = round(38 / 1280 * 1920)
+    die = dot_box(camera((10, 20)), size=die_px)
+    layout = make_layout(dot_size_frac=(0.012, 0.030))
+    assert 0.029 < scene.dot_size(die) <= 0.030                  # inside the size range: a candidate
+    dots = [dot_box(camera(cm), size=30) for cm in DOTS_CM.values()]
+    fake_sam(monkeypatch, {DOT_PROMPT: dots + [die]})
+    centres, dropped = scene.find_dots(PHOTO, layout)
+    assert len(centres) == 7 and dropped == []
+    ordered, leftovers = scene.choose_dots(centres, layout)
+    assert leftovers == [die.centre]                             # the die is the one left out
+    for seen_px, role in zip(ordered, scene.ROLES):
+        assert math.dist(seen_px, camera(DOTS_CM[role])) <= 1, role
+
+
+def test_real_ivcam_frame_with_the_arm_stops_on_the_right_check_dot(monkeypatch):
+    # Real reply (3 Nov) on an iVCam frame with the arm in place: 6 dot-sized boxes, roles right, but the right
+    # check dot lands at x = 35.07 cm against the provisional 34.5, so the photo is refused (0.57 cm).
+    # PROVISIONAL: update this test after the ruler measurement; it should then calibrate.
+    photo, layout, replies = real_dots("ivcam_arm")
+    lo, hi = layout.dot_size_frac
+    assert len(replies[layout.dot_prompt]) == 6
+    assert all(lo <= scene.dot_size(b) <= hi for b in replies[layout.dot_prompt])
+    fake_sam(monkeypatch, replies)
+    with pytest.raises(CalibrationError, match=r"right_check 0\.57 cm off"):
+        scene.calibrate(photo, layout)

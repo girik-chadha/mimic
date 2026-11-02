@@ -353,3 +353,16 @@ small and points the right way, so the AI advises but never steers the arm on it
 Two sentences: "We caught Spark describing a block that was not in the photo, so its advice is now only recorded,
 and the camera's measurement always decides the correction. Whenever Spark's account disagrees with the measurement
 by more than half a centimetre, the log and the report say so plainly."
+
+## 3 Nov: dots on a real camera frame, with the arm in view
+
+- SAM found exactly the six dots on a real iVCam frame with the arm parked at the top of the sheet. The dots were a
+  bit bigger than on the phone photos, and the orange one (with a white paper ring) nearly hit the size limit, so the
+  limit went up from 0.026 to 0.030 of the photo's width. A die-sized cube can now look like a dot, which is fine:
+  the dot finder tries every set of six and keeps the set that matches the sheet.
+- The frame was still refused, for a good reason: the right check dot is about half a centimetre from where the
+  provisional numbers say. Three different photos agree on that, so the ruler measurement will fix it.
+
+Two sentences: "On a real camera frame with the arm in view, SAM found exactly the six calibration dots, and we widened
+the size limit slightly so the biggest dot is no longer on the edge. The calibration still refuses this frame, because
+three photos agree that one provisional dot position is half a centimetre off, which the ruler measurement will fix."

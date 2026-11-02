@@ -50,6 +50,14 @@ client.responses.create(model="sam-3.1", input=[{"role": "user", "content": [
 - With the provisional dot positions, the right check dot lands at x = 34.98 cm (6a) and 35.06 cm (6b), against
   34.5 in layout.json: 6a calibrates (0.49 cm), 6b is refused (0.56 cm). Both photos agree, which points at the
   provisional number; the ruler measurement replaces it.
+- **Real iVCam frame with the arm in place (3 Nov, `ivcam_arm.jpg`, 1280x720):** "small coloured dot" gave exactly
+  the 6 dots, boxes 25-33 px (0.0195-0.0258; the orange check dot is biggest because of its white paper halo).
+  The arm at the top edge hid no dot. Roles came out right, but the right check dot lands at x = 35.07 cm and the
+  centre one at 18.67, so the photo is refused (right_check 0.57 cm). Three photos now agree: right check dot at
+  34.98 / 35.06 / 35.07, centre at 18.71 / 18.68 / 18.67. Fixture `sam_photo_ivcam_arm_small_coloured_dot.txt`.
+- **dot_size_frac raised to 0.012-0.030 (3 Nov):** 0.026 left the orange dot 0.2 px of margin. A 19 mm die
+  (about 38 px, 0.030) is now kept as a candidate, and the robust dot finding leaves it out because no set of 6
+  that includes it fits the layout.
 
 ### A3. SAM 3.1 on a video (tested 28 Oct)
 
