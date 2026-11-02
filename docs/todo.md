@@ -68,7 +68,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] `loop.py`, run log, retries (with a hook for `diagnose()`), `camera.py` (iVCam via ffmpeg), `scripts/run_mimic.py`: built and tested with fakes (2 Nov)
 - [ ] B2 camera test on the real camera: ten sharp overhead photos in a row
 - [x] `brain.diagnose()` in `choose_correction` (Spark's fix as advice, checked by code), `scripts/report.py`, `scripts/teach_plan.py`; tested with fakes (2 Nov)
-- [ ] B11: one real two-photo Spark call
+- [x] B11: one real two-photo Spark call: accepted, $0.0207, but it described a block that was not there (needs.md A5c) (2 Nov)
+- [ ] Decide: Spark diagnosis cost (~$0.02 each) vs the $0.15 cap, and the made-up-description problem
 - [ ] Measure the arm's base position, its reach, and the mess area into `calib/layout.json`
 - [ ] **Gate 4 at 21:00**: 3 blocks, 3 runs out of 5. Otherwise shrink the task.
 

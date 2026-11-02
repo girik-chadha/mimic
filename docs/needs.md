@@ -87,6 +87,18 @@ From Meta's pricing page (read 27 Oct) and third-party docs as marked.
   with the match counts (up to 2 retries). On `desk.jpeg`, retry 1 turned "black box" into "black rectangle"
   (1 box). That retry cost $0.0091 (1,692 tokens in, 1,644 out). Saved as `spark_rename_desk_round1.txt`.
 
+### A5c. Spark with two photos (B11, settled 2 Nov)
+
+- **Yes:** Muse Spark 1.3 accepts two `input_image` parts in one call (`brain.diagnose` sends before and after) and
+  replied with JSON that `parse_diagnosis` accepts. Saved as `spark_diagnose_two_photos_no_block.txt`.
+- **Cost: $0.0207 for one call** (3,457 tokens in, 3,859 out; mostly hidden reasoning), about double the $0.01
+  estimate. Six diagnoses would be about $0.12 of a run's $0.15 cap.
+- **Warning, it did not look properly:** the test photos (`dots_check_6a`/`6b`) contain no block at all, but Spark
+  answered `missed_aim`, "The red block is sitting about 1 cm to the right of the center slot", with a fix of
+  -1.0 cm: it repeated the measured miss given in the prompt instead of saying `not_found`. Its fix passed the
+  code's checks (size and direction), which cannot tell whether the explanation is true. Treat Spark's explanations
+  as unverified until tested on real before/after photos with a block in them.
+
 ### A6. The laptop
 
 - Microsoft Surface Laptop 7, Snapdragon X Plus (ARM64), Windows 11 Home, 16 GB RAM.
@@ -168,7 +180,6 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
-| B11 | Does Muse Spark 1.3 accept **two** images in one call (`brain.diagnose` sends before and after)? B1 only showed one works. | One real `diagnose` call on two saved photos (approved, about $0.01); check the reply parses. Until then a failure falls back to the numeric correction. | 2 Nov |
 
 ---
 

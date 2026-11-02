@@ -220,3 +220,12 @@ def test_diagnosis_is_skipped_when_the_cost_cap_is_close(monkeypatch):
     with pytest.raises(brain.DiagnosisError, match="cost cap is close"):
         brain.diagnose(DESK, DESK, MOVE, (1.0, 0.0))
     assert sent == []
+
+
+def test_real_two_photo_reply_parses():
+    # Real reply (2 Nov) to before/after photos that contain NO block: Spark still described a red block
+    # 1 cm to the right (it repeated the measured miss). It parses fine; whether it is true is another matter.
+    advice = brain.parse_diagnosis(saved("spark_diagnose_two_photos_no_block"))
+    assert advice["problem"] == "missed_aim"
+    assert advice["fix"] == {"dx_cm": -1.0, "dy_cm": 0.0, "retry": True}
+

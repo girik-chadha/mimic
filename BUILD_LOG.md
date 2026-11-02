@@ -91,3 +91,5 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   `scripts/teach_plan.py` (points to teach: slots, mess centre, mess corners; refuses points out of reach).
   layout.json: arm base just outside the top edge, reach 6-20 cm, mess area; placeholders re-derived to sit
   inside the reach and 4 cm from every dot. 26 new tests; +-2 cm clamp broken on purpose once.
+- B11 settled with one real call ($0.0207): Spark takes two photos in one call and answers in valid JSON, but on
+  photos with no block it still described "the red block ... 1 cm to the right", repeating the miss from the prompt.
