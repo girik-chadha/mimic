@@ -148,8 +148,12 @@ def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=RUNS_D
     # pick from the latest photo; PASS within 1.5 cm; else aim = slot - total miss (each axis within
     # +-2 cm), pick it up from where it landed, at most 2 retries, then FAIL and go on.
 def choose_correction(slot, measured, previous, before_photo, after_photo, move) -> (correction, info)
-    # (2 Nov) Spark's fix is advice: ignored if over 2 cm on an axis, or pointing the same way as a miss
-    # over 0.5 cm, or if diagnosis failed; then the numeric correction is used. Total limited to +-2 cm.
+    # (2 Nov) the numeric correction decides. Spark's fix is logged and printed only, unless
+    # MIMIC_USE_SPARK_FIX=1; then it is used only if within 2 cm per axis, not pointing the same way as a
+    # miss over 0.5 cm, and consistent with the measurement. Total limited to +-2 cm. At most 2 diagnoses
+    # per run; full-run cap $0.30.
+def consistency(advice, miss) -> (agrees | None, words)   # "contradicts measurement" if Spark's seen_offset_cm
+    # is more than 0.5 cm from the measured miss, or it says not_found while the camera measured the block
 ```
 
 ### 2.2 Firmware command protocol

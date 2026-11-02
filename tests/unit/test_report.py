@@ -30,7 +30,9 @@ def test_report_shows_every_attempt_with_its_photo_and_decision(tmp_path, monkey
     assert page.count('<section class="card">') == 4
     assert page.count("data:image/jpeg;base64,") == 2 + 4          # demo, mess and every attempt, embedded
     assert "RETRY" in page and page.count(">PASS<") == 3
-    assert "It landed right of the slot." in page and "Spark&#x27;s fix" in page
+    assert "It landed right of the slot." in page
+    assert "logged only (set MIMIC_USE_SPARK_FIX=1 to use it)" in page
+    assert "agrees with the measurement" in page
     assert "3 of 3 blocks placed within 1.5 cm" in page
     assert "src=\"http" not in page and "<script" not in page        # nothing loaded from outside, no scripts
     assert said == [f"Report: {run_dir / 'report.html'}", f"Summary picture: {run_dir / 'summary.png'}"]
@@ -42,6 +44,17 @@ def test_sparks_text_cannot_inject_html(tmp_path, monkeypatch):
     page = (run_dir / "report.html").read_text()
     assert "<script>" not in page
     assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; slid" in page
+
+
+def test_a_contradiction_is_highlighted_in_the_report(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch)
+    rig.world.release_misses = [(2.5, 0.0), (2.5, 0.0)]
+    rig.diagnoses = [diagnosis(-1.0, 0.0, seen=(1.0, 0.0))]
+    rig.run()
+    run_dir = next(rig.out_root.iterdir())
+    report.main([str(run_dir)], say=lambda s: None)
+    page = (run_dir / "report.html").read_text()
+    assert '<tr class="warn"><th>Spark&#x27;s position</th><td>contradicts measurement' in page
 
 
 def test_summary_picture_puts_the_demo_next_to_the_result(tmp_path, monkeypatch):

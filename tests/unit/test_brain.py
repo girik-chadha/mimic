@@ -184,8 +184,8 @@ def fake_spark(monkeypatch, reply):
 def test_diagnose_sends_both_photos_and_the_measured_miss(monkeypatch):
     sent = fake_spark(monkeypatch, VALID)
     advice = brain.diagnose(DESK, DESK, MOVE, (1.0, -0.4))
-    assert advice == {"problem": "slipped", "fix": {"dx_cm": -0.5, "dy_cm": 0.0, "retry": True},
-                      "explanation": "It slid right."}
+    assert advice == {"problem": "slipped", "seen_offset_cm": None,
+                      "fix": {"dx_cm": -0.5, "dy_cm": 0.0, "retry": True}, "explanation": "It slid right."}
     model, content = sent[0]
     assert model == "muse-spark-1.3"
     assert [part["type"] for part in content] == ["input_text", "input_image", "input_image"]
@@ -193,6 +193,8 @@ def test_diagnose_sends_both_photos_and_the_measured_miss(monkeypatch):
     assert "red block into slot 2" in text and "+1.0 cm in x and -0.4 cm in y" in text
     assert "+x points from the bottom-left dot towards the bottom-right dot" in text
     assert "The fix is advice only" in text and "decides whether to" in text
+    assert "If you cannot see the red block in photo 2, answer not_found. Do not repeat the measured miss." in text
+    assert "seen_offset_cm" in text
 
 
 @pytest.mark.parametrize("reply, problem", [
@@ -206,6 +208,27 @@ def test_diagnose_sends_both_photos_and_the_measured_miss(monkeypatch):
 def test_unusable_diagnoses_are_rejected(reply, problem):
     with pytest.raises(brain.DiagnosisError, match=problem):
         brain.parse_diagnosis(reply)
+
+
+def test_seen_offset_is_read_or_none():
+    seen = VALID.replace('"problem": "slipped",', '"problem": "slipped", "seen_offset_cm": {"dx_cm": 1.1, "dy_cm": -0.2},')
+    assert brain.parse_diagnosis(seen)["seen_offset_cm"] == (1.1, -0.2)
+    assert brain.parse_diagnosis(VALID.replace('"problem": "slipped",',
+                                               '"problem": "slipped", "seen_offset_cm": null,'))["seen_offset_cm"] is None
+    with pytest.raises(brain.DiagnosisError, match="seen dx_cm is not a number"):
+        brain.parse_diagnosis(VALID.replace('"problem": "slipped",',
+                                            '"problem": "slipped", "seen_offset_cm": {"dx_cm": "right", "dy_cm": 0},'))
+
+
+def test_reserve_is_3_cents_under_a_30_cent_run_cap(monkeypatch):
+    sent = fake_spark(monkeypatch, VALID)
+    monkeypatch.setattr(config, "BUDGET_USD", 0.30)
+    monkeypatch.setattr(meta_api, "cost_so_far", lambda: 0.28)   # 0.28 + 0.03 > 0.30
+    with pytest.raises(brain.DiagnosisError, match="cost cap is close"):
+        brain.diagnose(DESK, DESK, MOVE, (1.0, 0.0))
+    monkeypatch.setattr(meta_api, "cost_so_far", lambda: 0.26)   # 0.26 + 0.03 < 0.30
+    brain.diagnose(DESK, DESK, MOVE, (1.0, 0.0))
+    assert len(sent) == 1
 
 
 def test_long_explanations_are_trimmed():
@@ -228,4 +251,12 @@ def test_real_two_photo_reply_parses():
     advice = brain.parse_diagnosis(saved("spark_diagnose_two_photos_no_block"))
     assert advice["problem"] == "missed_aim"
     assert advice["fix"] == {"dx_cm": -1.0, "dy_cm": 0.0, "retry": True}
+
+
+def test_real_reply_with_the_not_found_rule():
+    # Real reply (2 Nov) to the same no-block photos after adding "If you cannot see the {block} in photo 2,
+    # answer not_found. Do not repeat the measured miss.": this time Spark says it cannot see the block.
+    advice = brain.parse_diagnosis(saved("spark_diagnose_two_photos_no_block_v2"))
+    assert advice["problem"] == "not_found" and advice["seen_offset_cm"] is None
+    assert advice["fix"] == {"dx_cm": 0.0, "dy_cm": 0.0, "retry": False}
 

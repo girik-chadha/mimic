@@ -93,3 +93,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   inside the reach and 4 cm from every dot. 26 new tests; +-2 cm clamp broken on purpose once.
 - B11 settled with one real call ($0.0207): Spark takes two photos in one call and answers in valid JSON, but on
   photos with no block it still described "the red block ... 1 cm to the right", repeating the miss from the prompt.
+- Spark's fix is now logged and printed only; the numeric correction always decides (`MIMIC_USE_SPARK_FIX=1` to
+  use it). New consistency check flags a diagnosis that "contradicts measurement" (log, terminal, report). Reserve
+  $0.03, at most 2 diagnoses per run, full-run cap $0.30. Prompt rule "If you cannot see the block in photo 2, answer
+  not_found. Do not repeat the measured miss." plus `seen_offset_cm`: second real call ($0.0194) on the no-block
+  photos now answers not_found. Consistency check broken on purpose once.

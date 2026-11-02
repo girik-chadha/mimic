@@ -160,7 +160,7 @@ def name_objects(image_path: str, attempts: list | None = None) -> list[str]:
 # ---------- diagnosing a missed placement ----------
 
 PROBLEMS = ("slipped", "dropped", "knocked", "missed_aim", "not_found", "other")
-DIAGNOSE_RESERVE_USD = 0.02   # a two-photo Spark call costs about $0.01; never let diagnosis hit the run's cap
+DIAGNOSE_RESERVE_USD = 0.03   # a two-photo Spark call cost $0.0207 (needs.md A5c); never let diagnosis hit the run's cap
 EXPLANATION_MAX_CHARS = 300
 
 DIAGNOSE_PROMPT = """You are checking a small robot arm that puts blocks into slots drawn on a sheet of paper.
@@ -178,6 +178,10 @@ What went wrong? Choose one problem:
 - missed_aim: the arm put it down in the wrong place
 - not_found: you cannot see the {name} in photo 2
 - other: anything else
+If you cannot see the {name} in photo 2, answer not_found. Do not repeat the measured miss.
+
+Say where YOU see the {name} in photo 2, relative to the centre of slot {slot}, in cm (seen_offset_cm), judged
+from the photo itself; use null if you cannot see it.
 
 Then suggest a fix: how far to move the robot's aim for the next try, in cm. Example: if the block landed 1 cm too
 far in +x, a fix of dx_cm -1.0 corrects it; a fix in +x would make it worse.
@@ -185,7 +189,8 @@ The fix is advice only. The robot's own code checks it, never moves the aim more
 use it.
 
 Reply with ONLY a JSON object and no other text, like this:
-{{"problem": "missed_aim", "fix": {{"dx_cm": -1.0, "dy_cm": 0.0, "retry": true}},
+{{"problem": "missed_aim", "seen_offset_cm": {{"dx_cm": 1.0, "dy_cm": 0.0}},
+ "fix": {{"dx_cm": -1.0, "dy_cm": 0.0, "retry": true}},
  "explanation": "One or two short sentences in plain English for the person watching."}}"""
 
 
@@ -200,7 +205,8 @@ def _number(value, what: str) -> float:
 
 
 def parse_diagnosis(reply: str) -> dict:
-    """Spark's reply -> {"problem", "fix": {"dx_cm", "dy_cm", "retry"}, "explanation"}, or DiagnosisError."""
+    """Spark's reply -> {"problem", "seen_offset_cm", "fix": {"dx_cm", "dy_cm", "retry"}, "explanation"},
+    or DiagnosisError. seen_offset_cm is (dx, dy) or None (not given, or Spark cannot see the block)."""
     try:
         data = _json_in(reply, r"\{.*\}", "object")
     except ValueError as error:
@@ -216,7 +222,12 @@ def parse_diagnosis(reply: str) -> dict:
     explanation = data.get("explanation")
     if not isinstance(explanation, str) or not explanation.strip():
         raise DiagnosisError("No explanation in the reply.")
-    return {"problem": problem,
+    seen = data.get("seen_offset_cm")
+    if seen is not None:
+        if not isinstance(seen, dict):
+            raise DiagnosisError(f"seen_offset_cm must be an object with dx_cm and dy_cm, or null: {seen!r}")
+        seen = (_number(seen.get("dx_cm"), "seen dx_cm"), _number(seen.get("dy_cm"), "seen dy_cm"))
+    return {"problem": problem, "seen_offset_cm": seen,
             "fix": {"dx_cm": _number(fix.get("dx_cm"), "dx_cm"), "dy_cm": _number(fix.get("dy_cm"), "dy_cm"),
                     "retry": fix["retry"]},
             "explanation": " ".join(explanation.split())[:EXPLANATION_MAX_CHARS]}

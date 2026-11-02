@@ -41,7 +41,8 @@ plan (Python) ──► for each block:
 - The arm's limits live in two places, Python and the ESP32 firmware, and a test keeps them identical. Python refuses an out-of-range move; the firmware clamps anyway.
 - Until the limits are measured and checked by hand, the firmware does not even switch the servos on. Lifting that lock is one deliberate command (`scripts/arm_lock.py unlock`).
 - Every move is speed-limited and ramped. The planned time the gripper stays closed is checked before moving, because the grip servo overheats.
-- Every API call goes through one function, with a cache, a cost counter and a hard budget per run ($0.15). Meta's own spend limit only notifies.
+- Every API call goes through one function, with a cache, a cost counter and a hard budget per run ($0.30 for a full run with the arm, $0.15 for planning from photos). Meta's own spend limit only notifies.
+- When a placement misses, Spark explains it from the before and after photos, but its suggested fix is only logged: the measured correction decides, and a diagnosis that contradicts the camera's measurement is flagged.
 
 ## Status (2 Nov 2026)
 

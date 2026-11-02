@@ -98,6 +98,19 @@ From Meta's pricing page (read 27 Oct) and third-party docs as marked.
   -1.0 cm: it repeated the measured miss given in the prompt instead of saying `not_found`. Its fix passed the
   code's checks (size and direction), which cannot tell whether the explanation is true. Treat Spark's explanations
   as unverified until tested on real before/after photos with a block in them.
+- **Prompt fixed (2 Nov, second call, $0.0194, 3,546 in / 3,517 out):** added "If you cannot see the {block} in
+  photo 2, answer not_found. Do not repeat the measured miss." and a `seen_offset_cm` field (where Spark itself sees
+  the block relative to the slot, or null). On the same no-block photos Spark now answered `not_found`,
+  `seen_offset_cm: null`, fix 0/0 with `retry: false`: "I cannot see a red block in the second photo, so there is
+  nothing to measure." Saved as `spark_diagnose_two_photos_no_block_v2.txt`. Still to test: real photos WITH a block.
+- **Decisions (2 Nov):** Spark's fix is **logged and printed only**; the numeric correction always decides, unless
+  `MIMIC_USE_SPARK_FIX=1` in `.env` (then it must also pass the size, direction and consistency checks). A
+  **consistency check** marks a diagnosis "contradicts measurement" (log, terminal, report) when Spark's
+  `seen_offset_cm` is more than 0.5 cm from the camera's measured miss, or when Spark says not_found although the
+  camera measured the block. Limits: reserve $0.03 per diagnosis, **at most 2 diagnoses per run**, per-run cap
+  **$0.30** for full runs (`loop.RUN_BUDGET_USD`; the budget guard still stops a run beyond it).
+  Limit of the check: it catches disagreement, not copying. Spark is still told the measured miss, so it could
+  copy it into `seen_offset_cm` and "agree". Leaving the miss out of the prompt would make the check independent.
 
 ### A6. The laptop
 

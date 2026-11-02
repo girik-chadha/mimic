@@ -134,7 +134,7 @@ def test_normal_three_block_run(tmp_path, monkeypatch):
     for name in ["demo.jpg", "mess.jpg", "after_3.jpg", "attempts.jsonl", "summary.json"]:
         assert (out_dir / name).exists(), name
     assert rig.summary()["cost_usd"] == 0.0 and "cost_usd" in rig.summary()
-    assert set(rig.budget_seen) == {0.15}                          # every SAM call under the $0.15 cap
+    assert set(rig.budget_seen) == {0.30}                          # every SAM call under the $0.30 cap
     assert any("planned grip hold" in line for line in rig.said)
     for name, slot in zip(["blue block", "green block", "red block"], scene.load_layout().slots_cm):
         assert math.dist(rig.world.blocks[name], slot) < 1.5      # the world agrees: blocks are in their slots
@@ -205,21 +205,66 @@ def test_same_direction_misses_warn_that_the_arm_or_sheet_moved(tmp_path, monkey
 
 # ---------- Spark's diagnosis of a miss ----------
 
-def diagnosis(dx, dy, problem="missed_aim", explanation="It landed to the right of the slot."):
-    return json.dumps({"problem": problem, "fix": {"dx_cm": dx, "dy_cm": dy, "retry": True}, "explanation": explanation})
+def diagnosis(dx, dy, problem="missed_aim", explanation="It landed to the right of the slot.", seen=(2.5, 0.0)):
+    return json.dumps({"problem": problem, "seen_offset_cm": {"dx_cm": seen[0], "dy_cm": seen[1]} if seen else None,
+                       "fix": {"dx_cm": dx, "dy_cm": dy, "retry": True}, "explanation": explanation})
 
 
-def test_sparks_fix_is_used_logged_and_explained(tmp_path, monkeypatch):
+def test_sparks_fix_is_logged_and_printed_but_the_numeric_correction_decides(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "USE_SPARK_FIX", False)
     rig = Rig(tmp_path, monkeypatch)
     rig.world.release_misses = [(2.5, 0.0), (2.5, 0.0)]
     rig.diagnoses = [diagnosis(-1.8, 0.0)]
     rig.run()
     first = rig.attempts()[0]
-    assert first["correction_source"] == "spark" and first["problem"] == "missed_aim"
-    assert first["next_correction_cm"] == pytest.approx([-1.8, 0.0])
-    assert first["explanation"] == "It landed to the right of the slot."
+    assert first["correction_source"] == "numeric"
+    assert first["next_correction_cm"] == pytest.approx([-2.0, 0.0], abs=0.6)   # numeric, not Spark's -1.8
+    assert first["spark_fix"] == {"dx_cm": -1.8, "dy_cm": 0.0, "retry": True}
+    assert first["spark_fix_note"].startswith("logged only")
+    assert first["consistency"].startswith("agrees with the measurement")
     assert "  Spark: It landed to the right of the slot. (missed_aim)" in rig.said
-    assert any(line.startswith("  -> using Spark's fix") for line in rig.said)
+    assert "  Spark's fix (-1.8, +0.0) cm: logged only (set MIMIC_USE_SPARK_FIX=1 to use it)" in rig.said
+    assert any(line.startswith("  -> numeric correction") for line in rig.said)
+
+
+def test_with_MIMIC_USE_SPARK_FIX_its_fix_is_used(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "USE_SPARK_FIX", True)
+    rig = Rig(tmp_path, monkeypatch)
+    rig.world.release_misses = [(2.5, 0.0), (2.5, 0.0)]
+    rig.diagnoses = [diagnosis(-1.8, 0.0)]
+    rig.run()
+    first = rig.attempts()[0]
+    assert first["correction_source"] == "spark" and first["spark_fix_note"] == "used"
+    assert first["next_correction_cm"] == pytest.approx([-1.8, 0.0])
+    assert any(line.startswith("  -> Spark's fix") for line in rig.said)
+
+
+def test_a_contradicting_diagnosis_is_flagged_in_the_log_and_terminal(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch)
+    rig.world.release_misses = [(2.5, 0.0), (2.5, 0.0)]
+    rig.diagnoses = [diagnosis(-1.0, 0.0, seen=(1.0, 0.0))]          # Spark "sees" 1 cm; the camera measured ~2.5
+    rig.run()
+    first = rig.attempts()[0]
+    assert first["consistency"].startswith("contradicts measurement: Spark sees it at (+1.0, +0.0) cm")
+    assert any(line.startswith("  !! Spark's position: contradicts measurement") for line in rig.said)
+
+
+def test_at_most_two_diagnoses_per_run(tmp_path, monkeypatch):
+    rig = Rig(tmp_path, monkeypatch)
+    calls = []
+    real_spark = rig.spark
+
+    def counting_spark(model, content, use_cache=True):
+        if isinstance(content, list) and len(content) == 3:
+            calls.append(1)
+        return real_spark(model, content, use_cache)
+
+    monkeypatch.setattr(meta_api, "call", counting_spark)
+    rig.world.release_misses = [(5.0, 0.0)] * 3 + [(5.0, 0.0)] * 3   # two moves that keep missing: 4 retries
+    rig.run()
+    assert len(calls) == 2
+    reasons = [a["fallback_reason"] for a in rig.attempts() if a["result"] == "RETRY"]
+    assert reasons[-1] == "no usable diagnosis: skipped: at most 2 diagnoses per run"
 
 
 def test_unusable_diagnosis_falls_back_to_the_numeric_correction(tmp_path, monkeypatch):
@@ -239,30 +284,30 @@ SLOT = (20.0, 20.0)
 MOVE = SimpleNamespace(name="red block", slot=1)
 
 
-def advice(dx, dy):
-    return lambda before, after, move, miss: {"problem": "missed_aim", "explanation": "x",
+def advice(dx, dy, seen=None, problem="missed_aim"):
+    return lambda before, after, move, miss: {"problem": problem, "explanation": "x", "seen_offset_cm": seen,
                                                "fix": {"dx_cm": dx, "dy_cm": dy, "retry": True}}
 
 
 def test_worked_example_block_landed_1_cm_right_so_a_fix_pointing_right_is_wrong():
     landed_right = (21.0, 20.0)
-    correction, info = loop.choose_correction(SLOT, landed_right, (0.0, 0.0), "b", "a", MOVE, advice(+1.0, 0.0))
+    correction, info = loop.choose_correction(SLOT, landed_right, (0.0, 0.0), "b", "a", MOVE, advice(+1.0, 0.0), True)
     assert info["correction_source"] == "numeric"
     assert "points the same way the block missed" in info["fallback_reason"]
     assert correction == pytest.approx((-1.0, 0.0))              # the numeric correction: aim 1 cm left
-    correction, info = loop.choose_correction(SLOT, landed_right, (0.0, 0.0), "b", "a", MOVE, advice(-0.8, 0.0))
+    correction, info = loop.choose_correction(SLOT, landed_right, (0.0, 0.0), "b", "a", MOVE, advice(-0.8, 0.0), True)
     assert info["correction_source"] == "spark" and correction == pytest.approx((-0.8, 0.0))
 
 
 def test_out_of_range_fix_is_ignored_not_trimmed():
-    correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (0.0, 0.0), "b", "a", MOVE, advice(-3.5, 0.0))
+    correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (0.0, 0.0), "b", "a", MOVE, advice(-3.5, 0.0), True)
     assert info["correction_source"] == "numeric" and "over 2 cm" in info["fallback_reason"]
     assert correction == pytest.approx((-1.0, 0.0))
 
 
 def test_total_correction_stays_within_2_cm_whoever_suggests_it():
     # Spark: -1.5 so far plus a further -1.5 would be -3.0; limited to -2
-    correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (-1.5, 0.0), "b", "a", MOVE, advice(-1.5, 0.0))
+    correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (-1.5, 0.0), "b", "a", MOVE, advice(-1.5, 0.0), True)
     assert info["correction_source"] == "spark" and correction == pytest.approx((-2.0, 0.0))
 
     def unusable(*args):
@@ -278,4 +323,30 @@ def test_a_failing_diagnosis_never_stops_the_run():
     correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (0.0, 0.0), "b", "a", MOVE, broken)
     assert info["fallback_reason"] == "no usable diagnosis: API timed out"
     assert correction == pytest.approx((-1.0, 0.0))
+
+
+# ---------- the consistency check ----------
+
+def test_consistency_agrees_contradicts_or_cannot_tell():
+    miss = (1.0, 0.0)
+    assert loop.consistency({"problem": "missed_aim", "seen_offset_cm": (1.3, 0.2)}, miss)[0] is True
+    agrees, words = loop.consistency({"problem": "missed_aim", "seen_offset_cm": (0.2, 0.0)}, miss)
+    assert agrees is False and words.startswith("contradicts measurement") and "0.8 cm apart" in words
+    agrees, words = loop.consistency({"problem": "not_found", "seen_offset_cm": None}, miss)
+    assert agrees is False and "cannot see the block, but the camera measured it" in words
+    assert loop.consistency({"problem": "slipped", "seen_offset_cm": None}, miss) == (None, "not checked: Spark gave no position")
+
+
+def test_log_only_by_default():
+    correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (0.0, 0.0), "b", "a", MOVE,
+                                              advice(-0.8, 0.0, seen=(1.0, 0.0)), False)
+    assert info["correction_source"] == "numeric" and correction == pytest.approx((-1.0, 0.0))
+    assert info["spark_fix"]["dx_cm"] == -0.8 and info["spark_fix_note"].startswith("logged only")
+
+
+def test_when_enabled_a_contradicting_fix_is_not_used():
+    correction, info = loop.choose_correction(SLOT, (21.0, 20.0), (0.0, 0.0), "b", "a", MOVE,
+                                              advice(-0.8, 0.0, seen=(-1.0, 0.0)), True)
+    assert info["correction_source"] == "numeric"
+    assert info["spark_fix_note"].startswith("not used: contradicts measurement")
 

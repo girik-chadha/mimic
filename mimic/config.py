@@ -35,6 +35,9 @@ FFMPEG_PATH = os.environ.get("MIMIC_FFMPEG") or (
     "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-9.0.2-full_build/bin/ffmpeg.exe")
 CAMERA_DEVICE = "e2eSoft iVCam"
 
+# Spark's fix for a missed placement is logged only, unless MIMIC_USE_SPARK_FIX=1 (needs.md A5c).
+USE_SPARK_FIX = os.environ.get("MIMIC_USE_SPARK_FIX") == "1"
+
 
 def api_key() -> str:
     key = os.environ.get("META_API_KEY")

@@ -339,3 +339,17 @@ step is small, slow and stoppable with one key, and nothing changes the real saf
 Two sentences: "When a placement misses, Spark looks at the before and after photos and explains in plain English what
 went wrong, and suggests a fix. Mimic's own code checks that fix against the measurement and only uses it if it is
 small and points the right way, so the AI advises but never steers the arm on its own."
+
+### 2 Nov, follow-up: Spark advises, the measurement decides
+
+- On two photos with **no block in them**, Spark first described "the red block 1 cm to the right": it had copied
+  the number we gave it. One added sentence ("If you cannot see the block, answer not_found. Do not repeat the
+  measured miss.") fixed that: it now says it cannot see a block.
+- So for now Spark's suggested fix is only written down and printed. The camera's measurement always decides the
+  correction. A switch in `.env` can turn Spark's fix on later, once it has been tested on real photos.
+- Spark also says where it thinks the block is. If that is more than 0.5 cm from what the camera measured, the run
+  log, the terminal and the report say "contradicts measurement", so a made-up story is visible.
+
+Two sentences: "We caught Spark describing a block that was not in the photo, so its advice is now only recorded,
+and the camera's measurement always decides the correction. Whenever Spark's account disagrees with the measurement
+by more than half a centimetre, the log and the report say so plainly."

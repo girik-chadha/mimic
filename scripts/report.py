@@ -64,9 +64,16 @@ def _attempt_card(run_dir: Path, a: dict) -> str:
     if a.get("next_correction_cm"):
         source = "Spark's fix" if a.get("correction_source") == "spark" else "numeric correction"
         rows.append(("Next aim", f"{_cm(a['next_correction_cm'])} from the slot ({source})"))
-    if a.get("fallback_reason"):
-        rows.append(("Why not Spark's fix", a["fallback_reason"]))
-    table = "".join(f"<tr><th>{e(k)}</th><td>{e(v)}</td></tr>" for k, v in rows)
+    if a.get("spark_fix"):
+        fix = a["spark_fix"]
+        rows.append(("Spark's fix", f"({fix['dx_cm']:+.1f}, {fix['dy_cm']:+.1f}) cm: {a.get('spark_fix_note') or ''}"))
+    if a.get("consistency"):
+        rows.append(("Spark's position", a["consistency"]))
+    elif a.get("fallback_reason"):
+        rows.append(("Spark", a["fallback_reason"]))
+    table = "".join(
+        f"<tr{' class=\"warn\"' if str(v).startswith('contradicts') else ''}><th>{e(k)}</th><td>{e(v)}</td></tr>"
+        for k, v in rows)
     spark = (f'<p class="spark"><b>Spark ({e(a.get("problem") or "")}):</b> {e(a["explanation"])}</p>'
              if a.get("explanation") else "")
     return f"""
@@ -119,6 +126,7 @@ td {{ padding: 3px 0; overflow-wrap: anywhere; }}
 .badge {{ font-size: 12px; padding: 2px 8px; border-radius: 999px; margin-left: 6px; color: var(--card); }}
 .badge.pass {{ background: var(--pass); }} .badge.retry {{ background: var(--retry); }} .badge.fail {{ background: var(--fail); }}
 .spark {{ margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--line); }}
+tr.warn td, tr.warn th {{ color: var(--fail); font-weight: 600; }}
 .missing {{ color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; padding: 24px; }}
 </style></head>
 <body><main>

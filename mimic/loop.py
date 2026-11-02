@@ -19,7 +19,9 @@ from pathlib import Path
 from mimic import arm as arm_module
 from mimic import brain, config, kinematics, meta_api, motion, plan, scene
 
-RUN_BUDGET_USD = 0.15
+RUN_BUDGET_USD = 0.30          # a full run with the arm; the budget guard stops it beyond this
+MAX_DIAGNOSES_PER_RUN = 2      # each Spark diagnosis costs about $0.02
+CONSISTENT_WITHIN_CM = 0.5     # Spark's "where I see it" must be this close to the camera's measurement
 PASS_CM = 1.5
 MAX_CORRECTION_CM = 2.0
 MAX_TRIES = 3  # the first try plus 2 retries
@@ -41,40 +43,68 @@ def reject_fix(fix: dict, miss) -> str | None:
     return None
 
 
+def consistency(advice: dict, miss) -> tuple[bool | None, str]:
+    """Does what Spark says it sees agree with what the camera measured? (agrees, words); agrees is None
+    when it cannot be checked. Diagnosis only happens after the camera has found the block, so a
+    not_found answer always contradicts the measurement."""
+    if advice["problem"] == "not_found":
+        return False, "contradicts measurement: Spark says it cannot see the block, but the camera measured it"
+    seen = advice.get("seen_offset_cm")
+    if seen is None:
+        return None, "not checked: Spark gave no position"
+    gap = math.dist(seen, miss)
+    if gap > CONSISTENT_WITHIN_CM:
+        return False, (f"contradicts measurement: Spark sees it at ({seen[0]:+.1f}, {seen[1]:+.1f}) cm from the slot, "
+                       f"the camera measured ({miss[0]:+.1f}, {miss[1]:+.1f}) cm ({gap:.1f} cm apart)")
+    return True, f"agrees with the measurement (within {gap:.1f} cm)"
+
+
 def choose_correction(slot, measured, previous, before_photo, after_photo, move,
-                      diagnose=brain.diagnose) -> tuple[tuple[float, float], dict]:
+                      diagnose=brain.diagnose, use_spark_fix=None) -> tuple[tuple[float, float], dict]:
     """How far from the slot to aim next time, in sheet cm, and what was decided.
 
-    Spark looks at the photos and explains the miss. Its fix is used only if it passes reject_fix;
-    otherwise (or if Spark's reply is unusable) the numeric correction is used: the opposite of the
-    total miss so far. Either way the total is limited to 2 cm each way on x and on y.
+    The numeric correction decides: the opposite of the total miss so far. Spark looks at the photos,
+    explains the miss and suggests a fix, which is logged and printed beside it but NOT used, unless
+    MIMIC_USE_SPARK_FIX=1; even then only if it passes reject_fix and agrees with the measurement.
+    Either way the total is limited to 2 cm each way on x and on y.
     """
+    use_spark_fix = config.USE_SPARK_FIX if use_spark_fix is None else use_spark_fix
     miss = (measured[0] - slot[0], measured[1] - slot[1])
-    numeric = (previous[0] - miss[0], previous[1] - miss[1])
+    numeric = (_clamp(previous[0] - miss[0]), _clamp(previous[1] - miss[1]))
     info = {"correction_source": "numeric", "problem": None, "explanation": None, "spark_fix": None,
-            "fallback_reason": None}
+            "spark_seen_offset_cm": None, "consistency": None, "spark_fix_note": None, "fallback_reason": None}
     try:
         advice = diagnose(before_photo, after_photo, move, miss)
-    except Exception as error:  # unusable reply, API error, or the cost cap is close
+    except Exception as error:  # unusable reply, API error, the cost cap is close, or the per-run limit
         info["fallback_reason"] = f"no usable diagnosis: {error}"
-        return (_clamp(numeric[0]), _clamp(numeric[1])), info
-    info.update(problem=advice["problem"], explanation=advice["explanation"], spark_fix=advice["fix"])
-    reason = reject_fix(advice["fix"], miss)
+        return numeric, info
+    agrees, words = consistency(advice, miss)
+    info.update(problem=advice["problem"], explanation=advice["explanation"], spark_fix=advice["fix"],
+                spark_seen_offset_cm=advice.get("seen_offset_cm"), consistency=words)
+    reason = reject_fix(advice["fix"], miss) or (words if agrees is False else None)
+    if not use_spark_fix:
+        info["spark_fix_note"] = "logged only (set MIMIC_USE_SPARK_FIX=1 to use it)"
+        return numeric, info
     if reason:
+        info["spark_fix_note"] = f"not used: {reason}"
         info["fallback_reason"] = reason
-        return (_clamp(numeric[0]), _clamp(numeric[1])), info
+        return numeric, info
     info["correction_source"] = "spark"
+    info["spark_fix_note"] = "used"
     return (_clamp(previous[0] + advice["fix"]["dx_cm"]), _clamp(previous[1] + advice["fix"]["dy_cm"])), info
 
 
 def _say_decision(info: dict, correction, say) -> None:
     if info["explanation"]:
         say(f"  Spark: {info['explanation']} ({info['problem']})")
-    if info["correction_source"] == "spark":
-        say(f"  -> using Spark's fix: aiming ({correction[0]:+.1f}, {correction[1]:+.1f}) cm from the slot")
-    else:
-        say(f"  -> {info['fallback_reason']}; using the numeric correction: aiming "
-            f"({correction[0]:+.1f}, {correction[1]:+.1f}) cm from the slot")
+        warn = "!! " if info["consistency"].startswith("contradicts") else ""
+        say(f"  {warn}Spark's position: {info['consistency']}")
+        fix = info["spark_fix"]
+        say(f"  Spark's fix ({fix['dx_cm']:+.1f}, {fix['dy_cm']:+.1f}) cm: {info['spark_fix_note']}")
+    elif info["fallback_reason"]:
+        say(f"  Spark: {info['fallback_reason']}")
+    source = "Spark's fix" if info["correction_source"] == "spark" else "numeric correction"
+    say(f"  -> {source}: aiming ({correction[0]:+.1f}, {correction[1]:+.1f}) cm from the slot")
 
 
 def load_and_check():
@@ -115,6 +145,13 @@ def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=config
     meta_api.reset()
     budget_before = config.BUDGET_USD
     config.BUDGET_USD = min(config.BUDGET_USD, RUN_BUDGET_USD)
+    diagnoses_left = [MAX_DIAGNOSES_PER_RUN]
+
+    def limited_diagnose(*args):
+        if diagnoses_left[0] <= 0:
+            raise brain.DiagnosisError(f"skipped: at most {MAX_DIAGNOSES_PER_RUN} diagnoses per run")
+        diagnoses_left[0] -= 1
+        return brain.diagnose(*args)
 
     def photo(name: str):
         motion.go_camera_clear(arm, grid, limits, sleep)
@@ -157,7 +194,8 @@ def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=config
                     first_misses.append(None if passed else miss)
                 next_correction, decision = None, {}
                 if not passed and attempt < MAX_TRIES:
-                    next_correction, decision = choose_correction(move.to_cm, measured, correction, before, latest, move)
+                    next_correction, decision = choose_correction(move.to_cm, measured, correction, before, latest,
+                                                                  move, limited_diagnose)
                 summary["attempts"] += 1
                 with open(attempts_path, "a") as f:
                     f.write(json.dumps({
