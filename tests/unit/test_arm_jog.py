@@ -1,4 +1,5 @@
 """arm_jog.py tests: typed commands -> exact lines sent to a fake arm."""
+import dataclasses
 import importlib.util
 
 import pytest
@@ -29,8 +30,8 @@ def test_step_time_respects_the_speed_limit(fake):
     a, t = fake
     jog.handle(a, "shoulder +20")
     assert t.sent[-1] == "J 90 110 90 90 400"
-    jog.handle(a, "shoulder -40")
-    assert t.sent[-1] == "J 90 70 90 90 400"  # 40 degrees * 10 ms = 400 ms
+    jog.handle(a, "elbow -40")
+    assert t.sent[-1] == "J 90 110 50 90 400"  # 40 degrees * 10 ms = 400 ms
 
 
 def test_grip_home_status_stop(fake):
@@ -46,8 +47,8 @@ def test_grip_home_status_stop(fake):
 def test_step_past_a_limit_is_refused_and_not_sent(fake):
     a, t = fake
     jog.handle(a, "home")
-    reply = jog.handle(a, "base +25")
-    assert reply == "refused: base 115 degrees is outside its range 70-110."
+    reply = jog.handle(a, "shoulder -15")
+    assert reply == "refused: shoulder 75 degrees is outside its range 80-180."
     assert t.sent == ["H"]
 
 
@@ -62,7 +63,7 @@ def test_real_mode_refuses_placeholder_limits_before_opening_the_bridge(monkeypa
     def must_not_open(*args, **kwargs):
         pytest.fail("the serial bridge was started while the limits are locked")
     monkeypatch.setattr(arm, "SerialBridgeTransport", must_not_open)
-    limits = arm.load_limits(config.ARM_LIMITS_PATH)
+    limits = dataclasses.replace(arm.load_limits(config.ARM_LIMITS_PATH), placeholder=True)
     with pytest.raises(ArmError, match="placeholder numbers"):
         jog.make_arm(dry_run=False, limits=limits)
 

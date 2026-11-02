@@ -99,6 +99,10 @@ def test_main_needs_the_proposal_first(tmp_path):
 
 
 def test_real_arm_refused_while_locked(monkeypatch, tmp_path):
+    real_load = arm.load_limits
+    locked = dataclasses.replace(real_load(config.ARM_LIMITS_PATH), placeholder=True)
+    monkeypatch.setattr(arm, "load_limits",
+                        lambda path=config.ARM_LIMITS_PATH: locked if path == config.ARM_LIMITS_PATH else real_load(path))
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("bridge opened while locked"))
     proposed = tmp_path / "p.json"
     shutil.copy(config.ARM_LIMITS_PATH, proposed)

@@ -18,6 +18,7 @@ def copies(tmp_path):
     limits, header = tmp_path / "arm_limits.json", tmp_path / "arm_logic.h"
     shutil.copy(config.ARM_LIMITS_PATH, limits)
     shutil.copy(HEADER, header)
+    arm_lock.set_lock(True, limits, header)  # start from locked copies, whatever the committed state is
     return limits, header
 
 

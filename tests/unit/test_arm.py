@@ -57,14 +57,22 @@ def test_firmware_limits_match_arm_limits_json():
     assert scalars["MAX_LINE"] == arm.MAX_LINE_CHARS
 
 
-def test_committed_limits_are_locked():
+def locked_limits():
+    """The committed numbers with the lock on: the guard tests below must not depend on the committed state."""
+    return dataclasses.replace(committed_limits(), placeholder=True, limits_checked_by_hand=False)
+
+
+def test_committed_limits_are_unlocked_with_the_kit_ranges_for_the_first_powered_session():
+    # Changed on purpose (3 Nov, needs.md C7 step 2): unlocked with the kit's ranges, untested on this arm.
     limits = committed_limits()
-    assert limits.placeholder is True
-    assert limits.limits_checked_by_hand is False
+    assert limits.placeholder is False and limits.limits_checked_by_hand is True
+    assert limits.ranges_deg == {"base": (0, 180), "shoulder": (80, 180), "elbow": (30, 120)}
+    assert (limits.grip_open_deg, limits.grip_closed_limit_deg) == (90, 120)
+    assert limits.home_deg == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
 
 
 @pytest.mark.parametrize("change, problem", [
-    ({"home_deg": {"base": 150, "shoulder": 90, "elbow": 90, "grip": 90}}, "home base 150 is outside"),
+    ({"home_deg": {"base": 90, "shoulder": 70, "elbow": 90, "grip": 90}}, "home shoulder 70 is outside"),
     ({"grip_closed_limit_deg": 90}, "cannot be the same angle"),
     ({"pins": {"base": 4, "shoulder": 4, "elbow": 18, "grip": 19}}, "4 different pins"),
     ({"ranges_deg": {"base": [110, 70], "shoulder": [70, 110], "elbow": [70, 110]}}, "base range 110-70"),
@@ -163,8 +171,9 @@ def test_stop_sends_S_and_forgets_the_pose():
 # ---------- refused before anything is sent ----------
 
 @pytest.mark.parametrize("pose, problem", [
-    ({"base": 111, "shoulder": 90, "elbow": 90, "grip": 90}, "base 111 degrees is outside its range 70-110"),
-    ({"base": 90, "shoulder": 69, "elbow": 90, "grip": 90}, "shoulder 69 degrees is outside"),
+    ({"base": 181, "shoulder": 90, "elbow": 90, "grip": 90}, "base 181 degrees is outside its range 0-180"),
+    ({"base": 90, "shoulder": 79, "elbow": 90, "grip": 90}, "shoulder 79 degrees is outside its range 80-180"),
+    ({"base": 90, "shoulder": 90, "elbow": 121, "grip": 90}, "elbow 121 degrees is outside its range 30-120"),
     ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 121}, "grip 121 degrees is outside its range 90-120"),
     ({"base": 90, "shoulder": 90, "elbow": 90}, "needs exactly these joints"),
     ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "wrist": 90}, "needs exactly these joints"),
@@ -209,7 +218,7 @@ def test_garbled_status_reply_raises():
 # ---------- the placeholder guard on a real arm ----------
 
 def test_real_arm_with_placeholder_limits_refuses_moves():
-    a, t = fake_arm(committed_limits(), RealLookingTransport)
+    a, t = fake_arm(locked_limits(), RealLookingTransport)
     with pytest.raises(ArmError, match="placeholder numbers: measure the arm and set placeholder to false"):
         a.home()
     with pytest.raises(ArmError, match="placeholder"):
@@ -220,14 +229,14 @@ def test_real_arm_with_placeholder_limits_refuses_moves():
 
 
 def test_real_arm_still_obeys_stop_and_status_with_placeholder_limits():
-    a, t = fake_arm(committed_limits(), RealLookingTransport)
+    a, t = fake_arm(locked_limits(), RealLookingTransport)
     a.stop()
     a.status()
     assert t.sent == ["S", "?"]
 
 
 def test_real_arm_needs_limits_checked_by_hand_too():
-    measured_only = dataclasses.replace(committed_limits(), placeholder=False)
+    measured_only = dataclasses.replace(locked_limits(), placeholder=False)
     a, t = fake_arm(measured_only, RealLookingTransport)
     with pytest.raises(ArmError, match="not been checked by hand"):
         a.home()

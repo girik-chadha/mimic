@@ -196,7 +196,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 
 | # | Question | Test that settles it | When |
 |---|---|---|---|
-| B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). | Read the KEYESTUDIO PDF, jog each joint gently, measure with a ruler, write the numbers here. | Fri |
+| B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). **3 Nov: the kit's own ranges, from its sample code and untested on this arm, are in `calib/arm_limits.json` and `arm_logic.h` for the first powered session: base 0-180, shoulder 80-180, elbow 30-120, grip open 90 / closed limit 120, home 90 for every joint.** | `scripts/first_moves.py` (needs.md C7) measures the real ranges; link lengths and gripper opening with a ruler. | First powered session |
 | B6 | How precise is the arm at our table distances? | `scripts/repeatability.py --pose B S E G`: the same pose 10 times from alternating sides, the camera measures the claw-tip marker; spread (mean, standard deviation, max), backlash, verdict against the 1.5 cm tolerance. | First powered session |
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
@@ -254,7 +254,8 @@ BASETEN_API_KEY=...          # Mon, optional
 In every script, **s** at any prompt or **Ctrl+C** sends S (stop) and exits. If anything buzzes, strains or
 smells: switch the batteries off.
 
-**Before power**
+**Before power** (steps 1-3 done 3 Nov: kit ranges in both files, unlocked, firmware compiled and copied to
+`C:\Users\girik\mimic_firmware\mimic_arm`; not uploaded yet)
 1. Write the kit's own joint ranges (KEYESTUDIO docs, B4) into **both** `calib/arm_limits.json` and
    `firmware/mimic_arm/arm_logic.h`, home 90 for every joint, a conservative grip closed limit. `.venv/bin/pytest`
    (the sync test must pass).

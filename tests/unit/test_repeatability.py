@@ -125,6 +125,8 @@ def test_main_caps_cost_at_10_cents_and_turns_the_cache_off(monkeypatch, tmp_pat
 def test_real_arm_refused_while_locked(monkeypatch, tmp_path):
     unlocked_layout = dataclasses.replace(scene.load_layout(config.LAYOUT_PATH), placeholder=False)
     monkeypatch.setattr(scene, "load_layout", lambda path=config.LAYOUT_PATH: unlocked_layout)
+    locked = dataclasses.replace(arm.load_limits(config.ARM_LIMITS_PATH), placeholder=True)
+    monkeypatch.setattr(arm, "load_limits", lambda path=config.ARM_LIMITS_PATH: locked)
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("bridge opened while locked"))
     said = []
     assert rp.main(["--pose", "100", "80", "95", "90"], capture=lambda p: pytest.fail("camera used"),

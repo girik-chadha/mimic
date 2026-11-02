@@ -366,3 +366,18 @@ by more than half a centimetre, the log and the report say so plainly."
 Two sentences: "On a real camera frame with the arm in view, SAM found exactly the six calibration dots, and we widened
 the size limit slightly so the biggest dot is no longer on the edge. The calibration still refuses this frame, because
 three photos agree that one provisional dot position is half a centimetre off, which the ruler measurement will fix."
+
+## 3 Nov: unlocking the arm for its first powered session
+
+- The kit's own joint ranges went into both safety files (the Python limits and the firmware), and one command lifted
+  the lock in both at once. The firmware was compiled and copied to Windows, but not uploaded: that is done by hand,
+  with the batteries disconnected.
+- The tests that check the lock still check it: they now build their own locked example instead of relying on the
+  committed file being locked.
+- Once uploaded, the firmware drives the servos from power-on, and they jump to the home pose (90 degrees) the
+  moment the batteries are connected, because a hobby servo cannot report where it is. So the arm should be placed
+  near home by hand before switching on, and the first moves are small, slow and watched.
+
+Two sentences: "We unlocked the arm with the kit's own ranges only for a supervised first session, in which a script
+measures the real safe ranges with small, slow moves. Nothing is uploaded automatically; the person at the arm does
+it with the batteries off and a hand on the switch."

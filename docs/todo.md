@@ -56,7 +56,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] Keep every block at least 4 cm from every dot (a covered dot stops the run)
 - [ ] Gripper tip marker
 - [x] First-powered-session tools, tested with fakes (2 Nov): `first_moves.py`, `grip_test.py`, `repeatability.py`, robust dot finding, s / Ctrl+C stop everywhere
-- [ ] First powered session (needs.md C7): ranges with `first_moves.py`, copy into both files, upload; `grip_test.py`
+- [x] First powered session steps 1-3 (3 Nov): kit ranges in both files, unlocked, firmware compiled and copied to Windows (not uploaded)
+- [ ] First powered session (needs.md C7) from step 3's upload: ranges with `first_moves.py`, copy into both files, upload; `grip_test.py`
 - [ ] Precision test B6: `repeatability.py`
 - [x] Kinematics: taught-pose grid (`kinematics.py`, `calib/pose_grid.json`, `scripts/teach.py`), tested with fakes (2 Nov)
 - [x] `pick` / `place` (`motion.py`), planned grip hold checked against max_grip_hold_s, tested with fakes (2 Nov)

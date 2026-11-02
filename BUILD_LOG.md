@@ -105,3 +105,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   leaves out). With the provisional dot numbers this frame is refused on the right check dot (0.57 cm): a third photo
   putting it at ~35.0 cm, not 34.5. Real reply saved as a fixture ($0.0025); `ivcam_arm.jpg` and `ivcam_sheet.jpg`
   committed (checked by Girik: no people or screens).
+- First powered session, steps 1-3 (needs.md C7): the kit's ranges (base 0-180, shoulder 80-180, elbow 30-120, grip
+  90/120, home 90; from its sample code, untested) in both `arm_limits.json` and `arm_logic.h`; tests green with the
+  sync test; `arm_lock.py unlock`; `test_committed_limits_are_locked` updated on purpose, and the lock-guard tests now
+  build their own locked limits so they keep testing the guard. Unlocked firmware compiled (300,937 bytes, servo
+  code included) and copied to C:\Users\girik\mimic_firmware\mimic_arm. Not uploaded.

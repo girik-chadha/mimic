@@ -9,13 +9,14 @@
 #include <string.h>
 
 // ---------- limits: MUST match calib/arm_limits.json (tests/unit/test_arm.py checks) ----------
-// PLACEHOLDER numbers until the arm is measured (needs.md B4).
+// KIT RANGES (3 Nov) from the kit's sample code, untested on this arm: for the first powered session only
+// (needs.md C7), until scripts/first_moves.py has proposed measured ranges.
 // Moves are refused unless LIMITS_ARE_PLACEHOLDER is 0 AND LIMITS_CHECKED_BY_HAND is 1.
 #ifndef LIMITS_ARE_PLACEHOLDER
-#define LIMITS_ARE_PLACEHOLDER 1
+#define LIMITS_ARE_PLACEHOLDER 0
 #endif
 #ifndef LIMITS_CHECKED_BY_HAND
-#define LIMITS_CHECKED_BY_HAND 0
+#define LIMITS_CHECKED_BY_HAND 1
 #endif
 #define GRIP_OPEN 90
 #define GRIP_CLOSED_LIMIT 120      // never close further than this (the grip servo overheats)
@@ -24,8 +25,8 @@
 #define MAX_LINE 64                // longer command lines are rejected
 
 const int PINS[4] = {16, 17, 2, 4};          // base, shoulder, elbow, grip (kit sample code, untested)
-const int MIN_ANGLE[3] = {70, 70, 70};       // base, shoulder, elbow
-const int MAX_ANGLE[3] = {110, 110, 110};    // base, shoulder, elbow
+const int MIN_ANGLE[3] = {0, 80, 30};        // base, shoulder, elbow
+const int MAX_ANGLE[3] = {180, 180, 120};    // base, shoulder, elbow
 const int HOME[4] = {90, 90, 90, 90};        // base, shoulder, elbow, grip
 
 #define GRIP_CLOSED_THRESHOLD 5    // the grip counts as closed once it is this far from open

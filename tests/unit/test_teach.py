@@ -1,4 +1,5 @@
 """teach.py with a fake arm: jog, set, save poses, finish. The real pose grid is never touched."""
+import dataclasses
 import importlib.util
 import json
 import shutil
@@ -91,4 +92,5 @@ def test_dry_run_never_writes_the_real_grid():
 def test_real_arm_refused_while_locked_before_the_bridge_opens(monkeypatch):
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("bridge opened while locked"))
     with pytest.raises(ArmError, match="placeholder"):
-        teach.make_arm(dry_run=False, limits=arm.load_limits(config.ARM_LIMITS_PATH))
+        teach.make_arm(dry_run=False, limits=dataclasses.replace(arm.load_limits(config.ARM_LIMITS_PATH),
+                                                                 placeholder=True))

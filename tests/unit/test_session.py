@@ -1,4 +1,6 @@
 """session.py: "s" at any prompt and Ctrl+C stop the arm (S) and close the bridge."""
+import dataclasses
+
 import pytest
 
 from mimic import arm, config, session
@@ -6,6 +8,7 @@ from mimic.arm import Arm, ArmError, FakeTransport
 from mimic.session import StopRequested
 
 LIMITS = arm.load_limits(config.ARM_LIMITS_PATH)
+LOCKED = dataclasses.replace(LIMITS, placeholder=True, limits_checked_by_hand=False)
 
 
 class ClosingFake(FakeTransport):
@@ -57,5 +60,5 @@ def test_command_loop_quit_and_s():
 def test_connect_refuses_a_locked_real_arm_before_the_bridge(monkeypatch):
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("bridge opened while locked"))
     with pytest.raises(ArmError, match="placeholder"):
-        session.connect(False, LIMITS)
+        session.connect(False, LOCKED)
     assert not session.connect(True, LIMITS, echo=None).transport.is_real

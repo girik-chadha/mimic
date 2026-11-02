@@ -111,6 +111,8 @@ def test_s_stops_with_S_and_writes_nothing(monkeypatch, tmp_path):
 
 
 def test_real_arm_refused_while_locked(monkeypatch, tmp_path):
+    locked = dataclasses.replace(REAL_LOAD_LIMITS(config.ARM_LIMITS_PATH), placeholder=True)
+    monkeypatch.setattr(arm, "load_limits", lambda path=config.ARM_LIMITS_PATH: locked)
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("bridge opened while locked"))
     said = []
     assert fm.main([], read=answers(), sleep=lambda s: None, say=said.append, proposed_path=tmp_path / "p.json") == 1

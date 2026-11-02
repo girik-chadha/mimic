@@ -96,10 +96,11 @@ static void test_clamps() {
   ArmState a;
   arm_init(a);
   char line[64];
-  snprintf(line, sizeof line, "J %d %d %d %d 800", MIN_ANGLE[0] - 40, MAX_ANGLE[1] + 40, inside,
+  int elbow_inside = (MIN_ANGLE[2] + MAX_ANGLE[2]) / 2;  // each joint has its own range
+  snprintf(line, sizeof line, "J %d %d %d %d 800", MIN_ANGLE[0] - 40, MAX_ANGLE[1] + 40, elbow_inside,
            GRIP_CLOSED_LIMIT + 40 * GRIP_DIR);
   CHECK(strcmp(send(a, line, 0), "OK") == 0, "an out-of-range J is accepted (and clamped)");
-  CHECK(near(a.to[0], MIN_ANGLE[0]) && near(a.to[1], MAX_ANGLE[1]) && near(a.to[2], inside) &&
+  CHECK(near(a.to[0], MIN_ANGLE[0]) && near(a.to[1], MAX_ANGLE[1]) && near(a.to[2], elbow_inside) &&
             near(a.to[3], GRIP_CLOSED_LIMIT),
         "J targets are clamped to the limits");
 }

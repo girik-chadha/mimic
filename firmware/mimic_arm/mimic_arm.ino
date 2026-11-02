@@ -10,9 +10,10 @@
 // Every safety rule (clamps, speed limit, grip timer, placeholder lock) is in arm_logic.h, which is
 // tested on the laptop. This file only reads the serial port and drives the servos.
 //
-// Status 2 Nov: compiles for esp32:esp32:esp32 (ESP32 core 2.0.12, ESP32Servo 1.2.1; no warnings in our files).
-// Uploaded locked; the read-only check passed. Pins are from the kit's sample code (untested on this arm); limits are placeholders
-// until the arm is measured (needs.md B4). The servo ports need battery power: USB alone does not move them.
+// Status 3 Nov: UNLOCKED with the kit's ranges (from its sample code, untested on this arm) for the first powered
+// session (needs.md C7). Compiles for esp32:esp32:esp32 (ESP32 core 2.0.12, ESP32Servo 1.2.1); not uploaded yet,
+// so the board still runs the locked build. Pins are from the kit's sample code (untested on this arm).
+// The servo ports need battery power: USB alone does not move them.
 //
 // While locked (placeholder limits, or not checked by hand) no servo is attached and no angle is ever
 // written: the servos get no signal. Only ? and S work; J and H reply ERR limits not measured.
