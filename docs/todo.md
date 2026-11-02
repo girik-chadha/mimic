@@ -42,7 +42,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] Measure pins, joint ranges, link lengths, gripper opening; write them into needs.md B4
 - [ ] Buy blocks that fit the gripper with ~1 cm to spare (solid, clearly different colours, not white)
 - [ ] Firmware with the command protocol over USB serial (code + g++ logic tests 29 Oct; compiles for the ESP32 with no warnings 2 Nov; not uploaded)
-- [ ] Settle B3 (Wi-Fi hotspot vs Windows bridge), then the real transport for `arm.py` + `arm_jog.py` (both done with a fake transport, 29 Oct)
+- [x] B3 chosen: Windows serial bridge (`scripts/serial_bridge.py`, `SerialBridgeTransport`), tested without hardware (2 Nov)
+- [ ] Upload the locked firmware (needs.md C5), batteries disconnected, then `python scripts/arm_check.py`: B3 moves to Part A when it passes
 - [ ] Fill `calib/arm_limits.json` **and** `firmware/mimic_arm/arm_logic.h` with conservative real numbers, jog gently, then set placeholder false / checked by hand true
 - [ ] `camera.py`, camera mounted; **Gate 2**
 

@@ -2,15 +2,21 @@
 
     J <base> <shoulder> <elbow> <grip> <ms>   ->  OK
     H                                         ->  OK
-    ?                                         ->  A <base> <shoulder> <elbow> <grip>
+    ?                                         ->  A <base> <shoulder> <elbow> <grip>   (+ " L" while locked)
     S                                         ->  OK
 
 Safety is in two places on purpose. Python refuses anything outside the limits in
 calib/arm_limits.json (an out-of-range angle here means a bug upstream). The firmware clamps to
 the same limits as the last line of defence. A unit test checks both use the same numbers.
 No real arm is moved while the limits are placeholders or have not been checked by hand.
+
+WSL cannot see USB, so the real arm is reached through scripts/serial_bridge.py, which runs on
+Windows Python and is started from here as a subprocess (SerialBridgeTransport).
 """
 import json
+import queue
+import subprocess
+import threading
 from dataclasses import dataclass
 
 from mimic import config
@@ -83,20 +89,24 @@ def refuse_unchecked_limits(limits: ArmLimits) -> None:
 
 
 class FakeTransport:
-    """Stands in for the real arm: remembers every line sent and answers like the firmware would."""
+    """Stands in for the real arm: remembers every line sent and answers like the firmware would.
+    locked=True answers like the firmware does while its lock is on."""
     is_real = False
 
-    def __init__(self, limits: ArmLimits, echo=None):
+    def __init__(self, limits: ArmLimits, echo=None, locked=False):
         self.sent = []
         self.angles = [limits.home_deg[j] for j in JOINTS]
         self.home = list(self.angles)
         self.echo = echo  # e.g. print, to show each line in a dry run
+        self.locked = locked
 
     def send(self, line: str) -> str:
         self.sent.append(line)
         parts = line.split()
         if line == "?":
-            reply = "A " + " ".join(str(a) for a in self.angles)
+            reply = "A " + " ".join(str(a) for a in self.angles) + (" L" if self.locked else "")
+        elif self.locked and (line == "H" or line.startswith("J")):
+            reply = "ERR limits not measured"
         elif line == "H":
             self.angles, reply = list(self.home), "OK"
         elif parts and parts[0] == "J" and len(parts) == 6:
@@ -108,6 +118,81 @@ class FakeTransport:
         if self.echo:
             self.echo(f"  -> {line}    <- {reply}")
         return reply
+
+    def close(self) -> None:
+        pass
+
+
+def bridge_command(port: str = "auto") -> list[str]:
+    """How to start the bridge on Windows Python, with its path turned into a Windows path."""
+    script = config.ROOT / "scripts" / "serial_bridge.py"
+    windows_path = subprocess.run(["wslpath", "-w", str(script)], capture_output=True, text=True,
+                                  check=True).stdout.strip()
+    return ["py.exe", "-u", windows_path, "--port", port]
+
+
+class SerialBridgeTransport:
+    """The real arm, through scripts/serial_bridge.py running on Windows Python.
+
+    One line goes to the bridge's stdin; the arm's reply comes back on its stdout. A thread reads the
+    bridge's output into a queue, so waiting for a reply has a time limit and can never hang.
+    After any timeout the transport refuses further commands: a late reply could otherwise be taken
+    as the answer to the next command.
+    """
+    is_real = True
+
+    def __init__(self, command: list[str] | None = None, ready_timeout_s: float = 8.0,
+                 reply_timeout_s: float = 3.0):
+        self.reply_timeout_s = reply_timeout_s  # a bit longer than the bridge's own 2 s, so its TIMEOUT arrives first
+        self.broken = False
+        self.lines = queue.Queue()
+        self.process = subprocess.Popen(command or bridge_command(), stdin=subprocess.PIPE,
+                                        stdout=subprocess.PIPE, text=True, bufsize=1)
+        threading.Thread(target=self._read_bridge, daemon=True).start()
+        first = self._next_line(ready_timeout_s, "the serial bridge to start")
+        if first.startswith("ERROR"):
+            self.close()
+            raise ArmError(f"The serial bridge could not start: {first[6:]}")
+        if first != "READY":
+            self.close()
+            raise ArmError(f"The serial bridge said {first!r} instead of READY.")
+
+    def _read_bridge(self) -> None:
+        for line in self.process.stdout:
+            self.lines.put(line.strip())
+        self.lines.put(None)  # the bridge has exited
+
+    def _next_line(self, timeout_s: float, waiting_for: str) -> str:
+        try:
+            line = self.lines.get(timeout=timeout_s)
+        except queue.Empty:
+            self.broken = True
+            raise ArmError(f"No answer from the serial bridge within {timeout_s} s while waiting for "
+                           f"{waiting_for}: it may be stuck.")
+        if line is None:
+            self.broken = True
+            raise ArmError(f"The serial bridge stopped while waiting for {waiting_for}.")
+        return line
+
+    def send(self, line: str) -> str:
+        if self.broken or self.process.poll() is not None:
+            raise ArmError("The serial bridge is not usable any more: close it and start again.")
+        self.process.stdin.write(line + "\n")
+        self.process.stdin.flush()
+        reply = self._next_line(self.reply_timeout_s, f"the reply to {line!r}")
+        if reply == "TIMEOUT":
+            self.broken = True
+            raise ArmError(f"The arm did not reply to {line!r} (the serial bridge timed out).")
+        return reply
+
+    def close(self) -> None:
+        """Closing the bridge's input makes it send S to the arm and exit."""
+        if self.process.stdin and not self.process.stdin.closed:
+            self.process.stdin.close()
+        try:
+            self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
 
 
 class Arm:
@@ -135,12 +220,26 @@ class Arm:
     # ---------- the four commands ----------
 
     def status(self) -> dict:
+        """The four angles plus "locked". While the firmware is locked its angles are only its own
+        numbers (no servo is driven), so they are not kept as a known pose."""
         reply = self._send("?")
         parts = reply.split()
-        if len(parts) != 5 or parts[0] != "A":
+        locked = len(parts) == 6 and parts[5] == "L"
+        if parts[:1] != ["A"] or len(parts) not in (5, 6) or (len(parts) == 6 and not locked):
             raise ArmError(f"The arm replied {reply!r} to '?'.")
-        self.angles = dict(zip(JOINTS, (int(p) for p in parts[1:])))
-        return dict(self.angles)
+        angles = dict(zip(JOINTS, (int(p) for p in parts[1:5])))
+        self.angles = None if locked else angles
+        return dict(angles, locked=locked)
+
+    def known_pose(self) -> dict:
+        """The current pose, asking the arm if needed. Refuses if the firmware says it is locked."""
+        if self.angles:
+            return dict(self.angles)
+        status = self.status()
+        if status["locked"]:
+            raise ArmError("The arm's firmware is locked (its '?' reply ends with L): it drives no servo and "
+                           "refuses moves. Lift the lock (needs.md) and upload the firmware again.")
+        return {j: status[j] for j in JOINTS}
 
     def move(self, angles: dict, ms: int = 800) -> None:
         self._refuse_real_move_with_unchecked_limits()
@@ -153,7 +252,7 @@ class Arm:
                 raise ArmError(f"{joint} {angle} degrees is outside its range {lo}-{hi}.")
         if not isinstance(ms, int) or ms < 0:
             raise ArmError(f"Move time must be a whole number of ms, got {ms!r}.")
-        current = self.angles or self.status()
+        current = self.known_pose()
         biggest = max(abs(target[j] - current[j]) for j in JOINTS)
         needed = biggest * self.limits.min_ms_per_degree
         if ms < needed:
@@ -162,7 +261,7 @@ class Arm:
         self.angles = target
 
     def grip(self, closed: bool) -> None:
-        current = self.angles or self.status()
+        current = self.known_pose()
         pose = dict(current)
         pose["grip"] = self.limits.grip_closed_limit_deg if closed else self.limits.grip_open_deg
         change = abs(pose["grip"] - current["grip"])

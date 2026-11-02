@@ -38,7 +38,7 @@ def test_grip_home_status_stop(fake):
     assert jog.handle(a, "home") == "home"
     assert jog.handle(a, "grip close") == "grip close"
     assert jog.handle(a, "grip open") == "grip open"
-    assert jog.handle(a, "status") == "{'base': 90, 'shoulder': 90, 'elbow': 90, 'grip': 90}"
+    assert jog.handle(a, "status") == "{'base': 90, 'shoulder': 90, 'elbow': 90, 'grip': 90, 'locked': False}"
     assert jog.handle(a, "stop") == "stopped"
     assert t.sent == ["H", "J 90 90 90 120 500", "J 90 90 90 90 500", "?", "S"]
 
@@ -58,10 +58,21 @@ def test_unknown_commands_show_help_and_send_nothing(fake, typed):
     assert t.sent == []
 
 
-def test_real_mode_refuses_placeholder_limits():
+def test_real_mode_refuses_placeholder_limits_before_opening_the_bridge(monkeypatch):
+    def must_not_open(*args, **kwargs):
+        pytest.fail("the serial bridge was started while the limits are locked")
+    monkeypatch.setattr(arm, "SerialBridgeTransport", must_not_open)
     limits = arm.load_limits(config.ARM_LIMITS_PATH)
     with pytest.raises(ArmError, match="placeholder numbers"):
         jog.make_arm(dry_run=False, limits=limits)
+
+
+def test_jog_on_a_locked_firmware_refuses_steps():
+    limits = arm.load_limits(config.ARM_LIMITS_PATH)
+    t = FakeTransport(limits, locked=True)
+    reply = jog.handle(Arm(t, limits), "base +5")
+    assert reply.startswith("refused: The arm's firmware is locked")
+    assert t.sent == ["?"]
 
 
 def test_dry_run_works_with_placeholder_limits():

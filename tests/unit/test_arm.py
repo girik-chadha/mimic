@@ -88,8 +88,38 @@ def test_home_sends_H():
 
 def test_status_sends_question_mark_and_reads_the_reply():
     a, t = fake_arm()
-    assert a.status() == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
+    assert a.status() == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "locked": False}
     assert t.sent == ["?"]
+    assert a.angles == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
+
+
+# ---------- a locked firmware ("?" ends with L) ----------
+
+def test_locked_status_is_reported_and_not_kept_as_a_pose():
+    limits = committed_limits()
+    a = Arm(FakeTransport(limits, locked=True), limits)
+    assert a.status() == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "locked": True}
+    assert a.angles is None  # the firmware's own numbers, not where the servos really are
+
+
+def test_move_refuses_when_the_firmware_says_it_is_locked():
+    # e.g. arm_limits.json was unlocked but the firmware was not uploaded again
+    limits = ready_limits()
+    t = FakeTransport(limits, locked=True)
+    a = Arm(t, limits)
+    with pytest.raises(ArmError, match="firmware is locked"):
+        a.move({"base": 95, "shoulder": 90, "elbow": 90, "grip": 90}, ms=800)
+    with pytest.raises(ArmError, match="firmware is locked"):
+        a.grip(closed=True)
+    assert t.sent == ["?", "?"]  # it asked, and sent no move
+
+
+@pytest.mark.parametrize("reply", ["A 90 90 90 90 X", "A 90 90 90 90 L extra", "B 90 90 90 90"])
+def test_odd_status_replies_raise(reply):
+    a, t = fake_arm()
+    t.send = lambda line: reply
+    with pytest.raises(ArmError, match="replied"):
+        a.status()
 
 
 def test_move_sends_one_J_line():

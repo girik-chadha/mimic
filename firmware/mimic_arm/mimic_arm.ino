@@ -4,6 +4,7 @@
 //   J <base> <shoulder> <elbow> <grip> <ms>   smooth move        -> OK, or ERR <reason>
 //   H                                         go home            -> OK
 //   ?                                         where are you?     -> A <base> <shoulder> <elbow> <grip>
+//                                                                   (with " L" on the end while locked)
 //   S                                         stop and hold      -> OK
 //
 // Every safety rule (clamps, speed limit, grip timer, placeholder lock) is in arm_logic.h, which is
@@ -13,8 +14,10 @@
 // NOT uploaded yet. Pins are from the kit's sample code (untested on this arm); limits are placeholders
 // until the arm is measured (needs.md B4). The servo ports need battery power: USB alone does not move them.
 //
-// Power-on: a hobby servo cannot report its position, so attach() makes every joint jump to HOME.
-// Keep HOME a safe pose, and always send H before switching off so the jump at the next start is small.
+// While locked (placeholder limits, or not checked by hand) no servo is attached and no angle is ever
+// written: the servos get no signal. Only ? and S work; J and H reply ERR limits not measured.
+// Once unlocked, at power-on a hobby servo cannot report its position, so attach() makes every joint jump
+// to HOME. Keep HOME a safe pose, and always send H before switching off so the jump at the next start is small.
 #include <ESP32Servo.h>
 #include "arm_logic.h"
 
@@ -26,17 +29,20 @@ bool line_too_long = false;
 unsigned long last_tick = 0;
 
 void write_servos() {
+  if (!servos_enabled()) return;  // locked: never write an angle
   for (int j = 0; j < 4; j++) servos[j].write((int)lroundf(arm.now[j]));
 }
 
 void setup() {
   Serial.begin(115200);
   arm_init(arm);
-  for (int j = 0; j < 4; j++) {
-    servos[j].setPeriodHertz(50);
-    servos[j].attach(PINS[j], 500, 2400);
+  if (servos_enabled()) {  // locked: never attach, so the pins send no signal at all
+    for (int j = 0; j < 4; j++) {
+      servos[j].setPeriodHertz(50);
+      servos[j].attach(PINS[j], 500, 2400);
+    }
+    write_servos();
   }
-  write_servos();
 }
 
 void loop() {

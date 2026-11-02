@@ -7,9 +7,9 @@ Type one command per line:
     grip open      grip close
     home           status             stop             quit
 
---dry-run prints every line that would be sent, without an arm. It is the only mode until the
-arm connection is chosen on Friday (needs.md B3). A real arm is refused while calib/arm_limits.json
-is a placeholder or has not been checked by hand.
+--dry-run prints every line that would be sent, without an arm. Without --dry-run it talks to the
+real arm through the Windows serial bridge, but only once calib/arm_limits.json is no longer a
+placeholder and has been checked by hand; until then it refuses before opening the port.
 """
 import argparse
 import sys
@@ -38,7 +38,7 @@ def handle(arm: Arm, line: str) -> str:
             return f"grip {words[1]}"
         if len(words) == 2 and words[0] in JOINTS and words[1][:1] in "+-" and words[1][1:].isdigit():
             step = int(words[1])
-            pose = dict(arm.angles or arm.status())
+            pose = arm.known_pose()
             pose[words[0]] += step
             arm.move(pose, ms=max(MIN_STEP_MS, abs(step) * arm.limits.min_ms_per_degree))
             return f"{words[0]} now {pose[words[0]]}"
@@ -50,8 +50,8 @@ def handle(arm: Arm, line: str) -> str:
 def make_arm(dry_run: bool, limits) -> Arm:
     if dry_run:
         return Arm(FakeTransport(limits, echo=print), limits)
-    arm_module.refuse_unchecked_limits(limits)
-    raise ArmError("No real arm connection yet: it is chosen on Friday (needs.md B3). Use --dry-run.")
+    arm_module.refuse_unchecked_limits(limits)  # checked BEFORE the bridge (and the serial port) is opened
+    return Arm(arm_module.SerialBridgeTransport(), limits)
 
 
 def main():
@@ -65,10 +65,13 @@ def main():
         sys.exit(1)
     print("DRY RUN: nothing is sent to an arm." if args.dry_run else "")
     print(HELP)
-    for line in sys.stdin:
-        if line.strip().lower() in ("quit", "q", "exit"):
-            break
-        print(handle(arm, line))
+    try:
+        for line in sys.stdin:
+            if line.strip().lower() in ("quit", "q", "exit"):
+                break
+            print(handle(arm, line))
+    finally:
+        arm.transport.close()  # the real bridge sends S when it is closed
 
 
 if __name__ == "__main__":

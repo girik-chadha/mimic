@@ -37,8 +37,9 @@ static void test_always() {
   ArmState a;
   arm_init(a);
   char expect[32];
-  snprintf(expect, sizeof expect, "A %d %d %d %d", HOME[0], HOME[1], HOME[2], HOME[3]);
-  CHECK(strcmp(send(a, "?", 0), expect) == 0, "? reports the home pose after power-on");
+  snprintf(expect, sizeof expect, "A %d %d %d %d%s", HOME[0], HOME[1], HOME[2], HOME[3], limits_ok() ? "" : " L");
+  CHECK(strcmp(send(a, "?", 0), expect) == 0, "? reports the home pose after power-on (L while locked)");
+  CHECK(servos_enabled() == limits_ok(), "servos are enabled exactly when the limits are ok");
   CHECK(strcmp(send(a, "S", 0), "OK") == 0, "S always works");
 
   char long_line[80];
@@ -65,6 +66,8 @@ static void test_refused() {
   ArmState a;
   arm_init(a);
   CHECK(!limits_ok(), "limits are not ok with these flags");
+  CHECK(!servos_enabled(), "locked: servos are not enabled (never attached, no angle written)");
+  CHECK(strstr(send(a, "?", 0), " L") != NULL, "locked: ? ends with L");
   CHECK(strcmp(send(a, "J 95 95 95 95 800", 0), "ERR limits not measured") == 0, "J refused");
   CHECK(strcmp(send(a, "H", 0), "ERR limits not measured") == 0, "H refused");
   run_until(a, 0, 5000);
@@ -72,6 +75,13 @@ static void test_refused() {
 }
 
 // ---------- limits ready: moves, clamps, ramps, timers ----------
+
+static void test_unlocked_status() {
+  ArmState a;
+  arm_init(a);
+  CHECK(servos_enabled(), "unlocked: servos are enabled");
+  CHECK(strchr(send(a, "?", 0), 'L') == NULL, "unlocked: ? has no L");
+}
 
 static void test_clamps() {
   CHECK(clamp_joint(0, MIN_ANGLE[0] - 50) == MIN_ANGLE[0], "base below its range is clamped to the minimum");
@@ -191,6 +201,7 @@ int main() {
   printf("limits flags: placeholder=%d checked_by_hand=%d\n", LIMITS_ARE_PLACEHOLDER, LIMITS_CHECKED_BY_HAND);
   test_always();
   if (limits_ok()) {
+    test_unlocked_status();
     test_clamps();
     test_ramp();
     test_speed_limit();

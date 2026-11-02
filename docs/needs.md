@@ -115,8 +115,12 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
   `esp32:esp32:esp32` (ESP32 Dev Module). Newer versions exist (core 3.3.12, ESP32Servo 3.2.1); do not upgrade
   during the event: the 2.0.12 + 1.2.1 pair is the one that works. (Core 3.x changed the PWM
   functions ESP32Servo uses, per the ESP32 core 3.0 migration notes; not tested here.)
-- `firmware/mimic_arm` compiles with these versions, with no warnings (2 Nov): 300,877 bytes (22%) of flash,
-  21,988 bytes (6%) of RAM. Not uploaded yet.
+- `firmware/mimic_arm` compiles with these versions (2 Nov). **Correction (2 Nov, later):** our own files
+  (`mimic_arm.ino`, `arm_logic.h`) give no warnings even with `--warnings all` on a clean build, but the
+  ESP32Servo 1.2.1 library itself has an unused variable (`TAG`) that `--warnings all` turns into an error.
+  Compile and upload with the default warning level (no `--warnings` flag). The earlier "no warnings in the
+  library" was wrong: those builds reused library files compiled with default warnings.
+  Locked build: 289,449 bytes (22%) of flash, 21,872 bytes (6%) of RAM.
 - **The servo ports need battery power.** USB powers the ESP32 board, but USB alone does not move the servos.
 - **Pins (from the kit's sample code, untested on our arm):** base GPIO 16, shoulder 17, elbow 2, grip 4.
   In `calib/arm_limits.json` and `arm_logic.h` (a unit test keeps them equal). GPIO 2 is also the board's LED
@@ -135,7 +139,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | # | Question | Test that settles it | When |
 |---|---|---|---|
 | B2 | Which camera can our code trigger? iPhone-as-webcam on Windows needs a third-party app. A cheap USB webcam is the reliable route. | `capture.py` saves a sharp, overhead photo in under 3 s, ten times in a row. | Decide Thu |
-| B3 | How does WSL talk to the arm? Option 1: ESP32 joins the phone hotspot and runs a tiny HTTP server; WSL sends requests. Option 2: a small Windows-side bridge over USB serial. | Option 1 first: ESP32 prints its IP, `curl` from WSL gets a reply. If the hotspot blocks it, Option 2. | Fri |
+| B3 | How does WSL talk to the arm? **Chosen 2 Nov: Option 2**, `scripts/serial_bridge.py` on Windows Python (3.14.6, pyserial 3.5), started from WSL by `SerialBridgeTransport`; finds the CP210x (COM7) by USB ID, sets DTR/RTS low before opening, waits 2 s and discards boot text. (Option 1, Wi-Fi HTTP, not pursued.) | `python scripts/arm_check.py` with batteries disconnected: `?` -> `A 90 90 90 90 L`, `S` -> `OK`, `J` and `H` -> `ERR limits not measured`. Moves to Part A when it passes. | Mon |
 | B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). | Read the KEYESTUDIO PDF, jog each joint gently, measure with a ruler, write the numbers here. | Fri |
 | B6 | How precise is the arm at our table distances? | Send the same pose 10 times; the camera measures the spread of the gripper tip in mm. | Sat |
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
@@ -168,9 +172,12 @@ BASETEN_API_KEY=...          # Mon, optional
 
 ### C4. Physical setup
 
-- **Arm power-on (29 Oct):** hobby servos cannot report their position, so when the arm is powered the firmware
-  sends every joint to the home pose and they jump there. The home pose must therefore be a safe pose: clear of
-  the table, the blocks and the camera. Always send `H` before switching off, so the next jump is small.
+- **Arm power-on while locked (2 Nov):** the firmware never attaches a servo and never writes an angle, so the
+  servos get no signal at all. Only `?` (replies `A 90 90 90 90 L`, the firmware's own numbers, not a real pose)
+  and `S` work; `J` and `H` reply `ERR limits not measured`.
+- **Arm power-on once unlocked (29 Oct):** hobby servos cannot report their position, so when the arm is powered
+  the firmware sends every joint to the home pose and they jump there. The home pose must therefore be a safe pose:
+  clear of the table, the blocks and the camera. Always send `H` before switching off, so the next jump is small.
 
 - White table, bright even light, no hard shadows.
 - An A3 sheet taped to the table as the work area, with 6 dots drawn on it (changed 30 Oct): 4 corner dots and
@@ -185,3 +192,30 @@ BASETEN_API_KEY=...          # Mon, optional
 - The camera looks down from 40-50 cm. It may move between photos: every photo calibrates itself.
 - Blocks: solid, 2-3 cm, clearly different colours, none white or pale. Buy them after measuring the gripper opening (B4).
 - Nothing personal, no faces, in the camera's view.
+
+### C5. Uploading the firmware, and lifting the arm's lock
+
+**Upload (from PowerShell; nothing is uploaded from WSL).** The firmware is copied to a Windows folder first,
+because the Arduino tools work best on Windows paths. Close anything using COM7 (the serial bridge, a serial
+monitor) before uploading: only one program can hold the port.
+
+1. Copy the current firmware from WSL (re-run after every firmware change):
+   `mkdir -p /mnt/c/Users/girik/mimic_firmware && cp -r firmware/mimic_arm /mnt/c/Users/girik/mimic_firmware/`
+2. Upload from PowerShell (default warning level: see A7b):
+   `& "C:\Program Files\Arduino CLI\arduino-cli.exe" compile --upload -p COM7 --fqbn esp32:esp32:esp32 C:\Users\girik\mimic_firmware\mimic_arm`
+   If it says "Failed to connect", hold BOOT during the upload (A7).
+3. Read-only check (batteries disconnected, switch off): `python scripts/arm_check.py` from WSL.
+
+**Lifting the lock (only after the joint ranges, grip limit and home pose are real numbers in BOTH
+`calib/arm_limits.json` and `firmware/mimic_arm/arm_logic.h`, conservative, and checked by hand):**
+
+1. One command flips all four lock values together and asks you to type yes:
+   `python scripts/arm_lock.py unlock`
+   (JSON: `"placeholder": false`, `"limits_checked_by_hand": true`; firmware: `LIMITS_ARE_PLACEHOLDER 0`,
+   `LIMITS_CHECKED_BY_HAND 1`.) `python scripts/arm_lock.py lock` puts it back, without asking.
+2. `.venv/bin/pytest`: the sync test must pass. `test_committed_limits_are_locked` fails on purpose: update it in
+   the same commit, so unlocking is always a deliberate, visible change.
+3. Copy and upload again (steps 1-2 above). Until the new firmware is on the board, the board stays locked, and
+   `arm.py` refuses moves because `?` still ends with L.
+4. After unlocking, `arm_check.py` reports "NOT locked": that check is only for the locked firmware.
+

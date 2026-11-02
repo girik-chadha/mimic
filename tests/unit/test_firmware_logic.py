@@ -25,13 +25,13 @@ def build_and_run(tmp_path, *defines):
 
 
 def test_placeholder_limits_refuse_every_move(tmp_path):
-    result = build_and_run(tmp_path)  # arm_logic.h exactly as committed
+    result = build_and_run(tmp_path, "-DLIMITS_ARE_PLACEHOLDER=1", "-DLIMITS_CHECKED_BY_HAND=0")
     assert "placeholder=1" in result.stdout
     assert result.returncode == 0, result.stdout
 
 
 def test_measured_but_not_checked_by_hand_still_refuses(tmp_path):
-    result = build_and_run(tmp_path, "-DLIMITS_ARE_PLACEHOLDER=0")
+    result = build_and_run(tmp_path, "-DLIMITS_ARE_PLACEHOLDER=0", "-DLIMITS_CHECKED_BY_HAND=0")
     assert "ok   J refused" in result.stdout
     assert result.returncode == 0, result.stdout
 

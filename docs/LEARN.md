@@ -248,3 +248,21 @@ fails, Mimic refuses the photo instead of guessing, which is exactly what happen
 Two sentences: "The firmware compiled for the real ESP32 first time, because every rule in it had already been
 compiled and tested on the laptop as plain C++. The exact tool versions are pinned so the build cannot change
 under us before the deadline."
+
+## 2 Nov: linking the laptop to the arm
+
+- **The problem:** our code runs in WSL (Linux inside Windows), but WSL cannot see USB devices, and the arm is a
+  USB serial device (COM7) on the Windows side.
+- **The bridge:** a tiny Windows Python script, `serial_bridge.py`, owns the serial port. Our Linux code starts it
+  and talks to it through its input and output, one line each way: `?` in, `A 90 90 90 90 L` out.
+- **Never hang, always stop:** every reply has a time limit; if the arm goes quiet, Mimic raises an error instead of
+  freezing. When the bridge is closed or anything goes wrong, it sends `S` (stop) to the arm.
+- **Locked means limp:** until the limits are real and checked by hand, the firmware does not even switch the
+  servos on. `?` ends with `L` so Python knows those angles are not real. One command, `arm_lock.py unlock`,
+  lifts the lock in both the Python limits file and the firmware together, after you type yes.
+- **Tested without hardware:** the bridge has a `--fake` mode that behaves like the locked arm, so the tests run the
+  real script over real pipes: replies, timeouts, closing, a port that will not open.
+
+Two sentences: "WSL cannot see USB, so a small Windows-side script owns the arm's serial port and passes one line at
+a time between it and our code, with a time limit on every reply and a stop command whenever it closes. Until the
+arm's limits are measured, the firmware keeps every servo switched off, and lifting that lock is one deliberate command."

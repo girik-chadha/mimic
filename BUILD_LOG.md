@@ -57,3 +57,9 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - Firmware compiles for the ESP32 (`esp32:esp32:esp32`, core 2.0.12, ESP32Servo 1.2.1) with the Windows
   arduino-cli run from WSL: no errors, no warnings, 22% of flash. Not uploaded.
 - Pins set from the kit's sample code (base 16, shoulder 17, elbow 2, grip 4), untested; limits still placeholders.
+- Laptop-to-arm link: `scripts/serial_bridge.py` (Windows Python + pyserial) started from WSL by
+  `SerialBridgeTransport`; finds the CP210x by USB ID, DTR/RTS low, 2 s boot wait, boot text discarded, every reply
+  time-limited, S on close. `scripts/arm_check.py` (read-only first test), `scripts/arm_lock.py` (lock/unlock in both
+  files at once). Firmware while locked: no servo attached or written, `?` ends with L. 25 new tests, all without
+  hardware. Firmware copied to C:\Users\girik\mimic_firmware and compiled there; nothing uploaded.
+- Correction: ESP32Servo 1.2.1 fails under `--warnings all` (unused variable in the library); use default warnings.

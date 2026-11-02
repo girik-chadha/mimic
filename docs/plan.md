@@ -116,9 +116,13 @@ class Arm:
     def move(self, angles: dict, ms: int = 800) -> None   # raises ArmError outside the limits / too fast
     def grip(self, closed: bool) -> None
     def home(self) -> None
-    def status(self) -> dict
+    def status(self) -> dict                             # angles + "locked" (2 Nov); locked angles are not kept
+    def known_pose(self) -> dict                         # refuses if the firmware says it is locked
     def stop(self) -> None                               # always allowed
     # a real transport refuses move/grip/home unless placeholder is false AND limits_checked_by_hand is true
+class SerialBridgeTransport:                             # (2 Nov) the real arm via scripts/serial_bridge.py
+    def send(self, line: str) -> str                     # ArmError on any timeout; then refuses further commands
+    def close(self) -> None                              # the bridge sends S and exits
 
 # mimic/camera.py
 def capture(path: str) -> str
@@ -146,6 +150,8 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
 - Moves are slowed to at least `MIN_MS_PER_DEGREE` per degree. A grip held closed for `MAX_GRIP_HOLD_MS` relaxes to open.
 - Lines over 64 characters are rejected. With no command, the arm holds; the last move is never repeated.
 - `J` and `H` reply `ERR limits not measured` unless the limits are real and checked by hand; `?` and `S` always work.
+- (2 Nov) While locked, no servo is attached and no angle is written (`servos_enabled()`), and `?` replies
+  `A b s e g L`: the L says these are the firmware's own numbers, not a real pose.
 - Python (`arm.py`) refuses out-of-range angles; the firmware clamps. The same numbers live in
   `calib/arm_limits.json` and `arm_logic.h`, and a unit test checks they match.
 

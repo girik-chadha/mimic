@@ -45,6 +45,10 @@ struct ArmState {
 
 inline bool limits_ok() { return !LIMITS_ARE_PLACEHOLDER && LIMITS_CHECKED_BY_HAND; }
 
+// While locked, the servos are never attached and no angle is ever written to them: they get no signal
+// at all and stay limp wherever they are. mimic_arm.ino asks this before touching any servo.
+inline bool servos_enabled() { return limits_ok(); }
+
 // Keep an angle inside its joint's range. For the grip, the range is open .. closed limit.
 inline int clamp_joint(int joint, int angle) {
   int lo, hi;
@@ -127,8 +131,9 @@ inline void handle_line(ArmState &a, const char *line, unsigned long now_ms, cha
     return;
   }
   if (strcmp(line, "?") == 0) {
-    snprintf(reply, n, "A %d %d %d %d", (int)lroundf(a.now[0]), (int)lroundf(a.now[1]),
-             (int)lroundf(a.now[2]), (int)lroundf(a.now[3]));
+    // While locked, " L" is added: these are the firmware's own numbers, not a real pose (no servo is driven).
+    snprintf(reply, n, "A %d %d %d %d%s", (int)lroundf(a.now[0]), (int)lroundf(a.now[1]),
+             (int)lroundf(a.now[2]), (int)lroundf(a.now[3]), servos_enabled() ? "" : " L");
     return;
   }
   if (strcmp(line, "S") == 0) {  // always allowed: stopping must always work
