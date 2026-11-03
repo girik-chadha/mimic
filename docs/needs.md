@@ -55,6 +55,13 @@ client.responses.create(model="sam-3.1", input=[{"role": "user", "content": [
   The arm at the top edge hid no dot. Roles came out right, but the right check dot lands at x = 35.07 cm and the
   centre one at 18.67, so the photo is refused (right_check 0.57 cm). Three photos now agree: right check dot at
   34.98 / 35.06 / 35.07, centre at 18.71 / 18.68 / 18.67. Fixture `sam_photo_ivcam_arm_small_coloured_dot.txt`.
+- **Ruler-measured dots (3 Nov, Girik), in cm from the red dot's centre:** bottom_left (0.0, 0.0), bottom_right
+  (36.0, -0.1), top_right (36.0, 24.9), top_left (-0.2, 25.1), centre_check (18.3, 12.5), right_check (34.3, 12.4);
+  sheet edges (-2.5, -2.3) to (38.5, 27.2). In `layout.json` with `dots_measured: true`. **All three real photos
+  now calibrate** (saved replies, no new call), check-dot errors in cm: 6a centre 0.13 / right 0.27; 6b 0.15 / 0.19;
+  ivcam_arm 0.20 / 0.19 (limit 0.5). In all three, both check dots land 0.1-0.25 cm to the left of their measured
+  x (right_check at 34.04-34.12, centre_check at 18.15-18.19): a small steady bias, inside the limit, worth a
+  second look at the right-hand corner measurements if it grows.
 - **dot_size_frac raised to 0.012-0.030 (3 Nov):** 0.026 left the orange dot 0.2 px of margin. A 19 mm die
   (about 38 px, 0.030) is now kept as a candidate, and the robust dot finding leaves it out because no set of 6
   that includes it fits the layout.
@@ -234,7 +241,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
-| B13 | The demo video, on the first real `show_demo.py` run: does SAM accept the shrunk video (10 fps H.264, made by ffmpeg, not a phone)? How long does a video call take (our timeout for video is 300 s; the 28 Oct call was never timed)? Does a track keep its id while a hand moves the block (A3's open question; if not, `show_demo.py` stops with "2 tracks")? | `python scripts/show_demo.py demo.mp4 --save-replies` on an 8-10 s video of the real sheet, after the dots are ruler-measured (`layout.json` must not be a placeholder). About $0.10-0.13 for 3 blocks. | After the dots are measured |
+| B13 | The demo video, on the first real `show_demo.py` run: does SAM accept the shrunk video (10 fps H.264, made by ffmpeg, not a phone)? How long does a video call take (our timeout for video is 300 s; the 28 Oct call was never timed)? Does a track keep its id while a hand moves the block (A3's open question; if not, `show_demo.py` stops with "2 tracks")? | `python scripts/show_demo.py demo.mp4 --save-replies` on an 8-10 s video of the real sheet. Since 3 Nov it needs only the measured dots (`dots_measured`); the slot positions are still placeholders, so the blocks must sit within 3 cm of the slots in `layout.json` or it stops with "not in a slot". About $0.10-0.13 for 3 blocks. | Dots measured 3 Nov; when the video is recorded |
 | B14 | Does Spark name the dice "colour die" with the new prompt line, and does SAM find exactly 1 box for each such name (two dice of similar colours could share one)? | One real `brain.name_objects` call on a photo of the dice on the sheet; save Spark's reply and each SAM reply as fixtures. About $0.01-0.02. | When the dice photo is taken |
 | B12 | Does opening COM7 reset the board? The bridge sets DTR and RTS low before opening so that it should not. If it does, every session restarts the arm (each servo jumps to home again) and a brownout is hidden by the next power-on. | After the upload (C7 step 4): `arm_jog.py`, type `boot` at once, `quit`, wait a minute, repeat. If the seconds are always 2-3, opening resets the board. | First powered session |
 
@@ -272,6 +279,10 @@ BASETEN_API_KEY=...          # Mon, optional
   clear of the table, the blocks and the camera. Always send `H` before switching off, so the next jump is small.
 
 - White table, bright even light, no hard shadows.
+- **Two flags in `layout.json` (3 Nov):** `dots_measured` (the 6 dots are ruler-measured: true since 3 Nov) is
+  all that calibration needs, so `scene.calibrate`, `show_demo.py` and `plan_from_photos.py` work now.
+  `placeholder` stays true until the slots, mess area and reach are measured too; until then `run_mimic.py`, the
+  loop, `teach_plan.py` (without `--provisional`) and `repeatability.py` refuse.
 - An A3 sheet taped to the table as the work area, with 6 dots drawn on it (changed 30 Oct): 4 corner dots and
   2 check dots, plus 3-4 numbered target slots. Each photo finds all 6 dots ("small coloured dot"), works out which
   is which by position, builds its own map from the corners and checks it with the 2 check dots (0.5 cm limit).

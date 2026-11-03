@@ -26,7 +26,7 @@ spec.loader.exec_module(script)
 SHEET_CM = [(-2, -2), (40, -2), (40, 27.7), (-2, 27.7)]
 SHEET_PX = [(300, 950), (1650, 980), (1400, 150), (520, 130)]
 DOT_PROMPT = "small coloured dot"
-DOTS_CM = [(0, 0), (37, 0), (37, 24.7), (0, 24.7), (18.5, 12.4), (34.5, 12.4)]  # as in calib/layout.json
+DOTS_CM = [scene.load_layout(config.LAYOUT_PATH).dots_cm[role] for role in scene.ROLES]  # from calib/layout.json
 
 # Demo: blocks sit in the slots (y = 20) in the order blue, green, red. Mess: scattered on the left.
 DEMO_CM = {"red block": (32.3, 20.2), "blue block": (19.8, 20.1), "green block": (26.1, 19.9)}
@@ -117,18 +117,27 @@ def test_objects_are_drawn_in_the_colour_their_name_says():
     assert script.colour_for("grey cube", 1) == script.OTHER_COLOURS[1]
 
 
-def test_placeholder_layout_refuses_before_any_sam_call(tmp_path, monkeypatch):
+def test_unmeasured_dots_refuse_before_any_sam_call(tmp_path, monkeypatch):
     s = Scene(tmp_path, monkeypatch)
-    s.layout_path.write_text(config.LAYOUT_PATH.read_text())  # the committed file: placeholder true
-    with pytest.raises(scene.SceneError, match="measure your sheet and set placeholder to false"):
+    layout = json.loads(config.LAYOUT_PATH.read_text())
+    layout.update(placeholder=True, dots_measured=False)
+    s.layout_path.write_text(json.dumps(layout))
+    with pytest.raises(scene.SceneError, match="dot positions are not measured yet"):
         s.run()
     assert s.budget_seen == []  # nothing was asked of SAM
 
 
+def test_measured_dots_are_enough_even_while_the_rest_of_the_layout_is_a_placeholder(tmp_path, monkeypatch):
+    s = Scene(tmp_path, monkeypatch)
+    s.layout_path.write_text(config.LAYOUT_PATH.read_text())  # the committed file: placeholder true, dots measured
+    assert s.run()["target_order"] == ["blue block", "green block", "red block"]
+
+
 def test_bad_check_dot_on_the_mess_photo_stops_the_run(tmp_path, monkeypatch, capsys):
-    wrong = DOTS_CM[:5] + [(32.5, 12.4)]  # right check dot seen 2 cm away from where layout.json says
+    x, y = DOTS_CM[5]
+    wrong = DOTS_CM[:5] + [(x - 2, y)]  # right check dot seen 2 cm away from where layout.json says
     s = Scene(tmp_path, monkeypatch, mess_dots_cm=wrong)
-    with pytest.raises(calib.CalibrationError, match="right_check 2.00 cm off"):
+    with pytest.raises(calib.CalibrationError, match=r"right_check (1\.99|2\.00|2\.01) cm off"):  # px rounding
         s.run()
     out = capsys.readouterr().out
     assert "demo photo: check dots centre_check 0.0" in out  # the demo photo was fine and was reported

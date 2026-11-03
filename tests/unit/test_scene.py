@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
-from mimic import config, sam, scene
+from mimic import calib, config, sam, scene
 from mimic.calib import Calib, CalibrationError
 from mimic.sam import Box
 from mimic.scene import HeightCorrection, Layout, SceneError
@@ -75,7 +75,8 @@ def fake_sam(monkeypatch, boxes_by_name):
 
 def make_layout(**changes):
     values = dict(dots_cm=DOTS_CM, dot_prompt=DOT_PROMPT, dot_size_frac=(0.007, 0.02), slots_cm=SLOTS_CM,
-                  slot_tolerance_cm=3.0, sheet_min_cm=(-2, -2), sheet_max_cm=(40, 27.7), height=None)
+                  slot_tolerance_cm=3.0, sheet_min_cm=(-2, -2), sheet_max_cm=(40, 27.7), height=None,
+                  dots_measured=True)
     values.update(changes)
     return Layout(**values)
 
@@ -94,6 +95,11 @@ def true_calib():
 def test_committed_layout_file_loads_and_is_sane():
     layout = scene.load_layout(config.LAYOUT_PATH)
     assert list(layout.dots_cm) == scene.ROLES
+    # ruler-measured 3 Nov from the red dot's centre; slots, mess area and reach are still placeholders
+    assert layout.dots_measured is True and layout.placeholder is True
+    assert layout.dots_cm == {"bottom_left": (0.0, 0.0), "bottom_right": (36.0, -0.1), "top_right": (36.0, 24.9),
+                              "top_left": (-0.2, 25.1), "centre_check": (18.3, 12.5), "right_check": (34.3, 12.4)}
+    assert (layout.sheet_min_cm, layout.sheet_max_cm) == ((-2.5, -2.3), (38.5, 27.2))
     assert layout.dot_prompt == "small coloured dot"
     assert len(layout.slots_cm) >= 3
     assert layout.height is None  # off by default
@@ -111,7 +117,7 @@ def test_layout_with_height_enabled_but_empty_raises(tmp_path):
 
 def test_slot_too_close_to_a_dot_is_refused(tmp_path):
     data = json.loads(config.LAYOUT_PATH.read_text())
-    data["slots_cm"] = [[28.0, 5.0], [32.0, 12.4], [28.0, 20.7]]  # slot 2 is 2.5 cm from the right check dot
+    data["slots_cm"] = [[28.0, 5.0], [31.8, 12.4], [28.0, 20.7]]  # slot 2 is 2.5 cm from the right check dot
     (tmp_path / "layout.json").write_text(json.dumps(data))
     with pytest.raises(SceneError, match="Slot 2 is only 2.5 cm from the right_check dot"):
         scene.load_layout(tmp_path / "layout.json")
@@ -119,7 +125,7 @@ def test_slot_too_close_to_a_dot_is_refused(tmp_path):
 
 def test_mess_area_too_close_to_a_dot_is_refused(tmp_path):
     data = json.loads(config.LAYOUT_PATH.read_text())
-    data["mess_area_cm"] = {"min": [5.0, 10.0], "max": [16.0, 20.0]}  # 2.5 cm from the centre check dot
+    data["mess_area_cm"] = {"min": [5.0, 10.0], "max": [15.8, 20.0]}  # 2.5 cm from the centre check dot
     (tmp_path / "layout.json").write_text(json.dumps(data))
     with pytest.raises(SceneError, match="mess area is only 2.5 cm from the centre_check dot"):
         scene.load_layout(tmp_path / "layout.json")
@@ -247,11 +253,36 @@ def test_check_dot_outside_the_corners_stops(monkeypatch):
         calibrate_with(monkeypatch, dot_boxes(dots_cm=outside), make_layout(dots_cm=outside))
 
 
-def test_calibrate_refuses_a_placeholder_layout(monkeypatch):
+def test_calibrate_refuses_unmeasured_dots(monkeypatch):
     asked = fake_sam(monkeypatch, {DOT_PROMPT: dot_boxes()})
-    with pytest.raises(SceneError, match="measure your sheet and set placeholder to false"):
-        scene.calibrate(PHOTO, make_layout(placeholder=True))
+    with pytest.raises(SceneError, match="dot positions are not measured yet"):
+        scene.calibrate(PHOTO, make_layout(placeholder=True, dots_measured=False))
     assert asked == []  # refused before spending anything on SAM
+
+
+def test_calibrate_needs_only_the_dots_not_the_whole_layout(monkeypatch):
+    fake_sam(monkeypatch, {DOT_PROMPT: dot_boxes()})
+    scene.calibrate(PHOTO, make_layout(placeholder=True, dots_measured=True))   # slots still placeholders: fine
+
+
+def test_the_arm_side_still_needs_the_whole_layout_real():
+    with pytest.raises(SceneError, match="placeholder numbers"):
+        scene.refuse_placeholder(make_layout(placeholder=True, dots_measured=True))
+    with pytest.raises(SceneError, match="placeholder numbers"):
+        scene.refuse_placeholder(make_layout(placeholder=False, dots_measured=False))
+    scene.refuse_placeholder(make_layout(placeholder=False, dots_measured=True))
+
+
+def test_layout_file_cannot_be_real_while_its_dots_are_not(tmp_path):
+    data = json.loads(config.LAYOUT_PATH.read_text())
+    data.update(placeholder=False, dots_measured=False)
+    (tmp_path / "layout.json").write_text(json.dumps(data))
+    with pytest.raises(SceneError, match="placeholder is false but dots_measured is not true"):
+        scene.load_layout(tmp_path / "layout.json")
+    del data["dots_measured"]
+    data["placeholder"] = True
+    (tmp_path / "layout.json").write_text(json.dumps(data))
+    assert scene.load_layout(tmp_path / "layout.json").dots_measured is False   # missing means not measured
 
 
 def test_labelled_photo_is_saved(tmp_path, monkeypatch):
@@ -369,39 +400,48 @@ def test_tolerance_over_half_the_slot_spacing_raises():
         scene.assign_slots({"red block": (32, 5)}, SLOTS_CM, 4.0)
 
 
-# ---------- the two real photos (SAM replies saved 30 Oct) ----------
+# ---------- the three real photos (SAM replies saved 30 Oct and 3 Nov), ruler-measured dots ----------
 
 def real_dots(stem):
-    """The committed layout (placeholder switched off in memory only) and a fake SAM giving the saved real reply."""
+    """The committed layout, as it is (dots measured), and a fake SAM giving the saved real reply."""
     reply = (config.RESPONSES_DIR / f"sam_photo_{stem}_small_coloured_dot.txt").read_text()
     photo = str(config.ROOT / "tests" / "fixtures" / "photos" / f"{stem}.jpg")
     layout = scene.load_layout(config.LAYOUT_PATH)
-    layout.placeholder = False
     return photo, layout, {layout.dot_prompt: sam.parse_boxes(reply)}
 
 
-def test_real_photo_6a_calibrates_itself(tmp_path, monkeypatch):
-    # PROVISIONAL: layout.json's dot positions come from coin and paper sizes, not a ruler. Update these
-    # expected numbers after the ruler measurement (the right check dot is expected to move to ~35.0 cm).
-    photo, layout, replies = real_dots("dots_check_6a")
+def check_errors(c) -> dict:
+    return {role: round(c.check(px, cm), 3) for role, px, cm in zip(scene.ROLES, c.pixel_pts, c.table_pts_cm)
+            if role in scene.CHECKS}
+
+
+# With the ruler numbers (3 Nov) all three photos calibrate. Errors in cm; the limit is 0.5.
+REAL_PHOTO_CHECK_ERRORS = {
+    "dots_check_6a": {"centre_check": 0.129, "right_check": 0.266},
+    "dots_check_6b": {"centre_check": 0.153, "right_check": 0.186},
+    "ivcam_arm":     {"centre_check": 0.202, "right_check": 0.189},
+}
+
+
+@pytest.mark.parametrize("stem", list(REAL_PHOTO_CHECK_ERRORS))
+def test_real_photo_calibrates_with_the_ruler_measured_dots(stem, tmp_path, monkeypatch):
+    photo, layout, replies = real_dots(stem)
     fake_sam(monkeypatch, replies)
-    c = scene.calibrate(photo, layout, tmp_path / "6a_dots.jpg")
-    errors = dict(zip(scene.ROLES, (c.check(px, cm) for px, cm in zip(c.pixel_pts, c.table_pts_cm))))
-    assert errors["right_check"] == pytest.approx(0.49, abs=0.01)
-    assert errors["centre_check"] == pytest.approx(0.22, abs=0.01)
+    c = scene.calibrate(photo, layout, tmp_path / f"{stem}_dots.jpg")
+    errors = check_errors(c)
+    print(f"{stem}: check-dot errors {errors} cm (limit {calib.MAX_CHECK_ERROR_CM})")
+    assert all(e <= calib.MAX_CHECK_ERROR_CM for e in errors.values())
+    assert errors == pytest.approx(REAL_PHOTO_CHECK_ERRORS[stem], abs=0.01)
+    assert (tmp_path / f"{stem}_dots.jpg").exists()
+
+
+def test_real_photo_6a_roles_are_by_position():
+    photo, layout, replies = real_dots("dots_check_6a")
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        fake_sam(monkeypatch, replies)
+        c = scene.calibrate(photo, layout)
     assert c.pixel_pts[0] == (115.5, 791.5)  # the red dot, bottom left in the photo, is bottom_left
     assert c.pixel_pts[2] == (1066.5, 161.0)  # the green dot, top right in the photo, is top_right
-    assert (tmp_path / "6a_dots.jpg").exists()
-
-
-def test_real_photo_6b_stops_on_the_right_check_dot(tmp_path, monkeypatch):
-    # PROVISIONAL: with the coin-and-paper numbers the right check dot lands 0.56 cm off, over the 0.5 cm
-    # limit, so this photo is refused. Update this test after the ruler measurement (it should then pass).
-    photo, layout, replies = real_dots("dots_check_6b")
-    fake_sam(monkeypatch, replies)
-    with pytest.raises(CalibrationError, match=r"right_check 0\.56 cm off"):
-        scene.calibrate(photo, layout, tmp_path / "6b_dots.jpg")
-    assert (tmp_path / "6b_dots.jpg").exists()
 
 
 def test_real_replies_have_six_dot_sized_boxes_and_nothing_else():
@@ -429,14 +469,9 @@ def test_a_38_px_die_is_kept_as_a_candidate_and_then_left_out(monkeypatch):
         assert math.dist(seen_px, camera(DOTS_CM[role])) <= 1, role
 
 
-def test_real_ivcam_frame_with_the_arm_stops_on_the_right_check_dot(monkeypatch):
-    # Real reply (3 Nov) on an iVCam frame with the arm in place: 6 dot-sized boxes, roles right, but the right
-    # check dot lands at x = 35.07 cm against the provisional 34.5, so the photo is refused (0.57 cm).
-    # PROVISIONAL: update this test after the ruler measurement; it should then calibrate.
+def test_real_ivcam_frame_reply_has_six_dot_sized_boxes():
+    # Real reply (3 Nov) on an iVCam frame with the arm in place; it calibrates (see the test above).
     photo, layout, replies = real_dots("ivcam_arm")
     lo, hi = layout.dot_size_frac
     assert len(replies[layout.dot_prompt]) == 6
     assert all(lo <= scene.dot_size(b) <= hi for b in replies[layout.dot_prompt])
-    fake_sam(monkeypatch, replies)
-    with pytest.raises(CalibrationError, match=r"right_check 0\.57 cm off"):
-        scene.calibrate(photo, layout)

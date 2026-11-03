@@ -150,11 +150,17 @@ def test_a_video_that_could_cost_too_much_is_refused_before_asking(fake, tmp_pat
     assert paid(fake.events) == []
 
 
-def test_placeholder_layout_is_refused_before_shrinking(fake, tmp_path):
-    fake.layout = dataclasses.replace(fake.layout, placeholder=True)
-    with pytest.raises(scene.SceneError, match="placeholder"):
+def test_unmeasured_dots_are_refused_before_shrinking(fake, tmp_path):
+    fake.layout = dataclasses.replace(fake.layout, placeholder=True, dots_measured=False)
+    with pytest.raises(scene.SceneError, match="dot positions are not measured yet"):
         run(fake, tmp_path)
     assert fake.events == []
+
+
+def test_measured_dots_are_enough_while_the_rest_is_a_placeholder(fake, tmp_path):
+    fake.layout = dataclasses.replace(fake.layout, placeholder=True)   # as committed: dots measured, slots not
+    result, _ = run(fake, tmp_path)
+    assert result["target_order"] == ["red block", "blue block", "green block"]
 
 
 def test_a_last_frame_that_does_not_calibrate_stops_before_the_video_calls(fake, tmp_path):

@@ -465,3 +465,16 @@ pushing angle has been measured in the grip test."
 
 Two sentences: "We added one line of context so Spark knows it is looking at dice and names them like 'red die'.
 The safety net is unchanged: SAM must find exactly one match per name, or Spark is asked for a new one."
+
+### 3 Nov: the dots are measured
+
+- Girik measured the 6 dots with a ruler. With the real numbers, all three real photos we had saved (two phone
+  photos and one iVCam frame with the arm in view) calibrate, with both check dots within 0.27 cm of where the
+  ruler says they are. Before, two of the three were refused at about 0.56 cm.
+- Calibration only needs the dots, but the file still has guessed slots, mess area and reach. So there are now
+  two flags: `dots_measured` lets the camera side work (calibration, the photo and video demo scripts), while
+  `placeholder` keeps blocking everything that moves the arm or teaches it, until the rest is measured too.
+
+Two sentences: "With the ruler-measured dot positions, every real photo we have calibrates itself to within 0.27 cm.
+A separate 'dots measured' flag lets the camera side run now, while the arm side still waits for the slots and
+reach to be measured."

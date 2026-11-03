@@ -45,7 +45,7 @@ def check_dot_errors(c: calib.Calib) -> dict[str, float]:
 def run(video_path: str, layout_path=config.LAYOUT_PATH, out_root=config.RUNS_DIR, ask=input, say=print,
         save_replies: bool = False) -> dict:
     layout = scene.load_layout(layout_path)
-    scene.refuse_placeholder(layout)  # before anything is shrunk or sent
+    scene.refuse_unmeasured_dots(layout)  # before anything is shrunk or sent; only the dots must be real
     out_dir = Path(out_root) / time.strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
 

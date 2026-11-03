@@ -143,3 +143,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
 - Naming prompt: added "The objects are small painted dice, so name each one 'colour die' (for example 'red
   die')." Rename loop and exactly-1-box rule unchanged. The saved naming replies predate the line (lighters on
   desk.jpeg) and are kept, labelled as such; a real dice reply is needs.md B14. No API call.
+- Ruler-measured dots in `calib/layout.json` (Girik): dots and sheet edges. New flag `dots_measured: true`;
+  `placeholder` stays true (slots, mess area, reach still placeholders). `scene.calibrate`, `show_demo.py` and
+  `plan_from_photos.py` now need only the dots (`refuse_unmeasured_dots`); run_mimic, the loop, teach_plan and
+  repeatability still need the whole file (`refuse_placeholder`). All three real photos calibrate from their saved
+  replies: check dots 6a 0.13 / 0.27, 6b 0.15 / 0.19, ivcam_arm 0.20 / 0.19 cm (limit 0.5). No API call.

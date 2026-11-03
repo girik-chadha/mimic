@@ -49,7 +49,8 @@ class Layout:
     sheet_min_cm: tuple[float, float]
     sheet_max_cm: tuple[float, float]
     height: HeightCorrection | None = None  # None = correction off
-    placeholder: bool = False               # True until the real sheet has been measured
+    placeholder: bool = False               # True until the whole sheet (dots, slots, mess area, reach) is real
+    dots_measured: bool = False             # True once the 6 dots are ruler-measured: enough to calibrate
     mess_area_cm: tuple | None = None       # ((x_min, y_min), (x_max, y_max)): where blocks are scattered
     reach_cm: dict | None = None            # {"base": (x, y), "min": cm, "max": cm}: what the arm can reach
 
@@ -75,10 +76,14 @@ def load_layout(path=config.LAYOUT_PATH) -> Layout:
         sheet_max_cm=tuple(data["sheet_cm"]["max"]),
         height=height,
         placeholder=data["placeholder"],
+        dots_measured=data.get("dots_measured", False),
         mess_area_cm=(tuple(data["mess_area_cm"]["min"]), tuple(data["mess_area_cm"]["max"])),
         reach_cm={"base": tuple(data["reach_cm"]["base"]), "min": data["reach_cm"]["min"],
                   "max": data["reach_cm"]["max"]},
     )
+    if not layout.placeholder and not layout.dots_measured:
+        raise SceneError("layout.json says placeholder is false but dots_measured is not true: the whole sheet "
+                         "cannot be real while its dots are not measured.")
     _check_slot_tolerance(layout.slots_cm, layout.slot_tolerance_cm)
     for n, slot in enumerate(layout.slots_cm, start=1):
         for role, dot in layout.dots_cm.items():
@@ -115,9 +120,17 @@ def reach_problem(point, reach: dict) -> str | None:
 
 
 def refuse_placeholder(layout: Layout) -> None:
-    if layout.placeholder:
+    """For anything that uses the slots, the mess area or the reach (the arm, teaching): the whole file must be real."""
+    if layout.placeholder or not layout.dots_measured:
         raise SceneError("calib/layout.json still holds placeholder numbers: "
                          "measure your sheet and set placeholder to false.")
+
+
+def refuse_unmeasured_dots(layout: Layout) -> None:
+    """For calibration, which needs only the 6 dots: refused until they are ruler-measured (dots_measured)."""
+    if not layout.dots_measured:
+        raise SceneError("calib/layout.json's dot positions are not measured yet: measure them with a ruler from "
+                         "the bottom-left dot's centre and set dots_measured to true.")
 
 
 # ---------- finding things with SAM ----------
@@ -272,7 +285,7 @@ def calibrate(image_path: str, layout: Layout, labelled_path=None) -> Calib:
     """One photo -> its own pixel/cm map, from its own dots. If `labelled_path` is given, the photo is saved
     there with every dot named by role (or marked '?' when calibration stops), so the roles can be checked by eye.
     """
-    refuse_placeholder(layout)
+    refuse_unmeasured_dots(layout)  # only the dots: slots and reach may still be placeholders
     dots, dropped = find_dots(image_path, layout)
     try:
         try:

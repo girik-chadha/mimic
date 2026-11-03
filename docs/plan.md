@@ -250,6 +250,10 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
 - Six dots drawn on the sheet (changed 30 Oct): 4 corner dots build each photo's map, 2 check dots test it.
   SAM finds all 6 with one prompt ("small coloured dot"); which dot is which comes from where they are, not
   their colour. Dot positions by role, slots and sheet bounds live in `calib/layout.json`.
+- (3 Nov, Girik's decision) Two flags there: `dots_measured` is enough to calibrate (`scene.calibrate`,
+  `show_demo.py`, `plan_from_photos.py`); `placeholder: false` (the whole file real, which needs `dots_measured`
+  too) is still required by everything that uses slots, mess area or reach with the arm: `run_mimic.py`, the
+  loop, `teach_plan.py`, `repeatability.py`. The dots were ruler-measured 3 Nov; the rest is still placeholder.
 - **Keep every block and slot at least 4 cm from every dot:** a covered dot stops the run, because each photo
   needs all 6 dots to calibrate itself.
 - **Mess area** on one side, **target row** of numbered slots on the other. Slots start empty, so a placement never lands on another block.

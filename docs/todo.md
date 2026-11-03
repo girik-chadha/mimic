@@ -77,7 +77,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] Decided (2 Nov): Spark's fix logged only (`MIMIC_USE_SPARK_FIX=1` to use it), consistency check, at most 2 diagnoses per run, $0.30 full-run cap; prompt fixed (not_found on the no-block photos)
 - [ ] Test `diagnose` on real before/after photos with a block in them (Girik, 3 Nov)
 - [x] Dot check on a real iVCam frame with the arm in place: 6 dots found; dot_size_frac max 0.030 (3 Nov)
-- [ ] Ruler-measure the dots: three photos put the right check dot at ~35.0 cm, not 34.5 (needs.md A2b)
+- [x] Ruler-measure the dots (3 Nov, Girik): in `layout.json` with `dots_measured: true`; all three real photos now calibrate (check dots 0.13-0.27 cm off, needs.md A2b)
+- [ ] Measure the slot centres (and redraw them if needed) so `placeholder` can go false together with the mess area and reach
 - [x] Demo as a video: `scripts/show_demo.py` (shrink to 10 fps / 720p, warning + typed yes, $0.30 cap, settled frame, arrival order), `mimic/video.py`, `sam.track`; tested on the saved 317-frame reply and fakes (3 Nov)
 - [ ] First real `show_demo.py` run on an 8-10 s demo video (needs.md B13; after the dots are measured)
 - [x] Naming prompt: one line of scene context, the objects are small painted dice named "colour die" (3 Nov; no API call)

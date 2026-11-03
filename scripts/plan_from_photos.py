@@ -110,7 +110,7 @@ def draw_mess(photo, out_path, c, layout, names, positions, moves):
 
 def run(demo: str, mess: str, layout_path=config.LAYOUT_PATH, out_root=config.RUNS_DIR) -> dict:
     layout = scene.load_layout(layout_path)
-    scene.refuse_placeholder(layout)  # before spending anything
+    scene.refuse_unmeasured_dots(layout)  # before spending anything; only the dots must be real
 
     meta_api.reset()
     budget_before = config.BUDGET_USD
