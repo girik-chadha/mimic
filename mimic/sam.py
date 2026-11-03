@@ -68,8 +68,22 @@ def parse_tracks(text: str) -> dict[int, list[tuple[int, Box]]]:
     return tracks
 
 
+def frame_count(text: str) -> int:
+    """How many frames a video reply covers: one <Nf> marker per frame, even where SAM saw nothing."""
+    return sum(1 for kind, _ in _tokens(text) if kind == "frame")
+
+
 def find(image_path: str, name: str, use_cache: bool = True) -> list[Box]:
     """Ask SAM where `name` (e.g. "blue block") is in the photo. Cached and cost-counted by meta_api."""
     content = [{"type": "input_text", "text": name},
                {"type": "input_image", "image_url": meta_api.image_url(image_path)}]
     return parse_boxes(meta_api.call(config.SAM_MODEL, content, use_cache=use_cache))
+
+
+def track(video_path: str, name: str, save_as: str | None = None) -> tuple[dict[int, list[tuple[int, Box]]], int]:
+    """Ask SAM to follow `name` through a video. Returns ({track id: [(frame, box), ...]}, frames in the reply).
+    Cached and cost-counted by meta_api, which refuses the call if its price would pass the budget."""
+    content = [{"type": "input_text", "text": name},
+               {"type": "input_video", "video_url": meta_api.video_url(video_path)}]
+    text = meta_api.call(config.SAM_MODEL, content, save_as=save_as)
+    return parse_tracks(text), frame_count(text)

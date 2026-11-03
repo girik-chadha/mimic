@@ -67,6 +67,18 @@ Request: same as A2 but `{"type": "input_video", "video_url": "data:video/mp4;ba
 - One prompt per object again: `"blue bottle"`, `"black rectangle"`, `"green lighter"` each gave 1 track seen in 315-317 of 317 frames. Camera shake moved the centres by 11-21 px.
 - **Not tested yet:** whether a track keeps its id when the object is moved or covered by a hand. Only matters if we use video (stacking). Photos are enough for the row task.
 
+### A3b. Video facts checked locally, without a call (3 Nov)
+
+- **SAM's frame numbers are the video's frames:** the 317-frame reply has exactly 317 `<Nf>` markers (0-316) for
+  the 317 frames OpenCV counts in `clip.mp4` (30 fps, 1280x720). `show_demo.py` stops if the counts ever differ.
+- **Camera shake in that handheld clip:** at most 10.9 px (0.0085 of the width) within any one second, and 21 px
+  over the whole 10.6 s. So the "still" limit is 1.5% of the width (19 px at 1280, about 0.8 cm on the sheet). The
+  slow drift makes the lighter, which never moved, "arrive" at frame 9 (0.3 s): arrival times are approximate
+  with a handheld camera, which is why they are only logged.
+- **Windows ffmpeg 9.0.2 (with libx264) shrinks videos as planned:** `clip.mp4` (317 frames, 3.2 MB) became 106
+  frames at 10 fps, 548 KB, in about 2 s; made-up 1920x1080 and 1080x1920 videos came out 1280x720 and 720x1280.
+  Sound and metadata are dropped.
+
 ### A4. Pricing and limits
 
 From Meta's pricing page (read 27 Oct) and third-party docs as marked.
@@ -217,6 +229,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
+| B13 | The demo video, on the first real `show_demo.py` run: does SAM accept the shrunk video (10 fps H.264, made by ffmpeg, not a phone)? How long does a video call take (our timeout for video is 300 s; the 28 Oct call was never timed)? Does a track keep its id while a hand moves the block (A3's open question; if not, `show_demo.py` stops with "2 tracks")? | `python scripts/show_demo.py demo.mp4 --save-replies` on an 8-10 s video of the real sheet, after the dots are ruler-measured (`layout.json` must not be a placeholder). About $0.10-0.13 for 3 blocks. | After the dots are measured |
 | B12 | Does opening COM7 reset the board? The bridge sets DTR and RTS low before opening so that it should not. If it does, every session restarts the arm (each servo jumps to home again) and a brownout is hidden by the next power-on. | After the upload (C7 step 4): `arm_jog.py`, type `boot` at once, `quit`, wait a minute, repeat. If the seconds are always 2-3, opening resets the board. | First powered session |
 
 ---

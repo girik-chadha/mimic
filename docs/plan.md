@@ -14,7 +14,8 @@ mimic/                     the Python package
   config.py                settings from .env, model names, prices, budget, paths
   meta_api.py              one client for every Meta call: data URLs, retries,
                            response cache, cost counter, budget guard
-  sam.py                   parse SAM output (boxes, video tracks); find(image, name)
+  sam.py                   parse SAM output (boxes, video tracks); find(image, name); track(video, name)
+  video.py                 (3 Nov) demo video: shrink to 10 fps / 720p, settled frame, arrival order
   brain.py                 Spark calls: name_objects(photo), diagnose(before, after, move)
   scene.py                 read_target(photo) -> ordered names; read_positions(photo) -> px
   calib.py                 pixel <-> table centimetres (homography from 4 corner dots)
@@ -28,6 +29,8 @@ firmware/
   mimic_arm/mimic_arm.ino  ESP32: tiny command protocol, smooth moves, safety limits
 scripts/
   plan_from_photos.py      Gate 1 demo: two photos in, plan out
+  show_demo.py             (3 Nov) the demo as a video: target order and arrival order out (opt-in;
+                           run_mimic.py still takes a demo photo)
   arm_jog.py               move one joint at a time from the terminal
   run_mimic.py             the full loop
   benchmark.py             N runs, prints success rate, retries, cost
@@ -183,6 +186,25 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
   It shows ESP32 resets only, not a sag in the servo battery that leaves the ESP32 running (needs.md A10b).
 - Python (`arm.py`) refuses out-of-range angles; the firmware clamps. The same numbers live in
   `calib/arm_limits.json` and `arm_logic.h`, and a unit test checks they match.
+
+### 2.2b The demo as a video (added 3 Nov, Girik's decision; photos stay the default)
+
+`scripts/show_demo.py demo.mp4`: the human films the demo instead of taking one photo.
+- Windows ffmpeg shrinks it first: 10 fps, shorter side at most 720 px, no sound, no metadata. An 8 s clip is
+  about 80 frames. Refused before anything is sent if it could cost more than $0.30 (3 blocks: about 40 s).
+- A warning (hands, faces and anything in view go to Meta) and a typed `yes` before anything is sent.
+- The last frame is calibrated (6 dots) and named by Spark first, so a hidden dot or wrong layout stops for about
+  $0.01 before the video calls. The video must end with the blocks placed and hands away for a second.
+- One SAM video call per name. Stops if a name has no track, two track ids, or is lost (last seen more than 1 s
+  before the end), or if SAM's frame count or picture size does not match the video.
+- The frame read: the last one where every block was seen in each of the previous 10 frames (1 s) and stayed
+  within 1.5% of the image width of where it is then; up to 3 such frames, 1 s apart, are tried for the 6 dots.
+  On it the existing pipeline runs (`read_positions`, `assign_slots`). Stops if a block's photo box and video box
+  disagree by more than 1 cm, or if a block ends the video more than the slot tolerance from where it was in that
+  frame (the video ended before the last block settled).
+- Arrival order (first to settle first) is logged in `demo.json`, not used: the row task fills slots in order.
+- `meta_api`: a video call is priced from its frame count before it is sent and refused if it would pass the
+  budget; it gets a 300 s timeout and is never retried after a timeout (Meta may still bill it).
 
 ### 2.3 Scene layout
 

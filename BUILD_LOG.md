@@ -122,3 +122,10 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   code (power-on, brownout, software reset, watchdog, other); read-only, works while locked. Mapping in arm_logic.h,
   g++ tested in all three builds; the .ino checks the numbers against the ESP32's names with static_assert.
   Recompiled (301,273 bytes), Windows copy refreshed. Not uploaded. needs.md A10b, B12, C7 steps 4 and 8.
+- Demo as a video (`scripts/show_demo.py`, `mimic/video.py`, `sam.track`): Windows ffmpeg shrinks it to 10 fps,
+  at most 720p, no sound or metadata; warning + typed yes; $0.30 cap checked before anything is sent; last frame
+  calibrated and named first; one SAM video call per name; stops on a missing, doubled or lost track; reads the
+  last frame where every block was still for 1 s (10 frames) and all 6 dots are found; logs the arrival order.
+  meta_api: video calls priced before sending, 300 s timeout, no retry after a timeout. Checked locally: SAM's
+  317 frame markers match the clip's 317 frames; the clip shrinks to 106 frames / 548 KB. Broke the lost-track
+  stop on purpose: 3 tests failed; restored. No API call made.

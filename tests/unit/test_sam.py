@@ -117,3 +117,24 @@ def test_find_asks_sam_and_parses_the_reply(monkeypatch):
     assert sent["content"][0] == {"type": "input_text", "text": "blue lighter"}
     assert sent["content"][1]["image_url"].startswith("data:image/jpeg;base64,")
     assert sent["use_cache"] is True
+
+
+def test_frame_count_is_one_per_frame_marker():
+    assert sam.frame_count(saved("sam_video_green_lighter_317f")) == 317
+    assert sam.frame_count("<0f><1f>0<|box;x1=1;y1=1;x2=5;y2=5;w=10;h=10|><2f>") == 3  # frames 0 and 2 saw nothing
+    assert sam.frame_count("") == 0
+
+
+def test_track_sends_the_video_and_returns_tracks_and_frame_count(monkeypatch):
+    sent = {}
+
+    def fake_call(model, content, save_as=None):
+        sent.update(model=model, content=content, save_as=save_as)
+        return saved("sam_video_green_lighter_317f")
+
+    monkeypatch.setattr(meta_api, "call", fake_call)
+    tracks, frames = sam.track(str(config.ROOT / "tests/fixtures/clip.mp4"), "green lighter", save_as="x")
+    assert list(tracks) == [0] and len(tracks[0]) == 317 and frames == 317
+    assert sent["model"] == "sam-3.1" and sent["save_as"] == "x"
+    assert sent["content"][0] == {"type": "input_text", "text": "green lighter"}
+    assert sent["content"][1]["video_url"].startswith("data:video/mp4;base64,")

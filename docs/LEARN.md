@@ -406,3 +406,21 @@ for four jumps together. After that every move is ramped and speed-limited, whic
 Two sentences: "The arm can now tell us why it last restarted, for example `B brownout 42`, which means its supply dropped
 42 seconds ago. That turns 'the arm twitched for no reason' into a fact we can check, although it only sees restarts
 of the board, not every battery dip."
+
+### 3 Nov: showing the demo on video
+
+- Instead of one photo, the human can film themselves putting the blocks into the slots. SAM follows each block
+  through the video, and code picks the moment to read: the last frame where every block had been still for a
+  second. The usual photo pipeline then reads the slot order from that frame.
+- It is careful with money and privacy. The video is shrunk first (10 frames a second, 720p, no sound), its price
+  is worked out from its frame count before anything is sent, and it asks for a typed yes after warning that
+  hands and faces go to Meta.
+- It stops rather than guess: if SAM loses a block, sees two, or the video ends before the last block settles.
+  Testing found that last case: the "last still moment" could come from before the last block was placed, so
+  the script now checks that nothing moved after the frame it reads.
+- The order the blocks arrived in is logged, not used. A handheld camera drifts enough to blur it (a lighter that
+  never moved "arrived" 0.3 s in), so it would need the phone on a stand before anything relied on it.
+
+Two sentences: "You can now show Mimic the arrangement by filming yourself building it; SAM follows every block and
+the code reads the slot order from the last moment nothing was moving. Every way that could go wrong (a lost
+block, a video that ends too soon, a cost over 30 cents) stops the run with a plain message before it can mislead."

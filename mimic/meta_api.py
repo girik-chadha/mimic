@@ -2,8 +2,10 @@
 
 call(model, content) sends a request and returns the reply text. On the way it:
 - answers from the disk cache if we asked exactly this before (free, works offline),
-- refuses to start a call once the run's budget is used up,
-- retries when the server is busy (429) or broken (5xx),
+- refuses to start a call once the run's budget is used up, and refuses a video call whose price (known
+  exactly from its frame count) would take the run past the budget,
+- retries when the server is busy (429) or broken (5xx); a video call that times out is not retried,
+  because Meta may still bill it,
 - adds the cost of the call to the counter and to .cache/spend_log.jsonl,
 - replaces the API key with *** in any error before raising it.
 """
@@ -26,7 +28,12 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+class VideoTimedOut(RuntimeError):
+    pass
+
+
 RETRY_WAITS_S = [1, 2, 4]  # wait this long before retry 1, 2 and 3
+VIDEO_TIMEOUT_S = 300      # a video takes far longer than a photo; never timed with our client (needs.md B13)
 SPARK_TOKENS_PER_IMAGE_GUESS = 1000  # only used if the reply has no token counts (needs.md B10)
 
 _client = None
@@ -165,12 +172,22 @@ def _scrub(error: Exception) -> Exception:
     return error
 
 
+def _is_video(content) -> bool:
+    return not isinstance(content, str) and any(part["type"] == "input_video" for part in content)
+
+
 def _send(model: str, content):
     request = content if isinstance(content, str) else [{"role": "user", "content": content}]
+    video = _is_video(content)
+    options = {"timeout": VIDEO_TIMEOUT_S} if video else {}
     for attempt in range(len(RETRY_WAITS_S) + 1):
         try:
-            return _get_client().responses.create(model=model, input=request)
+            return _get_client().responses.create(model=model, input=request, **options)
         except Exception as error:
+            if video and isinstance(error, openai.APITimeoutError):
+                # Meta may have processed (and billed) it anyway: sending it again could pay for it twice.
+                raise VideoTimedOut(f"The video request timed out after {VIDEO_TIMEOUT_S} s and was not retried: "
+                                    f"Meta may still bill it (about ${sam_cost(content):.2f}).") from _scrub(error)
             if attempt == len(RETRY_WAITS_S) or not _worth_retrying(error):
                 raise _scrub(error)
             time.sleep(RETRY_WAITS_S[attempt])
@@ -195,6 +212,11 @@ def call(model: str, content, save_as: str | None = None, use_cache: bool = True
     else:
         if _spent_usd >= config.BUDGET_USD:
             raise BudgetExceeded(f"Spent ${_spent_usd:.4f} of the ${config.BUDGET_USD:.2f} budget.")
+        if model == config.SAM_MODEL and _is_video(content):
+            price = sam_cost(content)  # exact: frames x price per frame
+            if _spent_usd + price > config.BUDGET_USD:
+                raise BudgetExceeded(f"This video call costs ${price:.4f}; with ${_spent_usd:.4f} spent it would pass "
+                                     f"the ${config.BUDGET_USD:.2f} budget. Nothing was sent.")
         resp = _send(model, content)
         text = resp.output_text
         if model == config.SAM_MODEL:

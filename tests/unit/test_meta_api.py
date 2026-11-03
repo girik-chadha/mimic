@@ -21,10 +21,12 @@ class FakeClient:
     def __init__(self, *replies):
         self.replies = list(replies)
         self.calls = 0
+        self.options = []  # extra settings each request was sent with (e.g. a longer timeout)
         self.responses = self
 
-    def create(self, model, input):
+    def create(self, model, input, **options):
         self.calls += 1
+        self.options.append(options)
         reply = self.replies.pop(0)
         if isinstance(reply, Exception):
             raise reply
@@ -207,6 +209,27 @@ def test_cached_answer_still_works_over_budget(monkeypatch):
     assert meta_api.call("sam-3.1", photo_content()) == "a"
 
 
+def video_content(tmp_path, frames=80):
+    return [{"type": "input_text", "text": "red block"},
+            {"type": "input_video", "video_url": meta_api.video_url(make_video(tmp_path / "v.mp4", frames))}]
+
+
+def test_video_call_that_would_pass_the_budget_is_never_sent(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "BUDGET_USD", 0.015)
+    client = use(monkeypatch, FakeClient(reply("a"), reply("b")))
+    meta_api.call("sam-3.1", photo_content())                   # spent 0.0025: under budget, so the old check passes
+    with pytest.raises(meta_api.BudgetExceeded, match="costs \\$0.0160.*Nothing was sent"):
+        meta_api.call("sam-3.1", video_content(tmp_path))       # 80 frames = $0.016 would make it $0.0185
+    assert client.calls == 1 and meta_api.cost_so_far() == pytest.approx(0.0025)
+
+
+def test_video_call_inside_the_budget_is_sent(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "BUDGET_USD", 0.02)
+    client = use(monkeypatch, FakeClient(reply("<0f>")))
+    meta_api.call("sam-3.1", video_content(tmp_path))
+    assert client.calls == 1 and meta_api.cost_so_far() == pytest.approx(0.016)
+
+
 # ---------- retries ----------
 
 def test_retries_after_rate_limit(monkeypatch):
@@ -226,6 +249,30 @@ def test_gives_up_after_three_retries(monkeypatch):
         meta_api.call("sam-3.1", photo_content())
     assert client.calls == 4
     assert meta_api.cost_so_far() == 0  # failed calls cost nothing
+
+
+def timeout_error():
+    return openai.APITimeoutError(request=httpx2.Request("POST", "https://api.meta.ai/v1/responses"))
+
+
+def test_video_gets_a_longer_timeout_and_a_photo_does_not(monkeypatch, tmp_path):
+    client = use(monkeypatch, FakeClient(reply("<0f>"), reply("ok")))
+    meta_api.call("sam-3.1", video_content(tmp_path))
+    meta_api.call("sam-3.1", photo_content())
+    assert client.options == [{"timeout": 300}, {}]
+
+
+def test_video_that_times_out_is_not_retried_and_costs_nothing_on_our_counter(monkeypatch, tmp_path):
+    client = use(monkeypatch, FakeClient(timeout_error(), reply("never sent")))
+    with pytest.raises(meta_api.VideoTimedOut, match="not retried: Meta may still bill it"):
+        meta_api.call("sam-3.1", video_content(tmp_path))
+    assert client.calls == 1
+
+
+def test_photo_that_times_out_is_still_retried(monkeypatch):
+    client = use(monkeypatch, FakeClient(timeout_error(), reply("ok")))
+    assert meta_api.call("sam-3.1", photo_content()) == "ok"
+    assert client.calls == 2
 
 
 def test_bad_request_is_not_retried(monkeypatch):
