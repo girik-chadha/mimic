@@ -6,6 +6,7 @@ Type one command per line:
     base +5        shoulder -3        elbow +10        (degrees, one joint at a time)
     grip open      grip close
     home           status             stop             quit
+    boot           why the board last started (power-on, brownout, ...) and how long ago
     s (or Ctrl+C)  stop the arm and exit
 
 --dry-run prints every line that would be sent, without an arm. Without --dry-run it talks to the
@@ -19,7 +20,15 @@ from mimic import arm as arm_module
 from mimic import session
 from mimic.arm import JOINTS, Arm, ArmError
 
-HELP = "commands: base|shoulder|elbow|grip +N/-N, grip open, grip close, home, status, stop, quit, s (stop + exit)"
+HELP = ("commands: base|shoulder|elbow|grip +N/-N, grip open, grip close, home, status, boot, stop, quit, "
+        "s (stop + exit)")
+BOOT_MEANING = {
+    "power-on": "switched on, the reset button, or an upload",
+    "brownout": "the ESP32's own supply dropped too low and it restarted: switch off, check the batteries",
+    "software reset": "the firmware restarted itself",
+    "watchdog": "the firmware hung and was restarted",
+    "other": "a crash or another reason",
+}
 MIN_STEP_MS = 400
 
 
@@ -32,6 +41,10 @@ def handle(arm: Arm, line: str) -> str:
             return "home"
         if words == ["status"]:
             return str(arm.status())
+        if words == ["boot"]:
+            boot = arm.boot_reason()
+            return (f"last start: {boot['reason']}, {boot['seconds_since_boot']} s ago "
+                    f"({BOOT_MEANING[boot['reason']]})")
         if words == ["stop"]:
             arm.stop()
             return "stopped"

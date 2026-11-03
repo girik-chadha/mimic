@@ -166,6 +166,7 @@ One line in, one line out, the same over USB serial or Wi-Fi HTTP (`GET /cmd?c=<
 | `H` | go to the home pose | `OK` |
 | `?` | report current angles | `A <base> <shoulder> <elbow> <grip>` |
 | `S` | stop and hold | `OK` |
+| `B` | why did the board last start? (added 3 Nov) | `B <reason> <seconds since start-up>`: power-on, brownout, software reset, watchdog, other |
 
 Safety in the firmware, not only in Python: every angle is clamped to the limits measured on Friday (needs.md B4); moves are ramped, never jumps; the gripper never closes past its measured limit (overheating).
 
@@ -177,6 +178,9 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
 - `J` and `H` reply `ERR limits not measured` unless the limits are real and checked by hand; `?` and `S` always work.
 - (2 Nov) While locked, no servo is attached and no angle is written (`servos_enabled()`), and `?` replies
   `A b s e g L`: the L says these are the firmware's own numbers, not a real pose.
+- (3 Nov) `B` is read-only and always allowed, like `?` and `S`. The reason comes from the ESP32's reset code
+  (mapping in `arm_logic.h`, tested with g++; the numbers are checked against the ESP32's own names at compile time).
+  It shows ESP32 resets only, not a sag in the servo battery that leaves the ESP32 running (needs.md A10b).
 - Python (`arm.py`) refuses out-of-range angles; the firmware clamps. The same numbers live in
   `calib/arm_limits.json` and `arm_logic.h`, and a unit test checks they match.
 

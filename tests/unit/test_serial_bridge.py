@@ -32,6 +32,7 @@ def test_reply_lines_are_recognised():
     assert all(bridge_script.is_reply(r) for r in LOCKED_REPLIES)
     assert not bridge_script.is_reply("rst:0x1 (POWERON_RESET),boot:0x13")
     assert not bridge_script.is_reply("E (512) some log message")
+    assert bridge_script.is_reply("B brownout 42")  # the boot-reason reply is passed on, not ignored
 
 
 PORTS = [("COM5", None, None), ("COM6", None, None), ("COM7", 0x10C4, 0xEA60)]  # what this laptop shows

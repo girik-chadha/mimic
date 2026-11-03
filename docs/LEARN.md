@@ -393,3 +393,16 @@ it with the batteries off and a hand on the switch."
 
 Two sentences: "The arm's servos now wake up one at a time instead of all at once, so the battery is never asked
 for four jumps together. After that every move is ramped and speed-limited, which a test checks step by step."
+
+### 3 Nov: asking the board why it restarted
+
+- If the batteries sag, the ESP32 can restart, and every servo jumps back to home. Afterwards it is hard to tell
+  whether that happened. The new `B` command answers with the reason the board last started (power-on, brownout,
+  software reset, watchdog or other) and how many seconds ago.
+- The ESP32 keeps that reason in a number. The table from number to word is in `arm_logic.h`, so the laptop's g++
+  tests check it; when the firmware compiles, `static_assert` lines check that our numbers are the ESP32's own.
+- Limit: it only reports restarts of the ESP32. A dip in the servo battery that leaves the ESP32 running shows nothing.
+
+Two sentences: "The arm can now tell us why it last restarted, for example `B brownout 42`, which means its supply dropped
+42 seconds ago. That turns 'the arm twitched for no reason' into a fact we can check, although it only sees restarts
+of the board, not every battery dip."

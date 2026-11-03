@@ -34,6 +34,17 @@ const int HOME[4] = {90, 90, 90, 90};        // base, shoulder, elbow, grip
 #define RELAX_MS 500               // how long relaxing the grip takes (at least)
 #define ATTACH_GAP_MS 400          // at start-up the servos are switched on one at a time, this far apart
 
+// ---------- why the board last started (the B command) ----------
+// The ESP32's own reset codes (esp_reset_reason(), ESP-IDF 4.4 in Arduino core 2.0.12). Plain numbers here so g++
+// can test the mapping; mimic_arm.ino checks every number against the ESP32's own name when it compiles.
+// These are ESP32 resets only: a sag in the servo battery that does not reset the ESP32 shows nothing here.
+#define RESET_POWERON 1     // power-on; on the ESP32 also the EN (reset) button and an upload
+#define RESET_SW 3          // software reset (esp_restart)
+#define RESET_INT_WDT 5     // interrupt watchdog
+#define RESET_TASK_WDT 6    // task watchdog
+#define RESET_WDT 7         // other watchdogs
+#define RESET_BROWNOUT 9    // the ESP32's supply voltage dropped too low
+
 struct ArmState {
   float now[4];    // where each joint is right now, in degrees
   float from[4];   // where the current move started
@@ -43,7 +54,20 @@ struct ArmState {
   bool moving;
   bool grip_closed;
   unsigned long grip_closed_since;
+  int boot_code;   // why the board last started (esp_reset_reason()), set by mimic_arm.ino at start-up
 };
+
+inline const char *boot_reason_name(int code) {
+  switch (code) {
+    case RESET_POWERON: return "power-on";
+    case RESET_BROWNOUT: return "brownout";
+    case RESET_SW: return "software reset";
+    case RESET_INT_WDT:
+    case RESET_TASK_WDT:
+    case RESET_WDT: return "watchdog";
+    default: return "other";  // unknown, a crash (panic), waking from deep sleep, ...
+  }
+}
 
 inline bool limits_ok() { return !LIMITS_ARE_PLACEHOLDER && LIMITS_CHECKED_BY_HAND; }
 
@@ -83,6 +107,7 @@ inline void arm_init(ArmState &a) {
   a.moving = false;
   a.grip_closed = false;
   a.grip_closed_since = 0;
+  a.boot_code = 0;
 }
 
 // Start a smooth move from wherever the arm is now, so a new move simply replaces one still running.
@@ -145,6 +170,10 @@ inline void handle_line(ArmState &a, const char *line, unsigned long now_ms, cha
     // While locked, " L" is added: these are the firmware's own numbers, not a real pose (no servo is driven).
     snprintf(reply, n, "A %d %d %d %d%s", (int)lroundf(a.now[0]), (int)lroundf(a.now[1]),
              (int)lroundf(a.now[2]), (int)lroundf(a.now[3]), servos_enabled() ? "" : " L");
+    return;
+  }
+  if (strcmp(line, "B") == 0) {  // why the board last started, and how many seconds ago; read-only, always allowed
+    snprintf(reply, n, "B %s %lu", boot_reason_name(a.boot_code), now_ms / 1000);
     return;
   }
   if (strcmp(line, "S") == 0) {  // always allowed: stopping must always work

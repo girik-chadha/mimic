@@ -53,6 +53,25 @@ static void test_always() {
   exactly_64[64] = '\0';
   CHECK(strcmp(send(a, exactly_64, 0), "ERR bad command") == 0, "a 64-character line is read (then judged)");
 
+  // B: why the board last started, in every build (locked or not), and it never moves anything.
+  const char *expected_names[11] = {"other", "power-on", "other", "software reset", "other", "watchdog",
+                                    "watchdog", "watchdog", "other", "brownout", "other"};
+  bool all_named = true;
+  for (int code = 0; code <= 10; code++) all_named = all_named && strcmp(boot_reason_name(code), expected_names[code]) == 0;
+  CHECK(all_named, "reset codes 0-10 are named: 1 power-on, 3 software reset, 5-7 watchdog, 9 brownout, rest other");
+  CHECK(strcmp(boot_reason_name(99), "other") == 0, "an unknown reset code is other");
+  ArmState b;
+  arm_init(b);
+  CHECK(strcmp(send(b, "B", 500), "B other 0") == 0, "before setup sets the code, B says other");
+  b.boot_code = RESET_BROWNOUT;
+  CHECK(strcmp(send(b, "B", 42999), "B brownout 42") == 0, "B gives the reason and whole seconds since start-up");
+  b.boot_code = RESET_SW;
+  CHECK(strcmp(send(b, "B", 7000), "B software reset 7") == 0, "a two-word reason");
+  run_until(b, 0, 2000);
+  CHECK(!b.moving && near(b.now[0], HOME[0]) && near(b.now[3], HOME[3]), "B moves nothing");
+  CHECK(strcmp(send(b, "B 1", 0), "ERR bad command") == 0, "B takes no arguments");
+  CHECK(strcmp(send(b, "b", 0), "ERR bad command") == 0, "commands are case-sensitive: b is not B");
+
   CHECK(strcmp(send(a, "X", 0), "ERR bad command") == 0, "unknown command rejected");
   CHECK(strcmp(send(a, "J 90 90 90", 0), "ERR bad command") == 0, "J needs 5 numbers");
   CHECK(strcmp(send(a, "J 90 90 90 90 800 7", 0), "ERR bad command") == 0, "J with extra numbers rejected");

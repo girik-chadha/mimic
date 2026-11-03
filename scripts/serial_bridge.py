@@ -22,7 +22,7 @@ CP210X = (0x10C4, 0xEA60)   # the USB chip on the arm's ESP32 board (needs.md A7
 
 
 def is_reply(line: str) -> bool:
-    return line.startswith(("OK", "ERR", "A "))
+    return line.startswith(("OK", "ERR", "A ", "B "))
 
 
 # ---------- choosing and opening the port ----------
@@ -79,6 +79,8 @@ class FakePort:
             self.first_reply = False
         if line == "?":
             reply = "A 90 90 90 90 L"
+        elif line == "B":
+            reply = "B power-on 3"
         elif line == "S":
             reply = "OK"
         elif line == "H" or line.startswith("J "):

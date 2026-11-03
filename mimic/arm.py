@@ -4,6 +4,7 @@
     H                                         ->  OK
     ?                                         ->  A <base> <shoulder> <elbow> <grip>   (+ " L" while locked)
     S                                         ->  OK
+    B                                         ->  B <reason> <seconds since start-up>   (why the board last started)
 
 Safety is in two places on purpose. Python refuses anything outside the limits in
 calib/arm_limits.json (an out-of-range angle here means a bug upstream). The firmware clamps to
@@ -23,6 +24,7 @@ from mimic import config
 
 JOINTS = ("base", "shoulder", "elbow", "grip")
 MAX_LINE_CHARS = 64  # the firmware rejects longer lines
+BOOT_REASONS = ("power-on", "brownout", "software reset", "watchdog", "other")  # the firmware's B reply words
 
 
 class ArmError(RuntimeError):
@@ -93,12 +95,13 @@ class FakeTransport:
     locked=True answers like the firmware does while its lock is on."""
     is_real = False
 
-    def __init__(self, limits: ArmLimits, echo=None, locked=False):
+    def __init__(self, limits: ArmLimits, echo=None, locked=False, boot_reason="power-on"):
         self.sent = []
         self.angles = [limits.home_deg[j] for j in JOINTS]
         self.home = list(self.angles)
         self.echo = echo  # e.g. print, to show each line in a dry run
         self.locked = locked
+        self.boot_reason = boot_reason
 
     def send(self, line: str) -> str:
         self.sent.append(line)
@@ -113,6 +116,8 @@ class FakeTransport:
             self.angles, reply = [int(p) for p in parts[1:5]], "OK"
         elif line == "S":
             reply = "OK"
+        elif line == "B":
+            reply = f"B {self.boot_reason} 12"
         else:
             reply = "ERR bad command"
         if self.echo:
@@ -276,3 +281,18 @@ class Arm:
         """Always allowed: stopping must always work."""
         self._send_expect_ok("S")
         self.angles = None  # it stopped somewhere along the way; ask before the next move
+
+    def boot_reason(self) -> dict:
+        """Why the board last started, and how long ago: {"reason": "brownout", "seconds_since_boot": 42}.
+
+        Read-only, so it works while locked. It only shows ESP32 resets: a sag in the servo battery that
+        does not reset the ESP32 shows nothing here.
+        """
+        reply = self._send("B")
+        if reply == "ERR bad command":
+            raise ArmError("The arm's firmware has no B command (it is older than 3 Nov): upload the new build.")
+        parts = reply.split()
+        reason = " ".join(parts[1:-1])
+        if parts[:1] != ["B"] or reason not in BOOT_REASONS or not parts[-1].isdigit():
+            raise ArmError(f"The arm replied {reply!r} to 'B'.")
+        return {"reason": reason, "seconds_since_boot": int(parts[-1])}

@@ -185,6 +185,22 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
   So the bridge, the serial link, the protocol and the firmware's lock all work on the real hardware.
   No servo has been driven yet.
 
+### A10b. Why the board last started: the B command (3 Nov, firmware not uploaded yet)
+
+- `B` replies `B <reason> <seconds since start-up>`, e.g. `B brownout 42`. Reasons: power-on, brownout, software
+  reset, watchdog, other. Read-only, so it works while locked, like `?` and `S`. `arm.boot_reason()` in Python,
+  `boot` in `arm_jog.py`.
+- The words come from the ESP32's own reset code (`esp_reset_reason()`); the codes were read from core 2.0.12's
+  `esp_system.h` (POWERON 1, SW 3, INT_WDT 5, TASK_WDT 6, WDT 7, BROWNOUT 9), and `mimic_arm.ino` checks each
+  number with a `static_assert` when it compiles. A crash (panic) is "other".
+- **It only shows ESP32 resets, not servo supply sag.** If the servo battery dips but the ESP32 keeps running (for
+  example because USB powers it), `B` still says the old reason with a growing number of seconds. A brownout shows
+  only when the ESP32's own supply dropped far enough to restart it.
+- On the ESP32, the EN (reset) button and an upload also show as power-on.
+- The seconds tell a fresh restart from an old one: the bridge opens COM7 with DTR and RTS low so that opening the
+  port does not reset the board, but that is untested (B12). If every `boot` straight after opening shows only 2-3
+  seconds, opening the port does reset the board, and then a brownout would be hidden by the next power-on.
+
 ### A8. Repo
 
 - Public: https://github.com/girik-chadha/mimic, first commit 28 Oct 2026.
@@ -201,6 +217,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
+| B12 | Does opening COM7 reset the board? The bridge sets DTR and RTS low before opening so that it should not. If it does, every session restarts the arm (each servo jumps to home again) and a brownout is hidden by the next power-on. | After the upload (C7 step 4): `arm_jog.py`, type `boot` at once, `quit`, wait a minute, repeat. If the seconds are always 2-3, opening resets the board. | First powered session |
 
 ---
 
@@ -265,8 +282,10 @@ start-up, firmware compiled and copied to `C:\Users\girik\mimic_firmware\mimic_a
    also a boot pin on the ESP32 (A7b).
 4. **Check what is on the board (still no batteries):** `python scripts/arm_jog.py`, type `status`, expect
    `{'base': 90, 'shoulder': 90, 'elbow': 90, 'grip': 90, 'locked': False}` (the board answers `A 90 90 90 90`,
-   no L), then `quit`. Type nothing else: with no battery power nothing would move, but that is not the point.
-   (`scripts/arm_check.py` is only for the locked firmware: on this board it would report NOT locked.)
+   no L), then `boot`, expect `last start: power-on, ...` (the upload restarted the board), then `quit`. Type nothing
+   else: with no battery power nothing would move, but that is not the point. If `boot` is refused with "no B
+   command", the old build is still on the board. (`scripts/arm_check.py` is only for the locked firmware: on this
+   board it would report NOT locked.)
 
 **Power on**
 5. Clear the area: nothing within the arm's reach, cables free, sheet and blocks out of the way.
@@ -279,7 +298,10 @@ start-up, firmware compiled and copied to `C:\Users\girik\mimic_firmware\mimic_a
    at once. If the board does not start on battery power alone (not tested yet), plugging USB in starts it with the
    batteries already there, which still gives the one-at-a-time start. If the arm twitches over and over, the
    battery is dipping and resetting the board: switch off.
-8. `python scripts/arm_jog.py`, `status` again, then `quit`.
+8. `python scripts/arm_jog.py`, `status` again, then `boot`: `power-on` with a few seconds is the start you just
+   did. **Whenever the arm twitches, jumps back to home, or stops answering, type `boot` straight away:**
+   `brownout` (or a small number of seconds you did not expect) means the ESP32 restarted because its supply
+   dropped. Switch off and check the batteries. Then `quit`.
 
 **Ranges**
 9. `python scripts/first_moves.py`: base, then shoulder, then elbow; +5, -5, +10, -10 ... from home, slowly, never

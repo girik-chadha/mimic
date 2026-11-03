@@ -6,13 +6,15 @@
 //   ?                                         where are you?     -> A <base> <shoulder> <elbow> <grip>
 //                                                                   (with " L" on the end while locked)
 //   S                                         stop and hold      -> OK
+//   B                                         why did you start? -> B <reason> <seconds since start-up>
+//                                                                   (power-on, brownout, software reset, watchdog, other)
 //
 // Every safety rule (clamps, speed limit, grip timer, placeholder lock) is in arm_logic.h, which is
 // tested on the laptop. This file only reads the serial port and drives the servos.
 //
 // Status 3 Nov: UNLOCKED with the kit's ranges (from its sample code, untested on this arm) for the first powered
-// session (needs.md C7). Compiles for esp32:esp32:esp32 (ESP32 core 2.0.12, ESP32Servo 1.2.1); not uploaded yet,
-// so the board still runs the locked build. Pins are from the kit's sample code (untested on this arm).
+// session (needs.md C7), with the B command. Compiles for esp32:esp32:esp32 (ESP32 core 2.0.12, ESP32Servo 1.2.1);
+// not uploaded yet, so the board still runs the locked build (which has no B). Pins are from the kit's sample code (untested on this arm).
 // The servo ports need battery power: USB alone does not move them.
 //
 // While locked (placeholder limits, or not checked by hand) no servo is attached and no angle is ever
@@ -22,7 +24,16 @@
 // as it is switched on. Keep HOME a safe pose, and always send H before switching off so the next jump is small.
 // Every J and H after that is ramped (arm_logic.h: start_move and tick).
 #include <ESP32Servo.h>
+#include <esp_system.h>
 #include "arm_logic.h"
+
+// The reset codes in arm_logic.h must be the ESP32's own numbers: the build stops here if they ever differ.
+static_assert(RESET_POWERON == ESP_RST_POWERON, "RESET_POWERON is not ESP_RST_POWERON");
+static_assert(RESET_SW == ESP_RST_SW, "RESET_SW is not ESP_RST_SW");
+static_assert(RESET_INT_WDT == ESP_RST_INT_WDT, "RESET_INT_WDT is not ESP_RST_INT_WDT");
+static_assert(RESET_TASK_WDT == ESP_RST_TASK_WDT, "RESET_TASK_WDT is not ESP_RST_TASK_WDT");
+static_assert(RESET_WDT == ESP_RST_WDT, "RESET_WDT is not ESP_RST_WDT");
+static_assert(RESET_BROWNOUT == ESP_RST_BROWNOUT, "RESET_BROWNOUT is not ESP_RST_BROWNOUT");
 
 Servo servos[4];
 ArmState arm;
@@ -52,6 +63,7 @@ void write_servos() {
 void setup() {
   Serial.begin(115200);
   arm_init(arm);
+  arm.boot_code = (int)esp_reset_reason();  // read once: why this start-up happened (the B command reports it)
   started_ms = millis();
   attach_due_servos();  // the base now; the others follow from loop(), 400 ms apart
 }

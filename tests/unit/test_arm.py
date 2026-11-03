@@ -130,6 +130,37 @@ def test_odd_status_replies_raise(reply):
         a.status()
 
 
+# ---------- B: why the board last started ----------
+
+def test_boot_reason_reads_the_reason_and_seconds():
+    a, t = fake_arm()
+    assert a.boot_reason() == {"reason": "power-on", "seconds_since_boot": 12}
+    t.send = lambda line: "B software reset 42"
+    assert a.boot_reason() == {"reason": "software reset", "seconds_since_boot": 42}
+    assert t.sent == ["B"]
+
+
+def test_boot_reason_works_on_a_locked_real_arm():
+    limits = dataclasses.replace(committed_limits(), placeholder=True)  # read-only, so the lock does not matter
+    t = RealLookingTransport(limits, locked=True, boot_reason="brownout")
+    assert Arm(t, limits).boot_reason()["reason"] == "brownout"
+
+
+def test_old_firmware_without_B_says_upload_the_new_build():
+    a, t = fake_arm()
+    t.send = lambda line: "ERR bad command"   # what the build on the board before 3 Nov replies
+    with pytest.raises(ArmError, match="no B command .* upload the new build"):
+        a.boot_reason()
+
+
+@pytest.mark.parametrize("reply", ["B brownout", "B sleepy 4", "B power-on four", "A 90 90 90 90", "B"])
+def test_odd_boot_replies_raise(reply):
+    a, t = fake_arm()
+    t.send = lambda line: reply
+    with pytest.raises(ArmError, match="replied"):
+        a.boot_reason()
+
+
 def test_move_sends_one_J_line():
     a, t = fake_arm()
     a.home()

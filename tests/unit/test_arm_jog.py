@@ -76,6 +76,20 @@ def test_jog_on_a_locked_firmware_refuses_steps():
     assert t.sent == ["?"]
 
 
+def test_boot_says_why_the_board_last_started(fake):
+    a, t = fake
+    assert jog.handle(a, "boot") == "last start: power-on, 12 s ago (switched on, the reset button, or an upload)"
+    t.boot_reason = "brownout"
+    assert "brownout" in jog.handle(a, "boot") and "check the batteries" in jog.handle(a, "boot")
+    assert t.sent == ["B", "B", "B"]
+
+
+def test_boot_on_old_firmware_is_refused_politely(fake):
+    a, t = fake
+    t.send = lambda line: "ERR bad command"
+    assert jog.handle(a, "boot").startswith("refused: The arm's firmware has no B command")
+
+
 def test_dry_run_works_with_placeholder_limits():
     limits = arm.load_limits(config.ARM_LIMITS_PATH)
     a = jog.make_arm(dry_run=True, limits=limits)

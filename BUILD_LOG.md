@@ -118,3 +118,7 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   joint more than 3 degrees. Recompiled (301,081 bytes), Windows copy refreshed. Not uploaded.
 - needs.md C7 revised: post-upload `arm_jog.py status` check, pose the arm by hand first, unplug USB before
   connecting the batteries (so the start-up is staggered), GPIO 2 upload note, write down which way lifts the claw.
+- `B` command (firmware, Python, bridge, arm_jog): replies `B <reason> <seconds since start-up>` from the ESP32's reset
+  code (power-on, brownout, software reset, watchdog, other); read-only, works while locked. Mapping in arm_logic.h,
+  g++ tested in all three builds; the .ino checks the numbers against the ESP32's names with static_assert.
+  Recompiled (301,273 bytes), Windows copy refreshed. Not uploaded. needs.md A10b, B12, C7 steps 4 and 8.
