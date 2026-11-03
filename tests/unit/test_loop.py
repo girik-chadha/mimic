@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 from test_kinematics import linear_grid, wide_limits
 
-from mimic import arm, config, loop, meta_api, sam, scene
+from mimic import arm, config, kinematics, loop, meta_api, motion, sam, scene
 from mimic.arm import Arm, ArmError, FakeTransport
 from mimic.sam import Box
 
@@ -81,6 +81,7 @@ class Rig:
         self.said = []
         self.fail_sam_at = None
         self.diagnoses = []          # Spark's replies to diagnose calls, in order (none left: an unusable reply)
+        self.mess = MESS
         monkeypatch.setattr(sam, "find", self.find)
         monkeypatch.setattr(meta_api, "call", self.spark)
 
@@ -108,11 +109,11 @@ class Rig:
 
     def wait_for_user(self, prompt):
         self.prompts.append(prompt)
-        self.world.blocks = dict(DEMO if len(self.prompts) == 1 else MESS)
+        self.world.blocks = dict(DEMO if len(self.prompts) == 1 else self.mess)
 
-    def run(self):
+    def run(self, push=False):
         return loop.run(self.arm, self.capture, self.layout, self.grid, self.limits, self.wait_for_user,
-                        self.out_root, say=self.said.append, sleep=lambda s: None)
+                        self.out_root, say=self.said.append, sleep=lambda s: None, push=push)
 
     def attempts(self):
         out_dir = next(self.out_root.iterdir())
@@ -350,3 +351,122 @@ def test_when_enabled_a_contradicting_fix_is_not_used():
     assert info["correction_source"] == "numeric"
     assert info["spark_fix_note"].startswith("not used: contradicts measurement")
 
+
+# ---------- push mode (opt-in) ----------
+
+PUSH_MESS = {"red block": (9.0, 24.5), "blue block": (9.0, 15.5), "green block": (5.0, 20.0)}
+GRIP_PUSH = 126
+
+
+class PushWorld(FakeWorld):
+    """A claw at grab height, closed to grip_push, pushes any block in front of it, keeping it 2 cm ahead."""
+
+    def __init__(self, limits, grid):
+        super().__init__(limits, grid)
+        self.stuck = set()       # blocks that do not move when pushed
+        self.knocks = {}         # push number (1 = the first) -> (name, (dx, dy)), applied during that push
+        self.pushes_done = 0
+
+    def send(self, line):
+        b0, s0, e0, g0 = self.angles
+        reply = super().send(line)
+        if not (line.startswith("J") and reply == "OK"):
+            return reply
+        b1, s1, e1, g1 = self.angles
+        if g0 == g1 == GRIP_PUSH and e0 == GRAB_ELBOW and e1 != GRAB_ELBOW:
+            self.pushes_done += 1                                   # the claw lifts: one push finished
+        if not (g0 == g1 == GRIP_PUSH and e0 == e1 == GRAB_ELBOW):
+            return reply
+        p, q = ((b0 - 40) / 3, (s0 - 40) / 3), ((b1 - 40) / 3, (s1 - 40) / 3)
+        step = math.dist(p, q)
+        if step < 1e-9:
+            return reply
+        v = ((q[0] - p[0]) / step, (q[1] - p[1]) / step)
+        knock = self.knocks.pop(self.pushes_done + 1, None)
+        if knock:
+            name, (dx, dy) = knock
+            self.blocks[name] = (self.blocks[name][0] + dx, self.blocks[name][1] + dy)
+        for name, at in self.blocks.items():
+            if not at or name in self.stuck:
+                continue
+            was_ahead = (at[0] - p[0]) * v[0] + (at[1] - p[1]) * v[1]
+            ahead = (at[0] - q[0]) * v[0] + (at[1] - q[1]) * v[1]
+            side = -(at[0] - q[0]) * v[1] + (at[1] - q[1]) * v[0]
+            if abs(side) < 1.0 and was_ahead > 0 and ahead < motion.PUSH_CONTACT_CM:
+                c = motion.PUSH_CONTACT_CM
+                self.blocks[name] = (q[0] + v[0] * c - v[1] * side, q[1] + v[1] * c + v[0] * side)
+        return reply
+
+
+def push_rig(tmp_path, monkeypatch, mess=PUSH_MESS, grip_push=GRIP_PUSH):
+    rig = Rig(tmp_path, monkeypatch, PushWorld)
+    rig.grid = dataclasses.replace(rig.grid, grip_push=grip_push)
+    rig.world.grid = rig.grid
+    rig.mess = mess
+    return rig
+
+
+def test_push_mode_slides_every_block_into_its_slot_furthest_slot_first(tmp_path, monkeypatch):
+    rig = push_rig(tmp_path, monkeypatch)
+    summary = rig.run(push=True)
+    assert summary["success"] is True
+    assert [m["name"] for m in summary["moves"]] == ["red block", "green block", "blue block"]  # slots 3, 2, 1
+    red = [a for a in rig.attempts() if a["name"] == "red block"]
+    assert [a["result"] for a in red] == ["PUSH AGAIN", "PUSH AGAIN", "PASS"]   # 23 cm: cut by the grip timer
+    assert [a["cut_short_by_grip_timer"] for a in red] == [True, True, False]
+    assert all(a["mode"] == "push" and a["planned_claw_closed_s"] <= 4.5 for a in rig.attempts())
+    for name, slot in zip(["blue block", "green block", "red block"], rig.layout.slots_cm):
+        assert math.dist(rig.world.blocks[name], slot) < 1.5          # the world agrees
+    grips = {int(line.split()[4]) for line in rig.world.sent if line.startswith("J")}
+    assert grips == {90, GRIP_PUSH}                                    # never grip_closed, never the 140 limit
+    assert len(rig.captured) == 2 + summary["attempts"]                # a photo after every push
+
+
+def test_push_mode_refuses_without_grip_push_before_anything(tmp_path, monkeypatch):
+    rig = push_rig(tmp_path, monkeypatch, grip_push=None)
+    with pytest.raises(kinematics.KinematicsError, match="Push mode needs grip_push"):
+        rig.run(push=True)
+    assert rig.captured == [] and rig.world.sent == []
+
+
+def test_a_blocked_path_pushes_another_block_first_and_stops_when_none_is_clear(tmp_path, monkeypatch):
+    rig = push_rig(tmp_path, monkeypatch, mess=MESS)  # red's path passes green, green's passes red
+    with pytest.raises(motion.MotionError, match="No block can be pushed without passing near another"):
+        rig.run(push=True)
+    summary = rig.summary()
+    assert [m["name"] for m in summary["moves"]] == ["blue block"]   # the only clear push went first
+    assert "No block can be pushed" in summary["error"] and rig.world.sent[-1] == "S"
+
+
+def test_a_block_that_does_not_move_twice_is_FAIL_and_the_run_goes_on(tmp_path, monkeypatch):
+    rig = push_rig(tmp_path, monkeypatch)
+    rig.world.stuck = {"red block"}
+    summary = rig.run(push=True)
+    assert [a["result"] for a in rig.attempts() if a["name"] == "red block"] == ["PUSH AGAIN", "FAIL"]
+    assert [(m["name"], m["result"]) for m in summary["moves"]] == [
+        ("red block", "FAIL"), ("green block", "PASS"), ("blue block", "PASS")]
+    assert any("passed beside it" in line for line in rig.said)
+
+
+def test_a_knocked_mess_block_is_measured_again_and_the_run_goes_on(tmp_path, monkeypatch):
+    rig = push_rig(tmp_path, monkeypatch)
+    rig.world.knocks = {1: ("blue block", (1.5, 0.0))}
+    summary = rig.run(push=True)
+    assert summary["success"] is True
+    assert rig.attempts()[0]["knocked_cm"] == {"blue block": pytest.approx(1.5, abs=0.05)}
+    assert any("moved blue block by 1.5 cm; carrying on" in line for line in rig.said)
+
+
+def test_a_block_knocked_out_of_its_slot_stops_the_run(tmp_path, monkeypatch):
+    rig = push_rig(tmp_path, monkeypatch)
+    rig.world.knocks = {4: ("red block", (0.0, 2.5))}   # red took pushes 1-3; green's first push knocks it
+    with pytest.raises(motion.MotionError, match="Pushing green block knocked red block 2.5 cm, out of its slot"):
+        rig.run(push=True)
+    assert rig.world.sent[-1] == "S"
+
+
+def test_pick_and_place_is_unchanged_without_push(tmp_path, monkeypatch):
+    rig = push_rig(tmp_path, monkeypatch)
+    rig.mess = MESS
+    summary = rig.run()
+    assert summary["success"] is True and "mode" not in rig.attempts()[0]

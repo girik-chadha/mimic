@@ -134,3 +134,9 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   block, slides it straight towards the slot in steps of at most 1.5 cm at grab height, backs off, lifts, opens.
   A push longer than the grip timer allows is cut short (about 9 cm per push). Refused before moving if another
   block is within 4 cm of the path or the path leaves the taught area.
+- Push mode, step 2 (opt-in): `run_mimic.py --push` / `loop.run(push=True)`. Refused before anything opens if
+  grip_push is unknown. Furthest slot first; a blocked path lets another block go first, none clear stops the run.
+  After every push the camera measures every block: PASS within 1.5 cm, else push again (at most 4 per block);
+  two pushes that moved it less than 0.5 cm are FAIL; a knocked mess block carries on, a block knocked out of its
+  slot stops the run. `teach_plan.py --push` lists the extra points (5 with the placeholder layout, 1 out of
+  reach). Fake pushing world in the tests: 23 cm takes 3 pushes; the without-push run is unchanged.

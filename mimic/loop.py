@@ -6,6 +6,13 @@
         within 1.5 cm: next move. Otherwise aim the other way (at most 2 cm off the slot), pick it up
         from where it landed, and try again, at most 2 more times; then log FAIL and go on.
 
+Push mode (opt-in: run(push=True), scripts/run_mimic.py --push), for a claw that cannot hold a block:
+    each block is pushed straight towards its slot with the claw closed to grip_push (motion.plan_push),
+    furthest slot first, then the camera measures EVERY block. Within 1.5 cm: next block. Otherwise push
+    again from where it is now (a long push is cut short by the grip timer), at most 4 pushes per block.
+    A push that moved it less than 0.5 cm missed it; two in a row is FAIL. A block in the mess area that
+    was knocked is simply measured again; a block knocked out of its slot stops the run.
+
 Every photo calibrates itself from its own dots, so the camera may move between photos. The arm moves
 to camera_clear (a taught pose out of the picture) before every photo, and SAM is only ever asked while
 the arm is parked there, so a budget stop can never happen while a block is held.
@@ -26,6 +33,9 @@ PASS_CM = 1.5
 MAX_CORRECTION_CM = 2.0
 MAX_TRIES = 3  # the first try plus 2 retries
 WRONG_WAY_MIN_MISS_CM = 0.5  # a Spark fix pointing the same way as a miss bigger than this is ignored
+MAX_PUSHES = 4                # push mode: pushes per block (a long push is cut into ~9 cm pushes)
+NO_PROGRESS_CM = 0.5          # push mode: a push that moved the block less than this missed it
+KNOCKED_CM = 1.0              # push mode: another block that moved more than this was knocked
 
 
 def _clamp(value: float) -> float:
@@ -107,7 +117,13 @@ def _say_decision(info: dict, correction, say) -> None:
     say(f"  -> {source}: aiming ({correction[0]:+.1f}, {correction[1]:+.1f}) cm from the slot")
 
 
-def load_and_check():
+def check_push_ready(grid) -> None:
+    if grid.grip_push is None:
+        raise kinematics.KinematicsError("Push mode needs grip_push in calib/pose_grid.json, and it is unknown until "
+                                         "the grip test (needs.md C7 step 11).")
+
+
+def load_and_check(push: bool = False):
     """Load the sheet layout, pose grid and arm limits, and check them all, before anything is opened
     (no serial port, no camera, no API call). Used by scripts/run_mimic.py and scripts/benchmark.py."""
     layout = scene.load_layout()
@@ -116,15 +132,19 @@ def load_and_check():
     scene.refuse_placeholder(layout)
     grid.check_ready()
     grid.check_against(limits)
+    if push:
+        check_push_ready(grid)
     arm_module.refuse_unchecked_limits(limits)
     return layout, grid, limits
 
 
-def preflight(arm, layout, grid, limits) -> None:
+def preflight(arm, layout, grid, limits, push: bool = False) -> None:
     """Everything that can be checked before any photo, any API call or any move."""
     scene.refuse_placeholder(layout)
     grid.check_ready()
     grid.check_against(limits)
+    if push:
+        check_push_ready(grid)
     if arm.transport.is_real:
         arm_module.refuse_unchecked_limits(limits)
     for n, slot in enumerate(layout.slots_cm, start=1):
@@ -133,8 +153,8 @@ def preflight(arm, layout, grid, limits) -> None:
 
 
 def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=config.RUNS_DIR,
-        say=print, sleep=time.sleep) -> dict:
-    preflight(arm, layout, grid, limits)
+        say=print, sleep=time.sleep, push: bool = False) -> dict:
+    preflight(arm, layout, grid, limits, push)
     out_dir = Path(out_root) / time.strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True, exist_ok=True)
     attempts_path = out_dir / "attempts.jsonl"
@@ -175,46 +195,50 @@ def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=config
         latest, latest_map = photo("mess.jpg")
         moves = plan.plan_moves(scene.read_positions(latest, target, latest_map, layout), target, layout.slots_cm)
 
-        shots, first_misses = 0, []
-        for move in moves:
-            from_cm = where(move.name, latest, latest_map)  # where the block is now, in the latest photo
-            correction, result, error_cm = (0.0, 0.0), "FAIL", None
-            for attempt in range(1, MAX_TRIES + 1):
-                aim = (move.to_cm[0] + correction[0], move.to_cm[1] + correction[1])
-                hold_s = motion.pick_and_place(arm, grid, limits, from_cm, aim, sleep, say)
-                before = latest
-                shots += 1
-                latest, latest_map = photo(f"after_{shots}.jpg")
-                measured = where(move.name, latest, latest_map)
-                miss = (measured[0] - move.to_cm[0], measured[1] - move.to_cm[1])
-                error_cm = math.hypot(*miss)
-                passed = error_cm <= PASS_CM
-                result = "PASS" if passed else ("RETRY" if attempt < MAX_TRIES else "FAIL")
-                if attempt == 1:
-                    first_misses.append(None if passed else miss)
-                next_correction, decision = None, {}
-                if not passed and attempt < MAX_TRIES:
-                    next_correction, decision = choose_correction(move.to_cm, measured, correction, before, latest,
-                                                                  move, limited_diagnose)
-                summary["attempts"] += 1
-                with open(attempts_path, "a") as f:
-                    f.write(json.dumps({
-                        "move": move.slot, "name": move.name, "slot_cm": move.to_cm, "attempt": attempt,
-                        "from_cm": from_cm, "aim_cm": aim, "measured_cm": measured,
-                        "miss_cm": {"dx": round(miss[0], 2), "dy": round(miss[1], 2), "distance": round(error_cm, 2)},
-                        "result": result, "next_correction_cm": next_correction, "planned_grip_hold_s": hold_s,
-                        "photo": Path(latest).name, "cost_so_far_usd": round(meta_api.cost_so_far(), 4),
-                        "time_s": round(time.monotonic() - started, 1), **decision}) + "\n")
-                say(f"  {move.name} -> slot {move.slot}, try {attempt}: missed by {error_cm:.1f} cm -> {result}")
-                if next_correction:
-                    _say_decision(decision, next_correction, say)
-                if passed:
-                    break
-                if next_correction:
-                    correction, from_cm = next_correction, measured  # pick it up from where it landed
-            summary["moves"].append({"name": move.name, "slot": move.slot, "result": "PASS" if result == "PASS" else "FAIL",
-                                     "final_error_cm": round(error_cm, 2)})
-            _warn_if_same_direction(first_misses, say)
+        if push:
+            _push_moves(arm, moves, latest, latest_map, photo, layout, grid, limits, summary, attempts_path,
+                        started, say, sleep)
+        else:
+            shots, first_misses = 0, []
+            for move in moves:
+                from_cm = where(move.name, latest, latest_map)  # where the block is now, in the latest photo
+                correction, result, error_cm = (0.0, 0.0), "FAIL", None
+                for attempt in range(1, MAX_TRIES + 1):
+                    aim = (move.to_cm[0] + correction[0], move.to_cm[1] + correction[1])
+                    hold_s = motion.pick_and_place(arm, grid, limits, from_cm, aim, sleep, say)
+                    before = latest
+                    shots += 1
+                    latest, latest_map = photo(f"after_{shots}.jpg")
+                    measured = where(move.name, latest, latest_map)
+                    miss = (measured[0] - move.to_cm[0], measured[1] - move.to_cm[1])
+                    error_cm = math.hypot(*miss)
+                    passed = error_cm <= PASS_CM
+                    result = "PASS" if passed else ("RETRY" if attempt < MAX_TRIES else "FAIL")
+                    if attempt == 1:
+                        first_misses.append(None if passed else miss)
+                    next_correction, decision = None, {}
+                    if not passed and attempt < MAX_TRIES:
+                        next_correction, decision = choose_correction(move.to_cm, measured, correction, before, latest,
+                                                                      move, limited_diagnose)
+                    summary["attempts"] += 1
+                    with open(attempts_path, "a") as f:
+                        f.write(json.dumps({
+                            "move": move.slot, "name": move.name, "slot_cm": move.to_cm, "attempt": attempt,
+                            "from_cm": from_cm, "aim_cm": aim, "measured_cm": measured,
+                            "miss_cm": {"dx": round(miss[0], 2), "dy": round(miss[1], 2), "distance": round(error_cm, 2)},
+                            "result": result, "next_correction_cm": next_correction, "planned_grip_hold_s": hold_s,
+                            "photo": Path(latest).name, "cost_so_far_usd": round(meta_api.cost_so_far(), 4),
+                            "time_s": round(time.monotonic() - started, 1), **decision}) + "\n")
+                    say(f"  {move.name} -> slot {move.slot}, try {attempt}: missed by {error_cm:.1f} cm -> {result}")
+                    if next_correction:
+                        _say_decision(decision, next_correction, say)
+                    if passed:
+                        break
+                    if next_correction:
+                        correction, from_cm = next_correction, measured  # pick it up from where it landed
+                summary["moves"].append({"name": move.name, "slot": move.slot, "result": "PASS" if result == "PASS" else "FAIL",
+                                         "final_error_cm": round(error_cm, 2)})
+                _warn_if_same_direction(first_misses, say)
 
         summary["success"] = all(m["result"] == "PASS" for m in summary["moves"])
         summary["max_error_cm"] = max(m["final_error_cm"] for m in summary["moves"])
@@ -232,6 +256,92 @@ def run(arm, capture, layout, grid, limits, wait_for_user=input, out_root=config
         summary["seconds"] = round(time.monotonic() - started, 1)
         (out_dir / "summary.json").write_text(json.dumps(summary, indent=2))
         say(f"Run log: {out_dir}  (cost ${summary['cost_usd']:.4f}, cap ${RUN_BUDGET_USD:.2f})")
+
+
+def _push_order(moves: list, layout) -> list:
+    """Furthest slot from the mess area first, so a pushed block never has to pass through a filled slot."""
+    (x0, y0), (x1, y1) = layout.mess_area_cm
+    centre = ((x0 + x1) / 2, (y0 + y1) / 2)
+    return sorted(moves, key=lambda m: -math.dist(m.to_cm, centre))
+
+
+def _next_push(arm, grid, limits, remaining: list, positions: dict):
+    """The first remaining move whose push is clear of every other block, or MotionError saying why none is."""
+    reasons = []
+    for move in remaining:
+        others = {n: p for n, p in positions.items() if n != move.name}
+        try:
+            motion.plan_push(grid, limits, arm.known_pose(), positions[move.name], move.to_cm, others)
+            return move
+        except motion.MotionError as error:
+            reasons.append(f"{move.name}: {error}")
+    raise motion.MotionError("No block can be pushed without passing near another. Spread the blocks out in the "
+                             "mess area. " + " | ".join(reasons))
+
+
+def _push_moves(arm, moves, latest, latest_map, photo, layout, grid, limits, summary, attempts_path, started,
+                say, sleep) -> None:
+    """Push mode: push each block to its slot, measuring every block after every push."""
+    names = [m.name for m in moves]
+    positions = scene.read_positions(latest, names, latest_map, layout)
+    remaining, placed, shots = _push_order(moves, layout), {}, 0
+    while remaining:
+        move = _next_push(arm, grid, limits, remaining, positions)
+        remaining.remove(move)
+        result, misses_in_a_row = "FAIL", 0
+        for attempt in range(1, MAX_PUSHES + 1):
+            before = dict(positions)
+            others = {n: p for n, p in positions.items() if n != move.name}
+            try:
+                planned = motion.push(arm, grid, limits, before[move.name], move.to_cm, others, sleep, say)
+            except motion.MotionError as error:  # e.g. an overshoot whose push back leaves the taught area
+                say(f"  {move.name} -> slot {move.slot}: cannot push again: {error}")
+                break
+            shots += 1
+            latest, latest_map = photo(f"after_{shots}.jpg")
+            positions = scene.read_positions(latest, names, latest_map, layout)
+            measured = positions[move.name]
+            miss = (measured[0] - move.to_cm[0], measured[1] - move.to_cm[1])
+            error_cm = math.hypot(*miss)
+            progress = math.dist(measured, before[move.name])
+            knocked = {n: round(math.dist(positions[n], before[n]), 2) for n in others
+                       if math.dist(positions[n], before[n]) > KNOCKED_CM}
+            misses_in_a_row = misses_in_a_row + 1 if progress < NO_PROGRESS_CM else 0
+            passed = error_cm <= PASS_CM
+            if passed:
+                result = "PASS"
+            elif misses_in_a_row >= 2 or attempt == MAX_PUSHES:
+                result = "FAIL"
+            else:
+                result = "PUSH AGAIN"
+            summary["attempts"] += 1
+            with open(attempts_path, "a") as f:
+                f.write(json.dumps({
+                    "mode": "push", "move": move.slot, "name": move.name, "slot_cm": move.to_cm, "attempt": attempt,
+                    "from_cm": before[move.name], "planned_end_cm": planned.block_end_cm,
+                    "cut_short_by_grip_timer": not planned.reaches_slot, "measured_cm": measured,
+                    "miss_cm": {"dx": round(miss[0], 2), "dy": round(miss[1], 2), "distance": round(error_cm, 2)},
+                    "moved_cm": round(progress, 2), "knocked_cm": knocked, "result": result,
+                    "planned_claw_closed_s": planned.hold_s, "photo": Path(latest).name,
+                    "cost_so_far_usd": round(meta_api.cost_so_far(), 4),
+                    "time_s": round(time.monotonic() - started, 1)}) + "\n")
+            say(f"  {move.name} -> slot {move.slot}, push {attempt}: {error_cm:.1f} cm from the slot "
+                f"(moved {progress:.1f} cm) -> {result}")
+            if progress < NO_PROGRESS_CM and not passed:
+                say("  the push moved it less than 0.5 cm: the claw probably passed beside it")
+            for name, moved in knocked.items():
+                slot_of = placed.get(name)
+                if slot_of is not None and math.dist(positions[name], slot_of) > PASS_CM:
+                    raise motion.MotionError(f"Pushing {move.name} knocked {name} {moved:.1f} cm, out of its slot. "
+                                             f"Stopping. Photo: {Path(latest).name}")
+                say(f"  WARNING: pushing {move.name} moved {name} by {moved:.1f} cm; carrying on from where it is now")
+            if result != "PUSH AGAIN":
+                break
+        if result == "PASS":
+            placed[move.name] = move.to_cm  # only a block really in its slot can be knocked out of it
+        final_cm = math.dist(positions[move.name], move.to_cm)
+        summary["moves"].append({"name": move.name, "slot": move.slot, "result": "PASS" if result == "PASS" else "FAIL",
+                                 "final_error_cm": round(final_cm, 2)})
 
 
 def _warn_if_same_direction(first_misses: list, say) -> None:

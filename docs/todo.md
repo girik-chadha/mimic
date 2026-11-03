@@ -59,6 +59,7 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] First powered session steps 1-3 (3 Nov): kit ranges in both files, unlocked, firmware compiled and copied to Windows (not uploaded)
 - [x] `B` command: why the board last started and how long ago (`B brownout 42`), `arm.boot_reason()`, `boot` in `arm_jog.py`; g++ tested, compiled, copied to Windows (3 Nov, not uploaded)
 - [x] Push mode, step 1: `motion.plan_push` (claw at grip_push, straight push in 1.5 cm steps, cut by the grip timer, 4 cm clear of other blocks), tested with fakes (3 Nov)
+- [x] Push mode, step 2: `run_mimic.py --push` (opt-in; furthest slot first, every block measured after every push, knocks logged or stop), `teach_plan.py --push` extra points; tested with a fake pushing world (3 Nov)
 - [ ] `grip_push`: find it in the grip test (needs.md C7 step 11); push mode refuses to run until then
 - [ ] First powered session (needs.md C7) from step 3's upload: ranges with `first_moves.py`, copy into both files, upload; `grip_test.py`
 - [ ] Precision test B6: `repeatability.py`

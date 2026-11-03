@@ -1,11 +1,13 @@
 """The full run with the real arm and camera: watch your demo, then rebuild it from the mess.
 
     python scripts/run_mimic.py
+    python scripts/run_mimic.py --push     push mode (opt-in): slide each block with the claw at grip_push
 
 Needs: the sheet measured (calib/layout.json), the pose grid taught (scripts/teach.py), the arm unlocked
 (needs.md C5), iVCam running on Windows. Everything is checked before the serial port is even opened.
 Logs go to runs/<time>/ (photos, attempts.jsonl, summary.json).
 """
+import argparse
 import sys
 
 from mimic import arm as arm_module
@@ -13,15 +15,19 @@ from mimic import camera, kinematics, loop, scene
 from mimic.arm import Arm, ArmError
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="The full run with the real arm and camera.")
+    parser.add_argument("--push", action="store_true",
+                        help="push mode: push each block into its slot instead of picking it up (needs grip_push)")
+    args = parser.parse_args(argv)
     try:
-        layout, grid, limits = loop.load_and_check()  # before the bridge opens the serial port
+        layout, grid, limits = loop.load_and_check(push=args.push)  # before the bridge opens the serial port
     except (ArmError, scene.SceneError, kinematics.KinematicsError) as error:
         print(f"STOPPED before opening anything: {error}")
         return 1
     arm = Arm(arm_module.SerialBridgeTransport(), limits)
     try:
-        summary = loop.run(arm, camera.capture, layout, grid, limits)
+        summary = loop.run(arm, camera.capture, layout, grid, limits, push=args.push)
         print(f"{'SUCCESS' if summary['success'] else 'FINISHED WITH FAILURES'}: "
               f"{summary['attempts']} attempts, worst error {summary['max_error_cm']} cm, ${summary['cost_usd']}")
         return 0 if summary["success"] else 2

@@ -439,3 +439,17 @@ block, a video that ends too soon, a cost over 30 cents) stops the run with a pl
 Two sentences: "Push mode is a fallback that slides a block into its slot with the closed claw instead of lifting
 it, planned completely before the arm moves. It never squeezes the claw shut, never pushes for longer than the grip
 timer allows, and refuses any push whose path passes near another block."
+
+### 3 Nov: push mode, step 2 (running it)
+
+- `run_mimic.py --push` uses the pushes for the whole task, and only with the flag: without it the run is
+  exactly as before. It fills the furthest slot first, so a block never travels through a filled slot.
+- After every push the camera measures every block, not just the one pushed. That is how it notices a push that
+  missed (the block hardly moved) and a block knocked by accident. A knocked block in the mess area is fine,
+  because its new position is known; a block knocked out of its slot stops the run.
+- `teach_plan.py --push` adds the few extra points push mode needs, because the claw comes down behind a block,
+  which can be outside the area taught for picking.
+
+Two sentences: "With `--push`, Mimic slides every block into its slot and photographs the whole sheet after each push,
+so it always works from where the blocks really are. It is strictly opt-in and refuses to start until the claw's
+pushing angle has been measured in the grip test."

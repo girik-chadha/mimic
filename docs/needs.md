@@ -365,6 +365,9 @@ holds. The only unramped movement is each servo's first jump to home at start-up
 - **The arm base must never move relative to the sheet** after teaching: the grid is tied to the sheet. If it
   moves, re-teach. Two moves in a row missing the same way print a warning.
 - Practise first with `python scripts/teach.py --dry-run` (saves to `runs/pose_grid_dryrun.json`).
+- **Push mode (opt-in, `run_mimic.py --push`) needs a few more points:** `python scripts/teach_plan.py --push`
+  lists them (with the placeholder layout: 4 behind the mess area's corners, one of them out of reach, and one
+  beyond slot 3). It also needs `grip_push`, which is unknown until the grip test (C7 step 11).
 
 ### C5. Uploading the firmware, and lifting the arm's lock
 

@@ -2,6 +2,8 @@
 import dataclasses
 import importlib.util
 
+import pytest
+
 from mimic import config, scene
 
 spec = importlib.util.spec_from_file_location("teach_plan", config.ROOT / "scripts/teach_plan.py")
@@ -49,3 +51,24 @@ def test_point_too_close_to_the_base_is_refused(monkeypatch):
 def test_measured_layout_needs_no_flag(monkeypatch):
     code, text = run(monkeypatch, dataclasses.replace(COMMITTED, placeholder=False), argv=())
     assert code == 0 and not text.startswith("PROVISIONAL")
+
+
+def test_push_adds_the_points_behind_the_mess_area_and_beyond_the_last_slot(monkeypatch):
+    code, text = run(monkeypatch, argv=("--provisional", "--push"))
+    assert code == 0
+    extra = tp.push_points(COMMITTED, tp.plan_points(COMMITTED))
+    labels = [label for label, _ in extra]
+    assert labels == ["push start behind mess bottom-left", "push start behind mess bottom-right",
+                      "push start behind mess top-right", "push start behind mess top-left",
+                      "push back beyond slot 3"]
+    beyond_slot_3 = dict(extra)["push back beyond slot 3"]
+    assert beyond_slot_3[0] == pytest.approx(35.0, abs=0.05)   # 3 cm past slot 3 (32, 20)
+    assert "save hover 35.0 19.9" in text
+    # with the placeholder reach, the bottom-left push start is too far from the base: listed, not taught
+    assert "SKIPPED: push start behind mess bottom-left at (2.1, 16.4) cm is 21.3 cm from the arm's base" in text
+    assert "grip_push is unknown until the grip test" in text
+
+
+def test_without_push_no_push_points_are_listed(monkeypatch):
+    code, text = run(monkeypatch)
+    assert code == 0 and "Push mode" not in text and "push start" not in text

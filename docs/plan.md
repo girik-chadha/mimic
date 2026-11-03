@@ -226,6 +226,23 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
 - Provisional sizes (a 2 cm block, a claw 1-2 cm across) until measured. Pushes are straight lines only; a block
   is never pulled.
 
+`scripts/run_mimic.py --push` (`loop.run(push=True)`; without the flag nothing changes):
+- Refused before anything is opened if `grip_push` is unknown.
+- **Order:** the slot furthest from the mess area first (slot 3, 2, 1), so a pushed block never passes through a
+  filled slot. If that block's path passes near another block, the next block whose path is clear goes first;
+  if none is clear, the run stops ("spread the blocks out").
+- **After every push:** camera clear, photo, calibrate, and measure **every** block. Within 1.5 cm of the slot:
+  PASS. Otherwise push again from where it is now (the direction is worked out again, so an overshoot is pushed
+  back from the other side), at most 4 pushes per block. A push that moved it less than 0.5 cm missed it (the
+  claw passed beside it); two in a row is FAIL, and the run goes on with the next block.
+- **Knocks:** another block that moved more than 1 cm is logged; a block in the mess area simply carries on from
+  its new position, but a block knocked out of its slot stops the run.
+- Each check costs about $0.01 with 3 blocks (one dot photo plus one photo per block). No Spark diagnosis in push
+  mode. Every push is a line in `attempts.jsonl` with `"mode": "push"`.
+- `scripts/teach_plan.py --push` lists the extra points to teach: where the claw lands behind the mess area's
+  corners, and beyond the last slot (to push an overshoot back), when they are more than 1 cm outside the normal
+  points' area. A sideways correction at a slot may still need a point outside it, and is then refused (FAIL).
+
 ### 2.3 Scene layout
 
 - Work area: an A3 sheet taped down. Table coordinates in cm with the origin at the sheet's bottom-left dot.
