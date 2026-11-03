@@ -478,3 +478,15 @@ The safety net is unchanged: SAM must find exactly one match per name, or Spark 
 Two sentences: "With the ruler-measured dot positions, every real photo we have calibrates itself to within 0.27 cm.
 A separate 'dots measured' flag lets the camera side run now, while the arm side still waits for the slots and
 reach to be measured."
+
+### 3 Nov: dice everywhere in the prompts, and the precision test on measured dots
+
+- Both Spark prompts now say the objects are dice, and every example in them is a die. The rename example used to
+  turn "red cup" into "red mug", which taught Spark to change the object word; now it turns "red die" into
+  "dark red die", which keeps "die" and makes the colour more exact.
+- `repeatability.py` only uses the camera to measure where the claw tip lands, so it now needs just the measured
+  dots. It still cannot move a locked arm: that check is separate, and a test proves it still stops everything.
+
+Two sentences: "Spark is now told in both prompts that it is naming dice, with dice examples, so its names stay in
+the 'colour die' form even when a name has to be retried. The precision test can run as soon as the arm is
+unlocked, because it only needs the measured dots, and a locked arm still refuses it."

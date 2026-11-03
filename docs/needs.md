@@ -113,11 +113,13 @@ From Meta's pricing page (read 27 Oct) and third-party docs as marked.
 - **Renaming works.** `brain.name_objects` sends any name that does not give exactly 1 SAM box back to Spark
   with the match counts (up to 2 retries). On `desk.jpeg`, retry 1 turned "black box" into "black rectangle"
   (1 box). That retry cost $0.0091 (1,692 tokens in, 1,644 out). Saved as `spark_rename_desk_round1.txt`.
-- **(3 Nov) The naming prompt now has one line of scene context:** "The objects are small painted dice, so name
-  each one 'colour die' (for example 'red die')." The rename loop and the exactly-1-box rule are unchanged. The two
-  saved Spark replies above were recorded with the old prompt on `desk.jpeg` (lighters, not dice): they still test
-  reading the reply and the rename loop, but no real reply to the new prompt has been recorded yet. That needs a
-  photo of the dice on the sheet (B14).
+- **(3 Nov) Both naming prompts now have one line of scene context:** "The objects are small painted dice, so
+  name each one 'colour die' (for example 'red die')." It is in the first prompt and in the rename prompt, so a
+  renamed die comes back as "colour die", and every example in both is a die ("red die" or "blue die";
+  rename example `{"red die": "dark red die"}`). The rename loop and the exactly-1-box rule are unchanged. The two
+  saved Spark replies above were recorded with the old prompts on `desk.jpeg` (lighters, not dice): they still
+  test reading the replies and the rename loop, but no real reply to the new prompts has been recorded yet. That
+  needs a photo of the dice on the sheet (B14).
 
 ### A5c. Spark with two photos (B11, settled 2 Nov)
 
@@ -280,9 +282,10 @@ BASETEN_API_KEY=...          # Mon, optional
 
 - White table, bright even light, no hard shadows.
 - **Two flags in `layout.json` (3 Nov):** `dots_measured` (the 6 dots are ruler-measured: true since 3 Nov) is
-  all that calibration needs, so `scene.calibrate`, `show_demo.py` and `plan_from_photos.py` work now.
-  `placeholder` stays true until the slots, mess area and reach are measured too; until then `run_mimic.py`, the
-  loop, `teach_plan.py` (without `--provisional`) and `repeatability.py` refuse.
+  all that calibration needs, so `scene.calibrate`, `show_demo.py`, `plan_from_photos.py` and `repeatability.py`
+  (it only measures with the camera; the arm's own lock still guards it) work now. `placeholder` stays true until
+  the slots, mess area and reach are measured too; until then `run_mimic.py`, the loop and `teach_plan.py`
+  (without `--provisional`) refuse.
 - An A3 sheet taped to the table as the work area, with 6 dots drawn on it (changed 30 Oct): 4 corner dots and
   2 check dots, plus 3-4 numbered target slots. Each photo finds all 6 dots ("small coloured dot"), works out which
   is which by position, builds its own map from the corners and checks it with the 2 check dots (0.5 cm limit).

@@ -124,7 +124,7 @@ def main(argv=None, capture=camera.capture, sleep=time.sleep, say=print, out_roo
     layout = scene.load_layout()
     limits = arm_module.load_limits()
     try:
-        scene.refuse_placeholder(layout)
+        scene.refuse_unmeasured_dots(layout)  # it only measures with the camera: the dots are enough
         arm = session.connect(False, limits)  # refused while locked, before the bridge opens
     except (ArmError, scene.SceneError) as error:
         say(f"STOPPED before opening anything: {error}")

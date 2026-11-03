@@ -9,3 +9,5 @@ raw_response.txt
 # run logs and the API response cache
 runs/
 .cache/
+# a colour test photo, never committed
+dice_test.jpg

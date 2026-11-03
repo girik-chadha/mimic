@@ -122,13 +122,37 @@ def test_main_caps_cost_at_10_cents_and_turns_the_cache_off(monkeypatch, tmp_pat
     assert any(line.startswith("Verdict:") for line in said)
 
 
+def test_measured_dots_are_enough_while_the_rest_of_the_layout_is_a_placeholder(monkeypatch, tmp_path):
+    fake = FakeSession(monkeypatch, [(12.0, 8.0), (12.1, 8.0)])
+    fake.layout = dataclasses.replace(fake.layout, placeholder=True)   # as committed: dots measured, slots not
+    monkeypatch.setattr(scene, "load_layout", lambda path=config.LAYOUT_PATH: fake.layout)
+    monkeypatch.setattr(session, "connect", lambda dry_run, limits, echo=print: fake.arm)
+    said = []
+    assert rp.main(["--pose", "100", "80", "95", "90", "--shots", "2"], capture=fake.capture,
+                   sleep=lambda s: None, say=said.append, out_root=tmp_path) == 0
+    assert any(line.startswith("Verdict:") for line in said)
+
+
+def test_unmeasured_dots_are_refused_before_anything_opens(monkeypatch, tmp_path):
+    unmeasured = dataclasses.replace(scene.load_layout(config.LAYOUT_PATH), dots_measured=False)
+    monkeypatch.setattr(scene, "load_layout", lambda path=config.LAYOUT_PATH: unmeasured)
+    monkeypatch.setattr(session, "connect", lambda *a, **k: pytest.fail("arm connected"))
+    said = []
+    assert rp.main(["--pose", "100", "80", "95", "90"], capture=lambda p: pytest.fail("camera used"),
+                   say=said.append, out_root=tmp_path) == 1
+    assert "dot positions are not measured yet" in said[0]
+
+
 def test_real_arm_refused_while_locked(monkeypatch, tmp_path):
-    unlocked_layout = dataclasses.replace(scene.load_layout(config.LAYOUT_PATH), placeholder=False)
-    monkeypatch.setattr(scene, "load_layout", lambda path=config.LAYOUT_PATH: unlocked_layout)
+    # The committed layout as it is (placeholder true, dots measured) now passes the layout check, so the arm's
+    # lock is the only thing standing in the way, and it must still stop everything before the bridge opens.
+    committed = scene.load_layout(config.LAYOUT_PATH)
+    assert committed.placeholder and committed.dots_measured
+    monkeypatch.setattr(scene, "load_layout", lambda path=config.LAYOUT_PATH: committed)
     locked = dataclasses.replace(arm.load_limits(config.ARM_LIMITS_PATH), placeholder=True)
     monkeypatch.setattr(arm, "load_limits", lambda path=config.ARM_LIMITS_PATH: locked)
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("bridge opened while locked"))
     said = []
     assert rp.main(["--pose", "100", "80", "95", "90"], capture=lambda p: pytest.fail("camera used"),
                    say=said.append, out_root=tmp_path) == 1
-    assert "placeholder" in said[0]
+    assert said[0].startswith("STOPPED before opening anything: calib/arm_limits.json")  # the arm's lock, not the layout

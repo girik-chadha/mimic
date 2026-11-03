@@ -148,3 +148,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   `plan_from_photos.py` now need only the dots (`refuse_unmeasured_dots`); run_mimic, the loop, teach_plan and
   repeatability still need the whole file (`refuse_placeholder`). All three real photos calibrate from their saved
   replies: check dots 6a 0.13 / 0.27, 6b 0.15 / 0.19, ivcam_arm 0.20 / 0.19 cm (limit 0.5). No API call.
+- Naming prompts: every example is now a die ("red die" / "blue die"); the dice line is in the rename prompt too,
+  whose example is now `{"red die": "dark red die"}` (it was "red cup" -> "red mug", which taught changing the
+  object word). `repeatability.py` needs only `dots_measured`; tests: it runs with the committed layout, refuses
+  unmeasured dots, and still refuses a locked arm (checked by putting the old check back: 3 tests failed).
+  `dice_test.jpg` added to .gitignore. No API call.

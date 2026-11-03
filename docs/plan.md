@@ -76,7 +76,7 @@ def name_objects(image_path: str, attempts: list | None = None) -> list[str]
     # Spark looks at the demo photo, returns SAM-friendly names: ["red block", "blue block", ...]
     # each name must give exactly 1 SAM box; failures go back to Spark (max 2 retries, $0.03 cap),
     # then NamingFailed. Every check is appended to `attempts` as {round, name, boxes}. (changed 29 Oct)
-    # (3 Nov) the prompt says the objects are small painted dice, named "colour die" (e.g. "red die")
+    # (3 Nov) both prompts (naming and rename) say the objects are small painted dice, named "colour die"
 def diagnose(before_path: str, after_path: str, move, error_cm: tuple[float, float]) -> dict   # (2 Nov)
     # one Spark call with both photos and the measured miss
     # {"problem": slipped|dropped|knocked|missed_aim|not_found|other,
@@ -251,9 +251,10 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
   SAM finds all 6 with one prompt ("small coloured dot"); which dot is which comes from where they are, not
   their colour. Dot positions by role, slots and sheet bounds live in `calib/layout.json`.
 - (3 Nov, Girik's decision) Two flags there: `dots_measured` is enough to calibrate (`scene.calibrate`,
-  `show_demo.py`, `plan_from_photos.py`); `placeholder: false` (the whole file real, which needs `dots_measured`
-  too) is still required by everything that uses slots, mess area or reach with the arm: `run_mimic.py`, the
-  loop, `teach_plan.py`, `repeatability.py`. The dots were ruler-measured 3 Nov; the rest is still placeholder.
+  `show_demo.py`, `plan_from_photos.py`, and `repeatability.py`, which only measures with the camera and is still
+  guarded by the arm's own lock); `placeholder: false` (the whole file real, which needs `dots_measured` too) is
+  still required by everything that uses slots, mess area or reach with the arm: `run_mimic.py`, the loop,
+  `teach_plan.py`. The dots were ruler-measured 3 Nov; the rest is still placeholder.
 - **Keep every block and slot at least 4 cm from every dot:** a covered dot stops the run, because each photo
   needs all 6 dots to calibrate itself.
 - **Mess area** on one side, **target row** of numbered slots on the other. Slots start empty, so a placement never lands on another block.

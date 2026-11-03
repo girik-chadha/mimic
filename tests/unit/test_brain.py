@@ -25,11 +25,24 @@ def test_prompt_asks_for_lowercase_colour_and_type_one_per_object():
     assert "ONLY a JSON list" in prompt
 
 
-def test_prompt_says_the_objects_are_dice_and_the_rename_prompt_is_unchanged():
-    line = "The objects are small painted dice, so name each one 'colour die' (for example 'red die')."
-    assert brain.NAME_OBJECTS_PROMPT.splitlines()[1] == line           # one line of scene context, second line
-    assert brain.name_objects_content(DESK)[0]["text"] == brain.NAME_OBJECTS_PROMPT   # and it is what is sent
-    assert "dice" not in brain.RENAME_PROMPT
+DICE_LINE = "The objects are small painted dice, so name each one 'colour die' (for example 'red die')."
+
+
+def test_both_prompts_say_the_objects_are_dice_and_every_example_is_a_die():
+    for prompt in (brain.NAME_OBJECTS_PROMPT, brain.RENAME_PROMPT):
+        assert prompt.splitlines()[1] == DICE_LINE                    # one line of scene context, second line
+        for leftover in ("block", "lighter", "cup", "mug"):
+            assert leftover not in prompt, leftover
+    assert '"red die" or "blue die"' in brain.NAME_OBJECTS_PROMPT
+    assert brain.NAME_OBJECTS_PROMPT.endswith('["red die", "blue die"]')
+    assert brain.RENAME_PROMPT.endswith('{{"red die": "dark red die"}}')   # keeps "die", sharpens the colour
+
+
+def test_the_dice_line_is_in_what_is_sent_for_naming_and_for_renaming():
+    assert brain.name_objects_content(DESK)[0]["text"] == brain.NAME_OBJECTS_PROMPT
+    rename = brain.rename_content(DESK, ["red die", "orange die"], {"orange die": 2}, ["orange die"])[0]["text"]
+    assert rename.splitlines()[1] == DICE_LINE
+    assert '- "orange die": 2 matches' in rename and rename.endswith('{"red die": "dark red die"}')
 
 
 def test_dice_names_are_usable_sam_prompts():

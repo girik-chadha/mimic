@@ -24,16 +24,17 @@ The objects are small painted dice, so name each one 'colour die' (for example '
 List every separate object that a robot arm could pick up.
 Ignore the table, any paper sheet, drawn lines, numbers, and small calibration stickers.
 
-Name each object as "colour + object type", for example "red block" or "blue lighter":
+Name each object as "colour + object type", for example "red die" or "blue die":
 - all lowercase
 - the main colour first, then what the object is (2 or 3 words in total)
 - exactly one name per object
 - every name different
 
 Reply with ONLY a JSON list of strings and no other text, like this:
-["red block", "blue lighter"]"""
+["red die", "blue die"]"""
 
 RENAME_PROMPT = """Look at this photo of objects on a table again.
+The objects are small painted dice, so name each one 'colour die' (for example 'red die').
 You named the objects: {names}.
 An object finder searched the photo for each name. A good name matches exactly 1 object.
 These names did not:
@@ -43,7 +44,7 @@ Give a new name for each of those objects. Same rules as before: "colour + objec
 2 or 3 words, and different from every other name. Do not reuse any name already tried: {tried}.
 
 Reply with ONLY a JSON object that maps each failed name to its new name, and no other text, like this:
-{{"red cup": "red mug"}}"""
+{{"red die": "dark red die"}}"""
 
 
 class NamingFailed(RuntimeError):
