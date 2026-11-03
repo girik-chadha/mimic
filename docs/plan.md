@@ -76,6 +76,7 @@ def name_objects(image_path: str, attempts: list | None = None) -> list[str]
     # Spark looks at the demo photo, returns SAM-friendly names: ["red block", "blue block", ...]
     # each name must give exactly 1 SAM box; failures go back to Spark (max 2 retries, $0.03 cap),
     # then NamingFailed. Every check is appended to `attempts` as {round, name, boxes}. (changed 29 Oct)
+    # (3 Nov) the prompt says the objects are small painted dice, named "colour die" (e.g. "red die")
 def diagnose(before_path: str, after_path: str, move, error_cm: tuple[float, float]) -> dict   # (2 Nov)
     # one Spark call with both photos and the measured miss
     # {"problem": slipped|dropped|knocked|missed_aim|not_found|other,

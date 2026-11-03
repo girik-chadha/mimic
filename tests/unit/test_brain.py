@@ -12,6 +12,8 @@ def saved(name):
 
 
 def test_real_spark_reply_gives_three_names():
+    # Recorded 29 Oct on desk.jpeg (lighters, not dice) with the prompt as it was before the dice line was added
+    # (3 Nov). It still tests what does not depend on the prompt: reading the list, and the rename loop below.
     assert brain.parse_names(saved("spark_name_objects_desk")) == ["blue lighter", "green lighter", "black box"]
 
 
@@ -21,6 +23,17 @@ def test_prompt_asks_for_lowercase_colour_and_type_one_per_object():
     assert "lowercase" in prompt
     assert "exactly one name per object" in prompt
     assert "ONLY a JSON list" in prompt
+
+
+def test_prompt_says_the_objects_are_dice_and_the_rename_prompt_is_unchanged():
+    line = "The objects are small painted dice, so name each one 'colour die' (for example 'red die')."
+    assert brain.NAME_OBJECTS_PROMPT.splitlines()[1] == line           # one line of scene context, second line
+    assert brain.name_objects_content(DESK)[0]["text"] == brain.NAME_OBJECTS_PROMPT   # and it is what is sent
+    assert "dice" not in brain.RENAME_PROMPT
+
+
+def test_dice_names_are_usable_sam_prompts():
+    assert brain.parse_names('["red die", "Blue Die", "green die"]') == ["red die", "blue die", "green die"]
 
 
 @pytest.mark.parametrize("reply", [

@@ -140,3 +140,6 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   two pushes that moved it less than 0.5 cm are FAIL; a knocked mess block carries on, a block knocked out of its
   slot stops the run. `teach_plan.py --push` lists the extra points (5 with the placeholder layout, 1 out of
   reach). Fake pushing world in the tests: 23 cm takes 3 pushes; the without-push run is unchanged.
+- Naming prompt: added "The objects are small painted dice, so name each one 'colour die' (for example 'red
+  die')." Rename loop and exactly-1-box rule unchanged. The saved naming replies predate the line (lighters on
+  desk.jpeg) and are kept, labelled as such; a real dice reply is needs.md B14. No API call.

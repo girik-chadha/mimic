@@ -106,6 +106,11 @@ From Meta's pricing page (read 27 Oct) and third-party docs as marked.
 - **Renaming works.** `brain.name_objects` sends any name that does not give exactly 1 SAM box back to Spark
   with the match counts (up to 2 retries). On `desk.jpeg`, retry 1 turned "black box" into "black rectangle"
   (1 box). That retry cost $0.0091 (1,692 tokens in, 1,644 out). Saved as `spark_rename_desk_round1.txt`.
+- **(3 Nov) The naming prompt now has one line of scene context:** "The objects are small painted dice, so name
+  each one 'colour die' (for example 'red die')." The rename loop and the exactly-1-box rule are unchanged. The two
+  saved Spark replies above were recorded with the old prompt on `desk.jpeg` (lighters, not dice): they still test
+  reading the reply and the rename loop, but no real reply to the new prompt has been recorded yet. That needs a
+  photo of the dice on the sheet (B14).
 
 ### A5c. Spark with two photos (B11, settled 2 Nov)
 
@@ -230,6 +235,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
 | B13 | The demo video, on the first real `show_demo.py` run: does SAM accept the shrunk video (10 fps H.264, made by ffmpeg, not a phone)? How long does a video call take (our timeout for video is 300 s; the 28 Oct call was never timed)? Does a track keep its id while a hand moves the block (A3's open question; if not, `show_demo.py` stops with "2 tracks")? | `python scripts/show_demo.py demo.mp4 --save-replies` on an 8-10 s video of the real sheet, after the dots are ruler-measured (`layout.json` must not be a placeholder). About $0.10-0.13 for 3 blocks. | After the dots are measured |
+| B14 | Does Spark name the dice "colour die" with the new prompt line, and does SAM find exactly 1 box for each such name (two dice of similar colours could share one)? | One real `brain.name_objects` call on a photo of the dice on the sheet; save Spark's reply and each SAM reply as fixtures. About $0.01-0.02. | When the dice photo is taken |
 | B12 | Does opening COM7 reset the board? The bridge sets DTR and RTS low before opening so that it should not. If it does, every session restarts the arm (each servo jumps to home again) and a brownout is hidden by the next power-on. | After the upload (C7 step 4): `arm_jog.py`, type `boot` at once, `quit`, wait a minute, repeat. If the seconds are always 2-3, opening resets the board. | First powered session |
 
 ---

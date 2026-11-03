@@ -20,6 +20,7 @@ MAX_RETRIES = 2              # new names Spark may give for one object after the
 NAMING_RETRY_BUDGET_USD = 0.03  # retry rounds stop once they have cost this much in one name_objects call
 
 NAME_OBJECTS_PROMPT = """Look at this photo of objects on a table.
+The objects are small painted dice, so name each one 'colour die' (for example 'red die').
 List every separate object that a robot arm could pick up.
 Ignore the table, any paper sheet, drawn lines, numbers, and small calibration stickers.
 

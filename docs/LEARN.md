@@ -453,3 +453,15 @@ timer allows, and refuses any push whose path passes near another block."
 Two sentences: "With `--push`, Mimic slides every block into its slot and photographs the whole sheet after each push,
 so it always works from where the blocks really are. It is strictly opt-in and refuses to start until the claw's
 pushing angle has been measured in the grip test."
+
+### 3 Nov: telling Spark the objects are dice
+
+- The naming prompt now says, in one line, that the objects are small painted dice and should be named "colour
+  die" (for example "red die"). A name that short and plain is also a good prompt for SAM.
+- Nothing else changed: SAM must still find exactly one box for each name, and any name that fails still goes
+  back to Spark to be renamed.
+- The saved Spark replies used by the tests were recorded with the old prompt on a photo of lighters. They still
+  test the parts that do not depend on the prompt. A real reply to the new prompt needs a photo of the dice.
+
+Two sentences: "We added one line of context so Spark knows it is looking at dice and names them like 'red die'.
+The safety net is unchanged: SAM must find exactly one match per name, or Spark is asked for a new one."

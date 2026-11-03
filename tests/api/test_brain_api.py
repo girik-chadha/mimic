@@ -1,4 +1,8 @@
-"""Real Spark call on desk.jpeg. Costs about $0.005. Run on purpose only: pytest -m api"""
+"""Real Spark call on desk.jpeg. Costs about $0.005. Run on purpose only: pytest -m api
+
+desk.jpeg shows lighters and a box, not dice: since 3 Nov the prompt says the objects are dice, so this
+test only checks that Spark still gives three usable names. A dice photo is needed to test the new line.
+"""
 import pytest
 
 from mimic import brain, config, meta_api

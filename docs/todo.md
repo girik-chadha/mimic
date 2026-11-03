@@ -80,6 +80,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] Ruler-measure the dots: three photos put the right check dot at ~35.0 cm, not 34.5 (needs.md A2b)
 - [x] Demo as a video: `scripts/show_demo.py` (shrink to 10 fps / 720p, warning + typed yes, $0.30 cap, settled frame, arrival order), `mimic/video.py`, `sam.track`; tested on the saved 317-frame reply and fakes (3 Nov)
 - [ ] First real `show_demo.py` run on an 8-10 s demo video (needs.md B13; after the dots are measured)
+- [x] Naming prompt: one line of scene context, the objects are small painted dice named "colour die" (3 Nov; no API call)
+- [ ] Record Spark's real naming reply on a photo of the dice (needs.md B14)
 - [ ] Measure the arm's base position, its reach, and the mess area into `calib/layout.json`
 - [ ] **Gate 4 at 21:00**: 3 blocks, 3 runs out of 5. Otherwise shrink the task.
 
