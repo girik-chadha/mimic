@@ -31,14 +31,41 @@ static void run_until(ArmState &a, unsigned long from_ms, unsigned long to_ms) {
 
 static const int GRIP_DIR = GRIP_CLOSED_LIMIT > GRIP_OPEN ? 1 : -1;  // which way "closing" turns the servo
 
+// An unlocked arm after E, with all four servos switched on (E's default: 90 for every joint, which is HOME).
+static ArmState enabled_arm() {
+  ArmState a;
+  arm_init(a);
+  send(a, "E", 0);
+  update_attached(a, 3 * ATTACH_GAP_MS);
+  return a;
+}
+
 // ---------- always true, whatever the limits flags ----------
 
 static void test_always() {
   ArmState a;
   arm_init(a);
   char expect[32];
-  snprintf(expect, sizeof expect, "A %d %d %d %d%s", HOME[0], HOME[1], HOME[2], HOME[3], limits_ok() ? "" : " L");
-  CHECK(strcmp(send(a, "?", 0), expect) == 0, "? reports the home pose after power-on (L while locked)");
+  snprintf(expect, sizeof expect, "A %d %d %d %d%s", HOME[0], HOME[1], HOME[2], HOME[3], limits_ok() ? " D" : " L");
+  CHECK(strcmp(send(a, "?", 0), expect) == 0, "? after power-on: disarmed (D), or L while locked");
+  CHECK(!a.enabled && a.attached == 0, "power-on: disarmed, nothing attached");
+  bool nothing = true;
+  for (unsigned long t = 0; t <= 10000; t += 100) {
+    update_attached(a, t);
+    nothing = nothing && a.attached == 0;
+  }
+  CHECK(nothing, "power-on: without E no servo is ever switched on");
+  CHECK(strcmp(send(a, "D", 0), "OK") == 0, "D always works (even disarmed or locked)");
+  CHECK(strcmp(send(a, "E 90 90", 0), "ERR bad command") == 0, "E needs 0 or 4 numbers");
+  CHECK(strcmp(send(a, "E 90 90 90 90 7", 0), "ERR bad command") == 0, "E with extra numbers rejected");
+  CHECK(strcmp(send(a, "EX", 0), "ERR bad command") == 0, "EX is not E");
+  CHECK(!a.enabled, "a bad E enables nothing");
+  // grip range: open and the closed limit inside it, and the closed limit is one end, so nothing goes past it
+  CHECK(GRIP_RANGE[0] < GRIP_RANGE[1], "grip range is low-high");
+  CHECK(GRIP_RANGE[0] <= GRIP_OPEN && GRIP_OPEN <= GRIP_RANGE[1], "grip open is inside the grip range");
+  CHECK(GRIP_RANGE[0] <= HOME[3] && HOME[3] <= GRIP_RANGE[1], "grip home is inside the grip range");
+  CHECK(GRIP_CLOSED_LIMIT == GRIP_RANGE[0] || GRIP_CLOSED_LIMIT == GRIP_RANGE[1],
+        "the grip closed limit is one end of the range (the range never goes past it)");
   CHECK(servos_enabled() == limits_ok(), "servos are enabled exactly when the limits are ok");
   CHECK(strcmp(send(a, "S", 0), "OK") == 0, "S always works");
 
@@ -92,6 +119,10 @@ static void test_refused() {
   CHECK(strstr(send(a, "?", 0), " L") != NULL, "locked: ? ends with L");
   CHECK(strcmp(send(a, "J 95 95 95 95 800", 0), "ERR limits not measured") == 0, "J refused");
   CHECK(strcmp(send(a, "H", 0), "ERR limits not measured") == 0, "H refused");
+  CHECK(strcmp(send(a, "E", 0), "ERR limits not measured") == 0, "locked: E refused");
+  CHECK(strcmp(send(a, "E 90 90 90 90", 0), "ERR limits not measured") == 0, "locked: E with angles refused");
+  update_attached(a, 5000);
+  CHECK(!a.enabled && a.attached == 0, "locked: E switches nothing on");
   run_until(a, 0, 5000);
   CHECK(!a.moving && near(a.now[0], HOME[0]) && near(a.now[3], HOME[3]), "the arm did not move");
 }
@@ -99,19 +130,18 @@ static void test_refused() {
 // ---------- limits ready: moves, clamps, ramps, timers ----------
 
 static void test_staggered_start() {
-  CHECK(servos_to_attach(0) == 1, "start-up: the base is switched on at once");
-  CHECK(servos_to_attach(ATTACH_GAP_MS - 1) == 1, "start-up: still only the base just before 400 ms");
-  CHECK(servos_to_attach(ATTACH_GAP_MS) == 2, "start-up: the shoulder at 400 ms");
-  CHECK(servos_to_attach(2 * ATTACH_GAP_MS) == 3, "start-up: the elbow at 800 ms");
-  CHECK(servos_to_attach(3 * ATTACH_GAP_MS) == 4, "start-up: the claw at 1200 ms");
-  CHECK(servos_to_attach(60000) == 4, "start-up: never more than 4");
+  CHECK(servos_to_attach(0) == 1, "switch-on: the base is switched on at once");
+  CHECK(servos_to_attach(ATTACH_GAP_MS - 1) == 1, "switch-on: still only the base just before 400 ms");
+  CHECK(servos_to_attach(ATTACH_GAP_MS) == 2, "switch-on: the shoulder at 400 ms");
+  CHECK(servos_to_attach(2 * ATTACH_GAP_MS) == 3, "switch-on: the elbow at 800 ms");
+  CHECK(servos_to_attach(3 * ATTACH_GAP_MS) == 4, "switch-on: the claw at 1200 ms");
+  CHECK(servos_to_attach(60000) == 4, "switch-on: never more than 4");
 }
 
 static void test_ramp_speed() {
   // Even a J sent with 0 ms is slowed to MIN_MS_PER_DEGREE, and the ease-in/ease-out peak is 1.5x the average
   // speed, so no 20 ms tick may move a joint more than 1.5 * 20 / MIN_MS_PER_DEGREE degrees.
-  ArmState a;
-  arm_init(a);
+  ArmState a = enabled_arm();
   char line[64];
   snprintf(line, sizeof line, "J %d %d %d %d 0", MIN_ANGLE[0], MAX_ANGLE[1], MIN_ANGLE[2], HOME[3]);
   send(a, line, 0);
@@ -133,6 +163,75 @@ static void test_unlocked_status() {
   arm_init(a);
   CHECK(servos_enabled(), "unlocked: servos are enabled");
   CHECK(strchr(send(a, "?", 0), 'L') == NULL, "unlocked: ? has no L");
+  ArmState b = enabled_arm();
+  char expect[32];
+  snprintf(expect, sizeof expect, "A %d %d %d %d", HOME[0], HOME[1], HOME[2], HOME[3]);
+  CHECK(strcmp(send(b, "?", 0), expect) == 0, "armed: ? has no suffix");
+}
+
+static void test_disarmed_until_E() {
+  ArmState a;
+  arm_init(a);
+  CHECK(strcmp(send(a, "J 95 95 95 95 800", 0), "ERR not enabled") == 0, "disarmed: J refused");
+  CHECK(strcmp(send(a, "H", 0), "ERR not enabled") == 0, "disarmed: H refused");
+  CHECK(strcmp(send(a, "S", 0), "OK") == 0, "disarmed: S works");
+  run_until(a, 0, 3000);
+  CHECK(!a.moving && near(a.now[0], HOME[0]), "disarmed: nothing moves");
+}
+
+static void test_enable_switches_on_one_at_a_time() {
+  ArmState a;
+  arm_init(a);
+  const unsigned long t0 = 10000;  // E at 10 s after power-on: the times count from E
+  CHECK(strcmp(send(a, "E", t0), "OK") == 0, "E replies OK");
+  CHECK(a.attached == 1, "E: the base at once");
+  update_attached(a, t0 + ATTACH_GAP_MS - 1);
+  CHECK(a.attached == 1, "E: still only the base just before 400 ms");
+  CHECK(strcmp(send(a, "J 95 95 95 95 800", t0 + 100), "ERR not enabled") == 0, "J refused while switching on");
+  CHECK(strstr(send(a, "?", t0 + 100), " D") != NULL, "? still ends with D while switching on");
+  update_attached(a, t0 + ATTACH_GAP_MS);
+  CHECK(a.attached == 2, "E: the shoulder at 400 ms");
+  update_attached(a, t0 + 2 * ATTACH_GAP_MS);
+  CHECK(a.attached == 3, "E: the elbow at 800 ms");
+  update_attached(a, t0 + 3 * ATTACH_GAP_MS);
+  CHECK(a.attached == 4 && armed(a), "E: the claw at 1200 ms, then armed");
+  update_attached(a, t0 + 60000);
+  CHECK(a.attached == 4, "E: never more than 4");
+  CHECK(strcmp(send(a, "J 95 95 95 95 800", t0 + 1200), "OK") == 0, "armed: J accepted");
+  CHECK(strcmp(send(a, "E", t0 + 1300), "ERR already enabled") == 0, "E twice is refused (no reset mid-move)");
+  CHECK(a.moving, "a refused second E leaves the move running");
+}
+
+static void test_enable_starts_at_the_given_angles() {
+  ArmState a;
+  arm_init(a);
+  CHECK(strcmp(send(a, "E 100 85 70 95", 0), "OK") == 0, "E with angles replies OK");
+  CHECK(near(a.now[0], 100) && near(a.now[1], 85) && near(a.now[2], 70) && near(a.now[3], 95) && !a.moving,
+        "E sets where each servo starts, and nothing moves");
+  ArmState b;
+  arm_init(b);
+  char line[64];
+  snprintf(line, sizeof line, "E %d %d %d %d", MIN_ANGLE[0] - 20, MAX_ANGLE[1] + 20, HOME[2], GRIP_RANGE[1] + 20);
+  send(b, line, 0);
+  CHECK(near(b.now[0], MIN_ANGLE[0]) && near(b.now[1], MAX_ANGLE[1]) && near(b.now[3], GRIP_RANGE[1]),
+        "E angles are clamped like J");
+}
+
+static void test_disable_goes_limp() {
+  ArmState a = enabled_arm();
+  char line[64];
+  snprintf(line, sizeof line, "J %d %d %d %d 1000", MAX_ANGLE[0], HOME[1], HOME[2], HOME[3]);
+  send(a, line, 0);
+  run_until(a, 20, 400);
+  float stopped_at = a.now[0];
+  CHECK(strcmp(send(a, "D", 400), "OK") == 0, "D replies OK");
+  CHECK(!a.enabled && a.attached == 0 && !a.moving, "D: stopped, disarmed, nothing attached");
+  update_attached(a, 5000);
+  run_until(a, 420, 3000);
+  CHECK(a.attached == 0 && near(a.now[0], stopped_at), "after D nothing is switched on and nothing moves");
+  CHECK(strcmp(send(a, "J 95 95 95 95 800", 3000), "ERR not enabled") == 0, "after D, J refused");
+  CHECK(strstr(send(a, "?", 3000), " D") != NULL, "after D, ? ends with D");
+  CHECK(strcmp(send(a, "E", 3000), "OK") == 0, "E works again after D");
 }
 
 static void test_clamps() {
@@ -143,10 +242,10 @@ static void test_clamps() {
   int inside = (MIN_ANGLE[1] + MAX_ANGLE[1]) / 2;
   CHECK(clamp_joint(1, inside) == inside, "an angle inside the range is unchanged");
   CHECK(clamp_joint(3, GRIP_CLOSED_LIMIT + 30 * GRIP_DIR) == GRIP_CLOSED_LIMIT, "grip never closes past its limit");
-  CHECK(clamp_joint(3, GRIP_OPEN - 30 * GRIP_DIR) == GRIP_OPEN, "grip never opens past open");
+  CHECK(clamp_joint(3, GRIP_OPEN - 5) == GRIP_OPEN - 5, "grip can go 5 degrees below open (range 40-140)");
+  CHECK(clamp_joint(3, GRIP_RANGE[0] - 10) == GRIP_RANGE[0], "grip never goes below its range");
 
-  ArmState a;
-  arm_init(a);
+  ArmState a = enabled_arm();
   char line[64];
   int elbow_inside = (MIN_ANGLE[2] + MAX_ANGLE[2]) / 2;  // each joint has its own range
   snprintf(line, sizeof line, "J %d %d %d %d 800", MIN_ANGLE[0] - 40, MAX_ANGLE[1] + 40, elbow_inside,
@@ -158,8 +257,7 @@ static void test_clamps() {
 }
 
 static void test_ramp() {
-  ArmState a;
-  arm_init(a);
+  ArmState a = enabled_arm();
   int target = HOME[0] + 10 <= MAX_ANGLE[0] ? HOME[0] + 10 : HOME[0] - 10;
   char line[64];
   snprintf(line, sizeof line, "J %d %d %d %d 1000", target, HOME[1], HOME[2], HOME[3]);
@@ -188,8 +286,7 @@ static void test_ramp() {
 }
 
 static void test_speed_limit() {
-  ArmState a;
-  arm_init(a);
+  ArmState a = enabled_arm();
   int target = MIN_ANGLE[0];
   char line[64];
   snprintf(line, sizeof line, "J %d %d %d %d 0", target, HOME[1], HOME[2], HOME[3]);
@@ -199,8 +296,7 @@ static void test_speed_limit() {
 }
 
 static void test_new_move_replaces_old() {
-  ArmState a;
-  arm_init(a);
+  ArmState a = enabled_arm();
   char line[64];
   snprintf(line, sizeof line, "J %d %d %d %d 1000", MAX_ANGLE[0], HOME[1], HOME[2], HOME[3]);
   send(a, line, 0);
@@ -214,8 +310,7 @@ static void test_new_move_replaces_old() {
 }
 
 static void test_stop_and_home() {
-  ArmState a;
-  arm_init(a);
+  ArmState a = enabled_arm();
   char line[64];
   snprintf(line, sizeof line, "J %d %d %d %d 1000", MAX_ANGLE[0], HOME[1], HOME[2], HOME[3]);
   send(a, line, 0);
@@ -230,8 +325,7 @@ static void test_stop_and_home() {
 }
 
 static void test_grip_relaxes() {
-  ArmState a;
-  arm_init(a);
+  ArmState a = enabled_arm();
   char line[64];
   snprintf(line, sizeof line, "J %d %d %d %d 500", HOME[0], HOME[1], HOME[2], GRIP_CLOSED_LIMIT);
   send(a, line, 0);
@@ -244,8 +338,7 @@ static void test_grip_relaxes() {
   CHECK(near(a.now[3], GRIP_OPEN), "after the hold time the grip relaxes to open");
   CHECK(near(a.now[0], HOME[0]) && near(a.now[1], HOME[1]), "relaxing the grip moves nothing else");
 
-  ArmState b;
-  arm_init(b);
+  ArmState b = enabled_arm();
   run_until(b, 0, MAX_GRIP_HOLD_MS * 3);
   CHECK(near(b.now[3], GRIP_OPEN) && !b.moving, "an open grip is left alone");
 }
@@ -255,6 +348,10 @@ int main() {
   test_always();
   if (limits_ok()) {
     test_staggered_start();
+    test_disarmed_until_E();
+    test_enable_switches_on_one_at_a_time();
+    test_enable_starts_at_the_given_angles();
+    test_disable_goes_limp();
     test_ramp_speed();
     test_unlocked_status();
     test_clamps();

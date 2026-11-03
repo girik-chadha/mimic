@@ -15,7 +15,7 @@ import sys
 import time
 
 from mimic import arm as arm_module
-from mimic import camera, config, kinematics, loop, meta_api, scene
+from mimic import camera, config, kinematics, loop, meta_api, scene, session
 from mimic.arm import Arm, ArmError
 
 
@@ -69,7 +69,7 @@ def benchmark(runs: int, run_once, wait_for_user, say=print) -> list[dict]:
     return summaries
 
 
-def main(argv=None) -> int:
+def main(argv=None, read=input) -> int:
     parser = argparse.ArgumentParser(description="Run the full loop several times and report the numbers.")
     parser.add_argument("--runs", type=int, default=5)
     args = parser.parse_args(argv)
@@ -80,10 +80,16 @@ def main(argv=None) -> int:
         print(f"STOPPED before opening anything: {error}")
         return 1
     arm = Arm(arm_module.SerialBridgeTransport(), limits)
-    try:
-        summaries = benchmark(args.runs, lambda: loop.run(arm, camera.capture, layout, grid, limits), input)
-    finally:
-        arm.transport.close()  # the bridge sends S as it closes
+    summaries = []
+
+    def body():
+        session.confirm_and_enable(arm, read)  # the board starts disarmed
+        summaries.extend(benchmark(args.runs, lambda: loop.run(arm, camera.capture, layout, grid, limits), read))
+
+    # s, Ctrl+C or an error: S then D; a normal end: "hold the arm", then D. The bridge closes either way.
+    code = session.guarded(arm, body)
+    if code != 0:
+        return code
     numbers = summarise(summaries)
     print()
     report(numbers, print)

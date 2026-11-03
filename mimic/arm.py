@@ -2,9 +2,14 @@
 
     J <base> <shoulder> <elbow> <grip> <ms>   ->  OK
     H                                         ->  OK
-    ?                                         ->  A <base> <shoulder> <elbow> <grip>   (+ " L" while locked)
+    ?                                         ->  A <base> <shoulder> <elbow> <grip>   (+ " L" while locked,
+                                                                                         " D" while disarmed)
     S                                         ->  OK
     B                                         ->  B <reason> <seconds since start-up>   (why the board last started)
+    E [<base> <shoulder> <elbow> <grip>]      ->  OK   switch the servos on, one at a time, starting at these angles
+    D                                         ->  OK   stop, then switch every servo off (limp)
+
+The board starts disarmed: nothing moves until enable() (E). J and H reply "ERR not enabled" until then.
 
 Safety is in two places on purpose. Python refuses anything outside the limits in
 calib/arm_limits.json (an out-of-range angle here means a bug upstream). The firmware clamps to
@@ -18,6 +23,7 @@ import json
 import queue
 import subprocess
 import threading
+import time
 from dataclasses import dataclass
 
 from mimic import config
@@ -25,6 +31,8 @@ from mimic import config
 JOINTS = ("base", "shoulder", "elbow", "grip")
 MAX_LINE_CHARS = 64  # the firmware rejects longer lines
 BOOT_REASONS = ("power-on", "brownout", "software reset", "watchdog", "other")  # the firmware's B reply words
+ENABLE_DEFAULT_DEG = 90   # E with no angles: the firmware starts every joint at 90
+ENABLE_WAIT_S = 1.3       # the firmware switches on one servo every 0.4 s: all four are on after 1.2 s
 
 
 class ArmError(RuntimeError):
@@ -37,6 +45,7 @@ class ArmLimits:
     ranges_deg: dict[str, tuple[int, int]]   # base, shoulder, elbow
     grip_open_deg: int
     grip_closed_limit_deg: int               # never close further (the grip servo overheats)
+    grip_range_deg: tuple[int, int]          # the grip's whole range; the closed limit is one end of it
     home_deg: dict[str, int]
     min_ms_per_degree: int                   # speed limit
     max_grip_hold_s: float                   # the firmware relaxes a closed grip after this long
@@ -45,7 +54,7 @@ class ArmLimits:
 
     def range_of(self, joint: str) -> tuple[int, int]:
         if joint == "grip":
-            return tuple(sorted((self.grip_open_deg, self.grip_closed_limit_deg)))
+            return self.grip_range_deg
         return self.ranges_deg[joint]
 
 
@@ -57,6 +66,8 @@ def load_limits(path=config.ARM_LIMITS_PATH) -> ArmLimits:
         ranges_deg={j: tuple(r) for j, r in data["ranges_deg"].items()},
         grip_open_deg=data["grip_open_deg"],
         grip_closed_limit_deg=data["grip_closed_limit_deg"],
+        grip_range_deg=tuple(data.get("grip_range_deg",
+                                      sorted((data["grip_open_deg"], data["grip_closed_limit_deg"])))),
         home_deg=data["home_deg"],
         min_ms_per_degree=data["min_ms_per_degree"],
         max_grip_hold_s=data["max_grip_hold_s"],
@@ -71,6 +82,13 @@ def load_limits(path=config.ARM_LIMITS_PATH) -> ArmLimits:
             raise ArmError(f"arm_limits.json: {joint} range {lo}-{hi} must be low-high within 0-180.")
     if limits.grip_open_deg == limits.grip_closed_limit_deg:
         raise ArmError("arm_limits.json: grip open and grip closed limit cannot be the same angle.")
+    lo, hi = limits.grip_range_deg
+    if not 0 <= lo < hi <= 180 or not lo <= limits.grip_open_deg <= hi:
+        raise ArmError(f"arm_limits.json: grip range {lo}-{hi} must be low-high within 0-180 and include open "
+                       f"({limits.grip_open_deg}).")
+    if limits.grip_closed_limit_deg not in (lo, hi):
+        raise ArmError(f"arm_limits.json: the grip closed limit {limits.grip_closed_limit_deg} must be one end of "
+                       f"the grip range {lo}-{hi}, so no angle can go past it.")
     for joint in JOINTS:
         lo, hi = limits.range_of(joint)
         if not lo <= limits.home_deg[joint] <= hi:
@@ -95,21 +113,33 @@ class FakeTransport:
     locked=True answers like the firmware does while its lock is on."""
     is_real = False
 
-    def __init__(self, limits: ArmLimits, echo=None, locked=False, boot_reason="power-on"):
+    def __init__(self, limits: ArmLimits, echo=None, locked=False, boot_reason="power-on", enabled=False):
         self.sent = []
         self.angles = [limits.home_deg[j] for j in JOINTS]
         self.home = list(self.angles)
         self.echo = echo  # e.g. print, to show each line in a dry run
         self.locked = locked
         self.boot_reason = boot_reason
+        self.enabled = enabled and not locked  # like the firmware: disarmed at power-on
 
     def send(self, line: str) -> str:
         self.sent.append(line)
         parts = line.split()
         if line == "?":
-            reply = "A " + " ".join(str(a) for a in self.angles) + (" L" if self.locked else "")
-        elif self.locked and (line == "H" or line.startswith("J")):
+            reply = "A " + " ".join(str(a) for a in self.angles) + (
+                " L" if self.locked else ("" if self.enabled else " D"))
+        elif self.locked and (line == "H" or line.startswith("J") or line.startswith("E")):
             reply = "ERR limits not measured"
+        elif line == "D":
+            self.enabled, reply = False, "OK"
+        elif parts and parts[0] == "E" and len(parts) in (1, 5):
+            if self.enabled:
+                reply = "ERR already enabled"
+            else:
+                self.angles = [ENABLE_DEFAULT_DEG] * 4 if len(parts) == 1 else [int(p) for p in parts[1:5]]
+                self.enabled, reply = True, "OK"
+        elif not self.enabled and (line == "H" or line.startswith("J")):
+            reply = "ERR not enabled"
         elif line == "H":
             self.angles, reply = list(self.home), "OK"
         elif parts and parts[0] == "J" and len(parts) == 6:
@@ -215,8 +245,19 @@ class Arm:
 
     def _send_expect_ok(self, line: str) -> None:
         reply = self._send(line)
+        if reply == "ERR not enabled":
+            self.angles = None
+            raise ArmError(f"The arm replied 'ERR not enabled' to {line!r}: its servos are off. "
+                           f"If nothing disabled it, the board restarted: {self._boot_note()}")
         if reply != "OK":
             raise ArmError(f"The arm replied {reply!r} to {line!r}.")
+
+    def _boot_note(self) -> str:
+        try:
+            boot = self.boot_reason()
+            return f"it last started ({boot['reason']}) {boot['seconds_since_boot']} s ago."
+        except ArmError as error:
+            return f"(the boot reason could not be read: {error})"
 
     def _refuse_real_move_with_unchecked_limits(self) -> None:
         if self.transport.is_real:
@@ -225,16 +266,17 @@ class Arm:
     # ---------- the four commands ----------
 
     def status(self) -> dict:
-        """The four angles plus "locked". While the firmware is locked its angles are only its own
-        numbers (no servo is driven), so they are not kept as a known pose."""
+        """The four angles plus "locked" and "armed". Unless armed (locked, or disarmed), the angles are only the
+        firmware's own numbers (no servo is driven), so they are not kept as a known pose."""
         reply = self._send("?")
         parts = reply.split()
-        locked = len(parts) == 6 and parts[5] == "L"
-        if parts[:1] != ["A"] or len(parts) not in (5, 6) or (len(parts) == 6 and not locked):
+        suffix = parts[5] if len(parts) == 6 else None
+        if parts[:1] != ["A"] or len(parts) not in (5, 6) or suffix not in (None, "L", "D"):
             raise ArmError(f"The arm replied {reply!r} to '?'.")
         angles = dict(zip(JOINTS, (int(p) for p in parts[1:5])))
-        self.angles = None if locked else angles
-        return dict(angles, locked=locked)
+        armed = suffix is None
+        self.angles = angles if armed else None
+        return dict(angles, locked=suffix == "L", armed=armed)
 
     def known_pose(self) -> dict:
         """The current pose, asking the arm if needed. Refuses if the firmware says it is locked."""
@@ -244,6 +286,9 @@ class Arm:
         if status["locked"]:
             raise ArmError("The arm's firmware is locked (its '?' reply ends with L): it drives no servo and "
                            "refuses moves. Lift the lock (needs.md) and upload the firmware again.")
+        if not status["armed"]:
+            raise ArmError("The arm is not enabled (its '?' reply ends with D): no servo is switched on. "
+                           "Enable it first (arm_jog.py: enable).")
         return {j: status[j] for j in JOINTS}
 
     def move(self, angles: dict, ms: int = 800) -> None:
@@ -281,6 +326,36 @@ class Arm:
         """Always allowed: stopping must always work."""
         self._send_expect_ok("S")
         self.angles = None  # it stopped somewhere along the way; ask before the next move
+
+    def enable(self, angles: dict | None = None, sleep=None) -> dict:
+        """Switch the servos on (E), one at a time, 0.4 s apart. Each jumps straight to its angle in `angles`
+        (default 90 for every joint), unramped, so pose the arm there by hand first. Returns the pose."""
+        self._refuse_real_move_with_unchecked_limits()
+        pose = {j: ENABLE_DEFAULT_DEG for j in JOINTS} if angles is None else {j: int(round(angles[j])) for j in JOINTS}
+        for joint, angle in pose.items():
+            lo, hi = self.limits.range_of(joint)
+            if not lo <= angle <= hi:
+                raise ArmError(f"enable: {joint} {angle} degrees is outside its range {lo}-{hi}.")
+        line = "E" if angles is None else "E " + " ".join(str(pose[j]) for j in JOINTS)
+        reply = self._send(line)
+        if reply == "ERR bad command":
+            raise ArmError("The arm's firmware has no E command (it is older than 3 Nov): upload the new build.")
+        if reply != "OK":
+            raise ArmError(f"The arm replied {reply!r} to {line!r}.")
+        (sleep or time.sleep)(ENABLE_WAIT_S)
+        status = self.status()
+        if not status["armed"]:
+            raise ArmError(f"The arm did not finish switching on after {ENABLE_WAIT_S} s: {self._boot_note()}")
+        return {j: status[j] for j in JOINTS}
+
+    def disable(self) -> None:
+        """Stop, then switch every servo off (D): the arm goes limp and sags under its own weight."""
+        reply = self._send("D")
+        self.angles = None
+        if reply == "ERR bad command":
+            raise ArmError("The arm's firmware has no D command (it is older than 3 Nov): upload the new build.")
+        if reply != "OK":
+            raise ArmError(f"The arm replied {reply!r} to 'D'.")
 
     def boot_reason(self) -> dict:
         """Why the board last started, and how long ago: {"reason": "brownout", "seconds_since_boot": 42}.

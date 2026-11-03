@@ -69,6 +69,16 @@ def test_bridge_answers_each_line_and_sends_S_at_the_end(tmp_path):
     assert log.read_text().splitlines() == FOUR_LINES + ["S"]
 
 
+def test_bridge_passes_the_B_reply_back(tmp_path):
+    out, err = run_bridge(bridge_script.FakePort("locked", tmp_path / "log.txt"), ["B"])
+    assert out == ["READY", "B power-on 3"]
+
+
+def test_fake_locked_arm_refuses_E_and_accepts_D_like_the_locked_firmware(tmp_path):
+    out, err = run_bridge(bridge_script.FakePort("locked", tmp_path / "log.txt"), ["E", "E 90 90 90 90", "D"])
+    assert out == ["READY", "ERR limits not measured", "ERR limits not measured", "OK"]
+
+
 def test_silent_arm_gives_TIMEOUT_quickly_and_still_gets_S(tmp_path):
     log = tmp_path / "log.txt"
     start = time.monotonic()

@@ -10,7 +10,7 @@ from mimic.motion import MotionError
 
 
 def fake_arm(limits):
-    t = FakeTransport(limits)
+    t = FakeTransport(limits, enabled=True)
     a = Arm(t, limits)
     a.home()
     return a, t

@@ -65,3 +65,23 @@ def test_cache_is_switched_off_and_nothing_opens_while_not_ready(monkeypatch, ca
     assert bench.main([]) == 1  # the committed layout, grid and limits are still placeholders
     assert meta_api.cache_enabled is False
     assert "STOPPED before opening anything" in capsys.readouterr().out
+
+
+def test_benchmark_enables_after_a_yes_and_disables_at_the_end(monkeypatch, tmp_path, capsys):
+    from mimic import loop, session
+    from mimic.arm import FakeTransport
+    from test_kinematics import wide_limits
+
+    limits = wide_limits()
+    transport = FakeTransport(limits)  # disarmed, like the firmware at power-on
+    monkeypatch.setattr(loop, "load_and_check", lambda push=False: (None, None, limits))
+    monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: transport)
+    monkeypatch.setattr(arm.time, "sleep", lambda s: None)
+    monkeypatch.setattr(session.time, "sleep", lambda s: None)
+    monkeypatch.setattr(config, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(meta_api, "cache_enabled", True)
+    monkeypatch.setattr(loop, "run", lambda *a, **k: run_summary(True, 3, 0.8, 0.04))
+    typed = iter(["yes"])
+    assert bench.main(["--runs", "1"], read=lambda q: next(typed, "")) == 0
+    assert transport.sent[:2] == ["?", "E"] and transport.sent[-1] == "D"
+    assert "Hold the arm" in capsys.readouterr().out

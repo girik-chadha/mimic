@@ -81,9 +81,9 @@ class FakePort:
             reply = "A 90 90 90 90 L"
         elif line == "B":
             reply = "B power-on 3"
-        elif line == "S":
+        elif line in ("S", "D"):
             reply = "OK"
-        elif line == "H" or line.startswith("J "):
+        elif line == "H" or line.startswith("J ") or line == "E" or line.startswith("E "):
             reply = "ERR limits not measured"
         else:
             reply = "ERR bad command"

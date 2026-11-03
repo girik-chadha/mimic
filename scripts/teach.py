@@ -22,6 +22,8 @@ JOG_STEPS = (1, 2, 5, 10)
 MIN_STEP_MS = 400
 DRY_RUN_GRID = config.RUNS_DIR / "pose_grid_dryrun.json"
 HELP = """commands:
+  enable [B S E G]                    switch the servos on (each jumps to 90, or to these angles); needed first
+  disable                             switch every servo off: the arm goes limp (hold it)
   base|shoulder|elbow|grip +N / -N    jog one joint by N degrees (N = 1, 2, 5 or 10)
   set <joint> <angle>                 move one joint to an angle
   save hover <x> <y>                  save the current pose as hover over (x, y) cm
@@ -30,7 +32,8 @@ HELP = """commands:
   save clear                          save the current pose as camera_clear (arm out of the photo)
   list                                show what is saved
   finish                              check the grid and mark it as taught (asks for yes)
-  home | status | stop | quit         s (or Ctrl+C) stops the arm and exits"""
+  home | status | stop | quit         quit disables the arm (hold it); s (or Ctrl+C) stops it, switches the
+                                      servos off and exits"""
 
 
 class Teacher:
@@ -59,6 +62,13 @@ class Teacher:
     def handle(self, line: str) -> str:
         words = line.strip().lower().split()
         try:
+            if words[:1] == ["enable"] and len(words) in (1, 5) and all(w.isdigit() for w in words[1:]):
+                angles = dict(zip(JOINTS, (int(w) for w in words[1:]))) if len(words) == 5 else None
+                pose = self.arm.enable(angles)
+                return "enabled, servos on at " + ", ".join(f"{j} {pose[j]}" for j in JOINTS)
+            if words == ["disable"]:
+                self.arm.disable()
+                return "disabled: the servos are off (limp)"
             if words in (["home"], ["status"], ["stop"]):
                 if words == ["home"]:
                     self.arm.home()

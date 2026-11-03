@@ -42,7 +42,7 @@ class FakeWorld(FakeTransport):
     """The arm plus the blocks on the table."""
 
     def __init__(self, limits, grid):
-        super().__init__(limits)
+        super().__init__(limits, enabled=True)  # switched on (run_mimic enables first)
         self.grid = grid
         self.blocks = {}
         self.held = None

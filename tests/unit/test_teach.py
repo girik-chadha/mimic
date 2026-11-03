@@ -20,7 +20,7 @@ def teacher(tmp_path):
     grid_path = tmp_path / "pose_grid.json"
     shutil.copy(kinematics.POSE_GRID_PATH, grid_path)
     limits = wide_limits()
-    t = FakeTransport(limits)
+    t = FakeTransport(limits, enabled=True)
     return teach.Teacher(Arm(t, limits), grid_path, ask=lambda q: "yes"), t, grid_path
 
 
@@ -32,11 +32,26 @@ def test_jog_steps_are_1_2_5_or_10(teacher):
     assert [line for line in t.sent if line.startswith("J")] == ["J 95 90 90 90 400", "J 95 90 80 90 400"]
 
 
+def test_enable_and_disable_commands(tmp_path, monkeypatch):
+    limits = arm.load_limits(config.ARM_LIMITS_PATH)
+    t = FakeTransport(limits)                      # disarmed, like the firmware at power-on
+    grid_path = tmp_path / "grid.json"
+    shutil.copy(kinematics.POSE_GRID_PATH, grid_path)
+    monkeypatch.setattr(arm.time, "sleep", lambda s: None)
+    tt = teach.Teacher(Arm(t, limits), grid_path, ask=lambda q: "no")
+    assert tt.handle("set base 100").startswith("refused: The arm is not enabled")
+    assert tt.handle("enable") == "enabled, servos on at base 90, shoulder 90, elbow 90, grip 90"
+    assert tt.handle("set base 100") == "base now 100"
+    assert tt.handle("disable") == "disabled: the servos are off (limp)"
+    assert tt.handle("enable 100 90 90 90") == "enabled, servos on at base 100, shoulder 90, elbow 90, grip 90"
+    assert [line for line in t.sent if line[0] in "EDJ"] == ["E", "J 100 90 90 90 400", "D", "E 100 90 90 90"]
+
+
 def test_set_goes_through_the_range_and_speed_limits(teacher):
     tt, t, _ = teacher
     assert tt.handle("set base 150") == "base now 150"
     assert t.sent[-1] == "J 150 90 90 90 600"            # 60 degrees * 10 ms
-    assert tt.handle("set grip 200").startswith("refused: grip 200 degrees is outside its range 90-140")
+    assert tt.handle("set grip 200").startswith("refused: grip 200 degrees is outside its range 40-140")
 
 
 def test_saving_poses_and_finishing(teacher):
@@ -74,7 +89,7 @@ def test_finish_needs_yes(tmp_path):
     grid_path = tmp_path / "g.json"
     shutil.copy(kinematics.POSE_GRID_PATH, grid_path)
     limits = wide_limits()
-    tt = teach.Teacher(Arm(FakeTransport(limits), limits), grid_path, ask=lambda q: "no")
+    tt = teach.Teacher(Arm(FakeTransport(limits, enabled=True), limits), grid_path, ask=lambda q: "no")
     for x, y in [(0, 0), (30, 0), (30, 24), (0, 24)]:
         tt.handle(f"save hover {x} {y}")
         tt.handle(f"save grab {x} {y}")

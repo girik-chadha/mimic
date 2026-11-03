@@ -11,11 +11,11 @@ import argparse
 import sys
 
 from mimic import arm as arm_module
-from mimic import camera, kinematics, loop, scene
+from mimic import camera, kinematics, loop, scene, session
 from mimic.arm import Arm, ArmError
 
 
-def main(argv=None) -> int:
+def main(argv=None, read=input) -> int:
     parser = argparse.ArgumentParser(description="The full run with the real arm and camera.")
     parser.add_argument("--push", action="store_true",
                         help="push mode: push each block into its slot instead of picking it up (needs grip_push)")
@@ -26,16 +26,16 @@ def main(argv=None) -> int:
         print(f"STOPPED before opening anything: {error}")
         return 1
     arm = Arm(arm_module.SerialBridgeTransport(), limits)
-    try:
+
+    def body():
+        session.confirm_and_enable(arm, read)  # the board starts disarmed
         summary = loop.run(arm, camera.capture, layout, grid, limits, push=args.push)
         print(f"{'SUCCESS' if summary['success'] else 'FINISHED WITH FAILURES'}: "
               f"{summary['attempts']} attempts, worst error {summary['max_error_cm']} cm, ${summary['cost_usd']}")
         return 0 if summary["success"] else 2
-    except Exception as error:
-        print(f"STOPPED: {type(error).__name__}: {error}")
-        return 1
-    finally:
-        arm.transport.close()  # the bridge sends S as it closes
+
+    # s, Ctrl+C or an error: S then D; a normal end: "hold the arm", then D. The bridge closes either way.
+    return session.guarded(arm, body)
 
 
 if __name__ == "__main__":

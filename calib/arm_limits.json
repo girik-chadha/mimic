@@ -1,11 +1,12 @@
 {
   "placeholder": false,
   "limits_checked_by_hand": true,
-  "note": "KIT RANGES (3 Nov), from the kit's sample code, untested on this arm: for the first powered session only (needs.md C7). scripts/first_moves.py explores inside them (at most 45 degrees from home by default) and proposes measured ranges in calib/arm_limits_proposed.json. Must match firmware/mimic_arm/arm_logic.h (a unit test checks). Real moves need placeholder false AND limits_checked_by_hand true. Pins (2 Nov) are from the kit's sample code, untested on this arm.",
+  "note": "KIT RANGES (3 Nov), from the kit's sample code, untested on this arm: for the first powered session only (needs.md C7). scripts/first_moves.py explores inside them (at most 45 degrees from home by default) and proposes measured ranges in calib/arm_limits_proposed.json. Must match firmware/mimic_arm/arm_logic.h (a unit test checks). Real moves need placeholder false AND limits_checked_by_hand true. Pins (2 Nov) are from the kit's sample code, untested on this arm. grip_range_deg (3 Nov) widened to 40-140 so the grip can go below open (grip -5 from the open stop) to find which way the claw closes; open 90 and the closed limit 140 are unchanged, and the closed limit must be one end of the range.",
   "pins": {"base": 16, "shoulder": 17, "elbow": 2, "grip": 4},
   "ranges_deg": {"base": [0, 180], "shoulder": [80, 180], "elbow": [30, 120]},
   "grip_open_deg": 90,
   "grip_closed_limit_deg": 140,
+  "grip_range_deg": [40, 140],
   "home_deg": {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90},
   "min_ms_per_degree": 10,
   "max_grip_hold_s": 5

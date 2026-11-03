@@ -123,6 +123,7 @@ def main(argv=None, read=input, sleep=time.sleep, say=print, proposed_path=None)
         return 1
 
     def body():
+        session.confirm_and_enable(arm, read, say, sleep)  # the board starts disarmed
         approved = explore(arm, limits, args.max_delta, lambda q: session.ask(q, read), say, sleep)
         data = proposal(config.ARM_LIMITS_PATH, limits, approved)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -134,7 +135,7 @@ def main(argv=None, read=input, sleep=time.sleep, say=print, proposed_path=None)
             say(f"  {joint}: {lo}-{hi}{warn}")
         say(f"Written to {out}. calib/arm_limits.json was not changed.")
 
-    return session.guarded(arm, body, say)
+    return session.guarded(arm, body, say, sleep)
 
 
 if __name__ == "__main__":

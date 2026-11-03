@@ -3,11 +3,14 @@
     python scripts/arm_jog.py --dry-run
 
 Type one command per line:
+    enable         switch the servos on (one at a time, each jumps to 90); enable B S E G starts at those angles
+    disable        switch every servo off: the arm goes limp (hold it)
     base +5        shoulder -3        elbow +10        (degrees, one joint at a time)
     grip open      grip close
     home           status             stop             quit
     boot           why the board last started (power-on, brownout, ...) and how long ago
-    s (or Ctrl+C)  stop the arm and exit
+    s (or Ctrl+C)  stop the arm, switch the servos off, and exit
+The board starts disarmed: type enable before anything can move. quit disables the arm (hold it).
 
 --dry-run prints every line that would be sent, without an arm. Without --dry-run it talks to the
 real arm through the Windows serial bridge, but only once calib/arm_limits.json is no longer a
@@ -20,8 +23,8 @@ from mimic import arm as arm_module
 from mimic import session
 from mimic.arm import JOINTS, Arm, ArmError
 
-HELP = ("commands: base|shoulder|elbow|grip +N/-N, grip open, grip close, home, status, boot, stop, quit, "
-        "s (stop + exit)")
+HELP = ("commands: enable [B S E G], disable, base|shoulder|elbow|grip +N/-N, grip open, grip close, home, status, "
+        "boot, stop, quit, s (stop + exit)")
 BOOT_MEANING = {
     "power-on": "switched on, the reset button, or an upload",
     "brownout": "the ESP32's own supply dropped too low and it restarted: switch off, check the batteries",
@@ -36,6 +39,17 @@ def handle(arm: Arm, line: str) -> str:
     """Carry out one typed command and say what happened."""
     words = line.strip().lower().split()
     try:
+        if words[:1] == ["enable"] and len(words) in (1, 5):
+            angles = None
+            if len(words) == 5:
+                if not all(w.isdigit() for w in words[1:]):
+                    return HELP
+                angles = dict(zip(JOINTS, (int(w) for w in words[1:])))
+            pose = arm.enable(angles)
+            return "enabled, servos on at " + ", ".join(f"{j} {pose[j]}" for j in JOINTS)
+        if words == ["disable"]:
+            arm.disable()
+            return "disabled: the servos are off (limp)"
         if words == ["home"]:
             arm.home()
             return "home"

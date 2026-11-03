@@ -30,3 +30,39 @@ def test_push_mode_without_grip_push_refuses_before_opening_anything(monkeypatch
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("serial bridge opened"))
     assert run_mimic.main(["--push"]) == 1
     assert "STOPPED before opening anything: Push mode needs grip_push" in capsys.readouterr().out
+
+
+def ready(monkeypatch, typed):
+    """Everything ready, a fake (disarmed) arm in place of the bridge, and loop.run replaced by a stand-in."""
+    from mimic import loop, session
+    from mimic.arm import FakeTransport
+
+    limits = wide_limits()
+    transport = FakeTransport(limits)  # disarmed, like the firmware at power-on
+    monkeypatch.setattr(loop, "load_and_check", lambda push=False: (None, None, limits))
+    monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: transport)
+    monkeypatch.setattr(arm.time, "sleep", lambda s: None)
+    monkeypatch.setattr(session.time, "sleep", lambda s: None)
+    runs = []
+
+    def fake_run(a, capture, layout, grid, limits, push=False):
+        runs.append(a.status()["armed"])
+        return {"success": True, "attempts": 3, "max_error_cm": 0.4, "cost_usd": 0.05}
+
+    monkeypatch.setattr(loop, "run", fake_run)
+    return transport, runs, (lambda q: typed)
+
+
+def test_run_mimic_enables_after_a_yes_and_disables_at_the_end(monkeypatch, capsys):
+    transport, runs, read = ready(monkeypatch, "yes")
+    assert run_mimic.main([], read=read) == 0
+    assert runs == [True]                                  # the run started with the servos on
+    assert transport.sent[:2] == ["?", "E"] and transport.sent[-1] == "D"
+    assert "Hold the arm" in capsys.readouterr().out
+
+
+def test_run_mimic_does_not_run_without_a_yes(monkeypatch, capsys):
+    transport, runs, read = ready(monkeypatch, "no")
+    assert run_mimic.main([], read=read) == 1
+    assert runs == [] and transport.sent == ["?"]
+    assert "Not enabled: nothing was moved." in capsys.readouterr().out

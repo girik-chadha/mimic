@@ -39,7 +39,7 @@ def test_steps_in_one_direction_stop_at_the_range_edge_or_max_delta():
 
 def test_each_direction_stops_at_its_first_n():
     limits = limits_for_test()
-    t = FakeTransport(limits)
+    t = FakeTransport(limits, enabled=True)
     a = Arm(t, limits)
     approved = fm.explore(a, limits, 45, answers(
         "y", "y", "y", "n", "n",      # base: +5 y, -5 y, +10 y, -10 n, +15 n
@@ -55,7 +55,7 @@ def test_each_direction_stops_at_its_first_n():
 
 def test_moves_are_slow():
     limits = limits_for_test()
-    t = FakeTransport(limits)
+    t = FakeTransport(limits, enabled=True)
     fm.explore(Arm(t, limits), limits, 45, answers(*["n"] * 6), say=lambda s: None, sleep=lambda s: None)
     for line in t.sent:
         if line.startswith("J"):
@@ -64,7 +64,7 @@ def test_moves_are_slow():
 
 def test_base_is_capped_by_max_delta():
     limits = limits_for_test(shoulder=(85, 95), elbow=(85, 95))
-    t = FakeTransport(limits)
+    t = FakeTransport(limits, enabled=True)
     fm.explore(Arm(t, limits), limits, 45, answers(*["y"] * 22), say=lambda s: None, sleep=lambda s: None)
     bases = [m[0] for m in j_lines(t)]
     assert max(bases) == 135 and min(bases) == 45
@@ -89,7 +89,7 @@ def run_main(monkeypatch, tmp_path, typed, argv=("--dry-run",)):
 
 def test_dry_run_writes_the_proposal_and_never_arm_limits(monkeypatch, tmp_path):
     before = config.ARM_LIMITS_PATH.read_bytes()
-    code, out, said = run_main(monkeypatch, tmp_path, ["y"] * 18 + ["n"] * 4)
+    code, out, said = run_main(monkeypatch, tmp_path, ["yes"] + ["y"] * 18 + ["n"] * 4)   # yes: enable first
     assert code == 0 and out.exists()
     assert json.loads(out.read_text())["ranges_deg"]["base"] == [50, 130]
     assert config.ARM_LIMITS_PATH.read_bytes() == before
@@ -105,9 +105,25 @@ def test_s_stops_with_S_and_writes_nothing(monkeypatch, tmp_path):
         return a
 
     monkeypatch.setattr(session, "connect", connect)
-    code, out, said = run_main(monkeypatch, tmp_path, ["y", "s"])
+    code, out, said = run_main(monkeypatch, tmp_path, ["yes", "y", "s"])
     assert code == 130 and not out.exists()
-    assert sent[0].sent[-1] == "S"
+    assert sent[0].sent[-2:] == ["S", "D"]   # stop, then switch the servos off
+
+
+def test_it_enables_first_and_a_no_moves_nothing(monkeypatch, tmp_path):
+    sent = []
+    real_connect = session.connect
+
+    def connect(dry_run, limits, echo=print):
+        a = real_connect(dry_run, limits, echo=None)
+        sent.append(a.transport)
+        return a
+
+    monkeypatch.setattr(session, "connect", connect)
+    code, out, said = run_main(monkeypatch, tmp_path, ["no"])
+    assert code == 1 and not out.exists()
+    assert sent[0].sent == ["?"] and "Not enabled: nothing was moved." in said
+    assert any("one at a time, 0.4 s apart" in line for line in said)
 
 
 def test_real_arm_refused_while_locked(monkeypatch, tmp_path):

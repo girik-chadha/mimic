@@ -27,7 +27,7 @@ class RealLookingTransport(FakeTransport):
 
 def fake_arm(limits=None, transport_class=FakeTransport):
     limits = limits or committed_limits()
-    transport = transport_class(limits)
+    transport = transport_class(limits, enabled=True)  # already switched on (E)
     return Arm(transport, limits), transport
 
 
@@ -52,6 +52,7 @@ def test_firmware_limits_match_arm_limits_json():
     assert arrays["HOME"] == [limits.home_deg[j] for j in arm.JOINTS]
     assert scalars["GRIP_OPEN"] == limits.grip_open_deg
     assert scalars["GRIP_CLOSED_LIMIT"] == limits.grip_closed_limit_deg
+    assert arrays["GRIP_RANGE"] == list(limits.grip_range_deg)
     assert scalars["MIN_MS_PER_DEGREE"] == limits.min_ms_per_degree
     assert scalars["MAX_GRIP_HOLD_MS"] == limits.max_grip_hold_s * 1000
     assert scalars["MAX_LINE"] == arm.MAX_LINE_CHARS
@@ -68,6 +69,7 @@ def test_committed_limits_are_unlocked_with_the_kit_ranges_for_the_first_powered
     assert limits.placeholder is False and limits.limits_checked_by_hand is True
     assert limits.ranges_deg == {"base": (0, 180), "shoulder": (80, 180), "elbow": (30, 120)}
     assert (limits.grip_open_deg, limits.grip_closed_limit_deg) == (90, 140)   # 140 since 3 Nov (kit's own: 150)
+    assert limits.grip_range_deg == (40, 140)   # 3 Nov: below open too, to find which way the claw closes
     assert limits.home_deg == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
 
 
@@ -96,9 +98,77 @@ def test_home_sends_H():
 
 def test_status_sends_question_mark_and_reads_the_reply():
     a, t = fake_arm()
-    assert a.status() == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "locked": False}
+    assert a.status() == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "locked": False, "armed": True}
     assert t.sent == ["?"]
     assert a.angles == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
+
+
+# ---------- disarmed at power-on: E (enable) and D (disable) ----------
+
+def disarmed_arm(limits=None):
+    limits = limits or committed_limits()
+    t = FakeTransport(limits)   # like the firmware: disarmed at power-on
+    return Arm(t, limits), t
+
+
+def test_a_disarmed_arm_reports_D_and_refuses_moves():
+    a, t = disarmed_arm()
+    assert a.status() == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "locked": False, "armed": False}
+    assert a.angles is None   # the firmware's own numbers: no servo is driven
+    with pytest.raises(ArmError, match="not enabled .* ends with D.*Enable it first"):
+        a.move({"base": 95, "shoulder": 90, "elbow": 90, "grip": 90}, ms=800)
+    assert t.sent == ["?", "?"]
+
+
+def test_enable_sends_E_waits_for_all_four_servos_and_knows_the_pose():
+    a, t = disarmed_arm()
+    waits = []
+    assert a.enable(sleep=waits.append) == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
+    assert t.sent == ["E", "?"] and waits == [arm.ENABLE_WAIT_S] and arm.ENABLE_WAIT_S > 1.2
+    a.move({"base": 95, "shoulder": 90, "elbow": 90, "grip": 90}, ms=800)
+    assert t.sent[-1] == "J 95 90 90 90 800"
+
+
+def test_enable_with_angles_sends_them_and_refuses_out_of_range_ones():
+    a, t = disarmed_arm()
+    pose = {"base": 100, "shoulder": 85, "elbow": 70, "grip": 85}
+    assert a.enable(pose, sleep=lambda s: None) == pose
+    assert t.sent[0] == "E 100 85 70 85"
+    b, u = disarmed_arm()
+    with pytest.raises(ArmError, match="enable: shoulder 70 degrees is outside its range 80-180"):
+        b.enable({"base": 90, "shoulder": 70, "elbow": 90, "grip": 90}, sleep=lambda s: None)
+    assert u.sent == []
+
+
+def test_enable_twice_and_old_firmware_are_clear_errors():
+    a, t = disarmed_arm()
+    a.enable(sleep=lambda s: None)
+    with pytest.raises(ArmError, match="replied 'ERR already enabled'"):
+        a.enable(sleep=lambda s: None)
+    b, u = disarmed_arm()
+    u.send = lambda line: "ERR bad command"   # the build on the board before 3 Nov
+    with pytest.raises(ArmError, match="no E command .* upload the new build"):
+        b.enable(sleep=lambda s: None)
+    with pytest.raises(ArmError, match="no D command .* upload the new build"):
+        b.disable()
+
+
+def test_disable_sends_D_and_forgets_the_pose():
+    a, t = fake_arm()
+    a.home()
+    a.disable()
+    assert t.sent == ["H", "D"] and a.angles is None and not t.enabled
+    with pytest.raises(ArmError, match="not enabled"):
+        a.home()
+
+
+def test_a_restart_while_enabled_says_so_with_the_boot_reason():
+    a, t = fake_arm()
+    a.home()
+    t.enabled, t.boot_reason = False, "brownout"    # the board restarted: it comes back disarmed
+    with pytest.raises(ArmError, match=r"ERR not enabled.*board restarted: it last started \(brownout\) 12 s ago"):
+        a.move({"base": 95, "shoulder": 90, "elbow": 90, "grip": 90}, ms=800)
+    assert t.sent[-1] == "B" and a.angles is None
 
 
 # ---------- a locked firmware ("?" ends with L) ----------
@@ -106,7 +176,7 @@ def test_status_sends_question_mark_and_reads_the_reply():
 def test_locked_status_is_reported_and_not_kept_as_a_pose():
     limits = committed_limits()
     a = Arm(FakeTransport(limits, locked=True), limits)
-    assert a.status() == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "locked": True}
+    assert a.status() == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "locked": True, "armed": False}
     assert a.angles is None  # the firmware's own numbers, not where the servos really are
 
 
@@ -120,6 +190,29 @@ def test_move_refuses_when_the_firmware_says_it_is_locked():
     with pytest.raises(ArmError, match="firmware is locked"):
         a.grip(closed=True)
     assert t.sent == ["?", "?"]  # it asked, and sent no move
+
+
+def test_grip_can_go_5_degrees_below_open():
+    a, t = fake_arm()
+    a.home()
+    a.move({"base": 90, "shoulder": 90, "elbow": 90, "grip": 85}, ms=500)   # "grip -5" from the open stop
+    assert t.sent[-1] == "J 90 90 90 85 500"
+
+
+def test_closed_limit_must_be_one_end_of_the_grip_range(tmp_path):
+    data = json.loads(config.ARM_LIMITS_PATH.read_text())
+    data["grip_range_deg"] = [40, 150]     # would let the grip close past its 140 limit
+    path = tmp_path / "limits.json"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ArmError, match="closed limit 140 must be one end of the grip range 40-150"):
+        arm.load_limits(path)
+    data["grip_range_deg"] = [95, 140]     # open (90) outside the range
+    path.write_text(json.dumps(data))
+    with pytest.raises(ArmError, match="include open"):
+        arm.load_limits(path)
+    del data["grip_range_deg"]             # an older file: the range is open .. closed limit
+    path.write_text(json.dumps(data))
+    assert arm.load_limits(path).grip_range_deg == (90, 140)
 
 
 @pytest.mark.parametrize("reply", ["A 90 90 90 90 X", "A 90 90 90 90 L extra", "B 90 90 90 90"])
@@ -205,7 +298,8 @@ def test_stop_sends_S_and_forgets_the_pose():
     ({"base": 181, "shoulder": 90, "elbow": 90, "grip": 90}, "base 181 degrees is outside its range 0-180"),
     ({"base": 90, "shoulder": 79, "elbow": 90, "grip": 90}, "shoulder 79 degrees is outside its range 80-180"),
     ({"base": 90, "shoulder": 90, "elbow": 121, "grip": 90}, "elbow 121 degrees is outside its range 30-120"),
-    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 141}, "grip 141 degrees is outside its range 90-140"),
+    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 141}, "grip 141 degrees is outside its range 40-140"),
+    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 39}, "grip 39 degrees is outside its range 40-140"),
     ({"base": 90, "shoulder": 90, "elbow": 90}, "needs exactly these joints"),
     ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "wrist": 90}, "needs exactly these joints"),
 ])

@@ -149,6 +149,7 @@ def main(argv=None, read=input, sleep=time.sleep, say=print, proposed_path=PROPO
         return 1
 
     def body():
+        session.confirm_and_enable(arm, read, say, sleep)  # the board starts disarmed
         angle = run_test(arm, lift, lambda q: session.ask(q, read), say, sleep)
         if angle is None:
             return 2
@@ -157,7 +158,7 @@ def main(argv=None, read=input, sleep=time.sleep, say=print, proposed_path=PROPO
         proposed_path.write_text(json.dumps(data, indent=2) + "\n")
         say(f"grip_hold_deg = {angle} written to {proposed_path} (use it as grip_closed when teaching).")
 
-    return session.guarded(arm, body, say)
+    return session.guarded(arm, body, say, sleep)
 
 
 if __name__ == "__main__":

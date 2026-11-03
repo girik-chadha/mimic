@@ -41,7 +41,7 @@ def test_lift_can_use_several_joints_up_to_10_degrees():
 
 def test_closes_in_2_degree_steps_opening_between_and_lifts_at_the_first_yes():
     limits = proposed_limits()
-    t = FakeTransport(limits)
+    t = FakeTransport(limits, enabled=True)
     a = Arm(t, limits)
     sent_when_placing = []
 
@@ -63,14 +63,14 @@ def test_closes_in_2_degree_steps_opening_between_and_lifts_at_the_first_yes():
 
 def test_not_held_through_the_lift_gives_no_angle():
     limits = proposed_limits()
-    a = Arm(FakeTransport(limits), limits)
+    a = Arm(FakeTransport(limits, enabled=True), limits)
     assert gt.run_test(a, {"shoulder": -4}, answers(None, "", "y", "n"), say=lambda s: None,
                        sleep=lambda s: None) is None
 
 
 def test_lift_test_refused_if_the_grip_would_be_closed_too_long():
     limits = proposed_limits(max_grip_hold_s=2.5)   # allowed 2.0 s; close + lift + 2 s hold + lower is more
-    t = FakeTransport(limits)
+    t = FakeTransport(limits, enabled=True)
     with pytest.raises(gt.GripTestError, match="would hold the grip closed for .* Nothing was moved"):
         gt.run_test(Arm(t, limits), {"shoulder": -4}, answers(None, "", "y"), say=lambda s: None,
                     sleep=lambda s: None)
@@ -84,7 +84,7 @@ def test_main_records_the_angle_in_the_proposal_only(monkeypatch, tmp_path):
                 ranges_deg={"base": [45, 135], "shoulder": [80, 120], "elbow": [60, 120]})
     proposed.write_text(json.dumps(data))
     before = config.ARM_LIMITS_PATH.read_bytes()
-    code = gt.main(["--lift", "shoulder -4", "--dry-run"], read=answers(None, "", "n", "y", "y"),
+    code = gt.main(["--lift", "shoulder -4", "--dry-run"], read=answers(None, "yes", "", "n", "y", "y"),
                    sleep=lambda s: None, say=lambda s: None, proposed_path=proposed)
     assert code == 0
     assert json.loads(proposed.read_text())["grip_hold_deg"] == 94

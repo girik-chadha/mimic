@@ -69,9 +69,9 @@ def test_backlash_is_the_gap_between_the_two_approaches_and_target_is_optional()
 class FakeSession:
     """Fake arm, camera and SAM. The marker is dot-sized, so the dot finder sees 7 candidates."""
 
-    def __init__(self, monkeypatch, markers):
+    def __init__(self, monkeypatch, markers, enabled=True):
         self.limits = wide_limits()
-        self.transport = FakeTransport(self.limits)
+        self.transport = FakeTransport(self.limits, enabled=enabled)
         self.arm = Arm(self.transport, self.limits)
         self.layout = dataclasses.replace(scene.load_layout(config.LAYOUT_PATH), placeholder=False)
         self.markers = list(markers)
@@ -120,6 +120,21 @@ def test_main_caps_cost_at_10_cents_and_turns_the_cache_off(monkeypatch, tmp_pat
     assert set(fake.budget_seen) == {0.10} and set(fake.cache_seen) == {False}
     assert config.BUDGET_USD == 1.0 and meta_api.cache_enabled is True   # both put back
     assert any(line.startswith("Verdict:") for line in said)
+
+
+def test_main_asks_before_enabling_and_a_no_moves_nothing(monkeypatch, tmp_path):
+    fake = FakeSession(monkeypatch, [(12.0, 8.0), (12.1, 8.0)], enabled=False)   # disarmed, as at power-on
+    monkeypatch.setattr(scene, "load_layout", lambda path=config.LAYOUT_PATH: fake.layout)
+    monkeypatch.setattr(session, "connect", lambda dry_run, limits, echo=print: fake.arm)
+    said = []
+    assert rp.main(["--pose", "100", "80", "95", "90", "--shots", "2"], capture=lambda p: pytest.fail("photo"),
+                   sleep=lambda s: None, say=said.append, out_root=tmp_path, read=lambda q: "no") == 1
+    assert fake.transport.sent == ["?"] and "Not enabled: nothing was moved." in said
+    said.clear()
+    assert rp.main(["--pose", "100", "80", "95", "90", "--shots", "2"], capture=fake.capture,
+                   sleep=lambda s: None, say=said.append, out_root=tmp_path, read=lambda q: "yes") == 0
+    assert "E" in fake.transport.sent and fake.transport.sent[-1] == "D"   # enabled first, disabled at the end
+    assert any(line.startswith("Hold the arm") for line in said)
 
 
 def test_measured_dots_are_enough_while_the_rest_of_the_layout_is_a_placeholder(monkeypatch, tmp_path):

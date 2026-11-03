@@ -238,14 +238,15 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 
 | # | Question | Test that settles it | When |
 |---|---|---|---|
-| B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). **3 Nov: the kit's own ranges, from its sample code and untested on this arm, are in `calib/arm_limits.json` and `arm_logic.h` for the first powered session: base 0-180, shoulder 80-180, elbow 30-120, grip open 90 / closed limit 140, home 90 for every joint.** The grip closed limit was raised from 120 to 140 the same day (the kit's own limit is 150): a 19 mm die needs the jaws closer than 120 would allow. How far the jaws move per degree is not measured yet, so `grip_test.py`'s 2-degree steps find the angle that holds. | `scripts/first_moves.py` (needs.md C7) measures the real ranges; link lengths and gripper opening with a ruler. | First powered session |
+| B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). **3 Nov: the kit's own ranges, from its sample code and untested on this arm, are in `calib/arm_limits.json` and `arm_logic.h` for the first powered session: base 0-180, shoulder 80-180, elbow 30-120, grip open 90 / closed limit 140, home 90 for every joint.** The grip closed limit was raised from 120 to 140 the same day (the kit's own limit is 150): a 19 mm die needs the jaws closer than 120 would allow. How far the jaws move per degree is not measured yet, so `grip_test.py`'s 2-degree steps find the angle that holds. **3 Nov: grip range widened to 40-140 to find which way the claw closes (B15): Girik's claw may close by decreasing the angle.** | `scripts/first_moves.py` (needs.md C7) measures the real ranges; link lengths and gripper opening with a ruler. | First powered session |
 | B6 | How precise is the arm at our table distances? | `scripts/repeatability.py --pose B S E G`: the same pose 10 times from alternating sides, the camera measures the claw-tip marker; spread (mean, standard deviation, max), backlash, verdict against the 1.5 cm tolerance. | First powered session |
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
 | B13 | The demo video, on the first real `show_demo.py` run: does SAM accept the shrunk video (10 fps H.264, made by ffmpeg, not a phone)? How long does a video call take (our timeout for video is 300 s; the 28 Oct call was never timed)? Does a track keep its id while a hand moves the block (A3's open question; if not, `show_demo.py` stops with "2 tracks")? | `python scripts/show_demo.py demo.mp4 --save-replies` on an 8-10 s video of the real sheet. Since 3 Nov it needs only the measured dots (`dots_measured`); the slot positions are still placeholders, so the blocks must sit within 3 cm of the slots in `layout.json` or it stops with "not in a slot". About $0.10-0.13 for 3 blocks. | Dots measured 3 Nov; when the video is recorded |
 | B14 | Does Spark name the dice "colour die" with the new prompt line, and does SAM find exactly 1 box for each such name (two dice of similar colours could share one)? | One real `brain.name_objects` call on a photo of the dice on the sheet; save Spark's reply and each SAM reply as fixtures. About $0.01-0.02. | When the dice photo is taken |
-| B12 | Does opening COM7 reset the board? The bridge sets DTR and RTS low before opening so that it should not. If it does, every session restarts the arm (each servo jumps to home again) and a brownout is hidden by the next power-on. | After the upload (C7 step 4): `arm_jog.py`, type `boot` at once, `quit`, wait a minute, repeat. If the seconds are always 2-3, opening resets the board. | First powered session |
+| B15 | **Which way does the claw close? (Girik, 3 Nov: my claw may close by decreasing the angle.)** Everything so far assumes a larger angle closes it. To test it, the grip range is widened to 40-140 in both limit files (open 90 and closed limit 140 unchanged), so `grip -5` from the open stop is allowed. **Until it is settled the 140 limit only guards the high side: if decreasing closes the claw, nothing but the 5 s relaxation stops it squeezing down to 40.** What assumes "closed = larger angle" (not changed yet): the closed limit's place (`GRIP_CLOSED_LIMIT 140` in arm_logic.h, `grip_closed_limit_deg` in arm_limits.json); `Arm.grip(closed=True)` and `arm_jog`'s `grip close` (go straight to 140); `grip_test.py` (steps towards the closed limit, from open); the `grip_push` rule ("tips touch, minus 2 degrees") in motion.py's comments, the kinematics error text, pose_grid.json's note and C7 step 12, and the check that only refuses grip_push equal to 140; the B4 note (closer than 120 needs a larger angle); the g++ test's `GRIP_DIR` (follows the limit). Already direction-free: the firmware's 5 s relaxation (it counts the grip as closed more than 5 degrees from open on either side and relaxes it to open), the grip clamp (the range), and motion.py's grip timing (taught angles). | C7 step 9: `grip -5` from open, watch the jaws. Then move the closed limit to the closing side in both files and fix the list. | First powered session |
+| B12 | Does opening COM7 reset the board? The bridge sets DTR and RTS low before opening so that it should not. If it does, every session restarts the arm (since 3 Nov: it comes back disarmed, so an enabled arm goes limp at every session start) and a brownout is hidden by the next power-on. | After the upload (C7 step 4): `arm_jog.py`, type `boot` at once, `quit`, wait a minute, repeat. If the seconds are always 2-3, opening resets the board. | First powered session |
 
 ---
 
@@ -276,9 +277,11 @@ BASETEN_API_KEY=...          # Mon, optional
 - **Arm power-on while locked (2 Nov):** the firmware never attaches a servo and never writes an angle, so the
   servos get no signal at all. Only `?` (replies `A 90 90 90 90 L`, the firmware's own numbers, not a real pose)
   and `S` work; `J` and `H` reply `ERR limits not measured`.
-- **Arm power-on once unlocked (29 Oct):** hobby servos cannot report their position, so when the arm is powered
-  the firmware sends every joint to the home pose and they jump there. The home pose must therefore be a safe pose:
-  clear of the table, the blocks and the camera. Always send `H` before switching off, so the next jump is small.
+- **Arm power-on once unlocked (changed 3 Nov):** the board starts **disarmed**: no servo is switched on and no
+  signal is sent, so power-on and restarts never move the arm (a restart while enabled makes it go limp instead).
+  `enable` (E) switches the servos on one at a time, 0.4 s apart, and each jumps straight to its starting angle
+  (default 90): hobby servos cannot report their position. Pose the arm there by hand first. `disable` (D) makes
+  every joint limp, so the arm sags: hold it.
 
 - White table, bright even light, no hard shadows.
 - **Two flags in `layout.json` (3 Nov):** `dots_measured` (the 6 dots are ruler-measured: true since 3 Nov) is
@@ -299,77 +302,90 @@ BASETEN_API_KEY=...          # Mon, optional
 - Blocks: solid, 2-3 cm, clearly different colours, none white or pale. Buy them after measuring the gripper opening (B4).
 - Nothing personal, no faces, in the camera's view.
 
-### C7. First powered session (scripts written 2 Nov against fakes; checklist revised 3 Nov)
+### C7. First powered session (scripts written 2 Nov against fakes; checklist revised 3 Nov for the disarmed start)
 
-In every script, **s** at any prompt or **Ctrl+C** sends S (stop) and exits. If anything buzzes, strains or
-smells: switch the batteries off.
+**The board now starts disarmed (3 Nov):** at power-on no servo is switched on and no signal is sent, so connecting
+the batteries, or a restart, never moves the arm. `enable` (E) switches the servos on one at a time, 0.4 s apart
+(base, shoulder, elbow, claw), and each one jumps straight to its starting angle (default 90; `enable B S E G` to
+give your own), unramped. `disable` (D) stops the arm and switches every servo off: **the arm goes limp and sags
+under its own weight**, so keep a hand under it.
+In every script, **s** at any prompt or **Ctrl+C** sends S (stop) then D (limp) and exits; any other error prints
+the reason, then sends S and D; a normal `quit` says "Hold the arm", waits 2 s and disables. If anything buzzes,
+strains or smells: switch the batteries off.
 
-**Before power** (steps 1-3 prepared 3 Nov: kit ranges in both files, grip closed limit 140, unlocked, staggered
-start-up, firmware compiled and copied to `C:\Users\girik\mimic_firmware\mimic_arm`; not uploaded yet)
+**Before power** (steps 1-3 prepared 3 Nov: kit ranges in both files, grip closed limit 140 and grip range 40-140,
+unlocked, disarmed start with E and D, B command, firmware compiled and copied to
+`C:\Users\girik\mimic_firmware\mimic_arm`; not uploaded yet)
 1. Write the kit's own joint ranges (B4) into **both** `calib/arm_limits.json` and
    `firmware/mimic_arm/arm_logic.h`, home 90 for every joint. `.venv/bin/pytest` (the sync test must pass).
 2. `python scripts/arm_lock.py unlock` (type yes). For this session the hand check is earned by `first_moves.py`
-   itself (step 10). Update `test_committed_limits_are_unlocked...` in the same commit.
+   itself (step 11). Update `test_committed_limits_are_unlocked...` in the same commit.
 3. Upload from PowerShell with the **batteries disconnected** (USB only), needs.md C5. If the upload fails with
    the servos plugged in, unplug the **elbow** servo's signal wire and try again: the elbow is on GPIO 2, which is
    also a boot pin on the ESP32 (A7b).
 4. **Check what is on the board (still no batteries):** `python scripts/arm_jog.py`, type `status`, expect
-   `{'base': 90, 'shoulder': 90, 'elbow': 90, 'grip': 90, 'locked': False}` (the board answers `A 90 90 90 90`,
-   no L), then `boot`, expect `last start: power-on, ...` (the upload restarted the board), then `quit`. Type nothing
-   else: with no battery power nothing would move, but that is not the point. If `boot` is refused with "no B
-   command", the old build is still on the board. (`scripts/arm_check.py` is only for the locked firmware: on this
-   board it would report NOT locked.)
+   `{'base': 90, 'shoulder': 90, 'elbow': 90, 'grip': 90, 'locked': False, 'armed': False}` (the board answers
+   `A 90 90 90 90 D`: unlocked, disarmed), then `boot`, expect `last start: power-on, ...` (the upload restarted the
+   board), then `quit`. If `boot` is refused with "no B command", the old build is still on the board.
+   (`scripts/arm_check.py` is only for the locked firmware: on this board it would report NOT locked.)
 
 **Power on**
 5. Clear the area: nothing within the arm's reach, cables free, sheet and blocks out of the way.
-6. **Pose the arm by hand first:** with everything switched off, gently move each joint to about 90 degrees (the
-   home pose) and leave the claw empty. At power-on each servo jumps straight to 90 degrees, unramped (it cannot
-   report where it was), so the closer it already is, the smaller the jump.
-7. **Unplug the USB cable**, then connect the batteries **with a hand on the switch**, then plug the USB cable back
-   in. Why: the firmware switches the servos on one at a time, 400 ms apart (base, shoulder, elbow, claw), but only
-   when the board starts. If the board is already running on USB when the batteries are connected, all four jump
-   at once. If the board does not start on battery power alone (not tested yet), plugging USB in starts it with the
-   batteries already there, which still gives the one-at-a-time start. If the arm twitches over and over, the
-   battery is dipping and resetting the board: switch off.
-8. `python scripts/arm_jog.py`, `status` again, then `boot`: `power-on` with a few seconds is the start you just
-   did. **Whenever the arm twitches, jumps back to home, or stops answering, type `boot` straight away:**
-   `brownout` (or a small number of seconds you did not expect) means the ESP32 restarted because its supply
-   dropped. Switch off and check the batteries. Then `quit`.
+6. **Pose the arm by hand:** with everything switched off, gently move each joint to about 90 degrees and leave
+   the claw empty. When it is enabled, each servo jumps straight to 90 (it cannot report where it was), so the
+   closer it already is, the smaller the jump.
+7. Connect the batteries **with a hand on the switch**. Nothing should move: the board is disarmed. (No need to
+   unplug USB first any more: the one-at-a-time start now happens at `enable`, not at power-on.)
+8. `python scripts/arm_jog.py`: `status` (armed False), then **`enable`** with a hand on the switch: base,
+   shoulder, elbow, claw switch on 0.4 s apart and each jumps to 90. `status` should now say armed True.
+   If you posed it elsewhere, `enable B S E G` with your best guess instead (each joint jumps by your error).
+   **Then test `disable` once:** hold the arm, type `disable`; every joint should go limp. If a servo still holds
+   its position with no signal (some digital servos do), write down which one. `enable` again.
+   **Whenever the arm twitches, drops or stops answering, type `boot` straight away:** `brownout` (or a small
+   number of seconds you did not expect) means the ESP32 restarted: it comes back disarmed, so the arm goes limp.
+   Switch off and check the batteries.
+9. **Which way does the claw close? (B15)** Still in `arm_jog`, with the arm enabled and the claw empty:
+   `grip -5` (to 85) and watch the jaws, then `grip +5` back to 90. Write down whether 85 opened or closed it.
+   Until this is known, do not step the grip further below open than about 10 degrees: the 140 closed limit only
+   guards the high side, and the range now goes down to 40 (see B15).
 
 **Ranges**
-9. `python scripts/first_moves.py`: base, then shoulder, then elbow; +5, -5, +10, -10 ... from home, slowly, never
-   past the range in arm_limits.json and never more than 45 degrees from home (`--max-delta` to widen; so the base
-   stays within 45-135). Answer y/n after each move; each direction stops at its first n. The shoulder has only 10
-   degrees below home (range 80-180).
-   **Write down which joint and direction lifts the claw** (for example "shoulder -" or "elbow +"): `grip_test.py`
-   needs it as `--lift`, and teaching needs to know which way is up.
-10. It writes `calib/arm_limits_proposed.json`: each direction's largest approved step minus 5 degrees. It never
+10. `python scripts/first_moves.py`: it asks before enabling (type yes once the arm is posed at 90). Then base,
+    then shoulder, then elbow; +5, -5, +10, -10 ... from home, slowly, never past the range in arm_limits.json and
+    never more than 45 degrees from home (`--max-delta` to widen; so the base stays within 45-135). Answer y/n
+    after each move; each direction stops at its first n. The shoulder has only 10 degrees below home (80-180).
+    **Write down which joint and direction lifts the claw** (for example "shoulder -" or "elbow +"): `grip_test.py`
+    needs it as `--lift`, and teaching needs to know which way is up.
+11. It writes `calib/arm_limits_proposed.json`: each direction's largest approved step minus 5 degrees. It never
     edits `calib/arm_limits.json`. **A completed first_moves session is the "checked by hand" step:** the proposal
-    has `limits_checked_by_hand: true`. Review it, copy the ranges into **both** files, run the tests, switch the
-    batteries off, upload (step 3), then power on again (steps 6-8).
+    has `limits_checked_by_hand: true`. Review it, copy the ranges into **both** files, run the tests, `quit`
+    (hold the arm), switch the batteries off, upload (step 3), then power on again (steps 6-8).
 
 **Grip and repeatability**
-11. `python scripts/grip_test.py --lift "<the lift you wrote down, e.g. shoulder -4>"` (one or more joints, 10 degrees
-    in total at most). At home with the claw open, place the cube while nothing is sent, press Enter. It closes in
-    2-degree steps (opening again between steps, because of the 5 s grip timer) and asks "did it hold?"; at the
-    first y it lifts, holds 2 s, lowers and opens. The angle that held goes into the proposal as `grip_hold_deg`.
-    Use this rather than `grip close` in `arm_jog.py`, which goes straight to the 140 limit.
+12. **Only if step 9 showed that a larger angle closes the claw** (`grip_test.py` steps towards 140; if the claw
+    closes by decreasing the angle, stop here and fix the grip direction first, B15):
+    `python scripts/grip_test.py --lift "<the lift you wrote down, e.g. shoulder -4>"` (one or more joints, 10
+    degrees in total at most). It asks before enabling. At home with the claw open, place the cube while nothing is
+    sent, press Enter. It closes in 2-degree steps (opening again between steps, because of the 5 s grip timer) and
+    asks "did it hold?"; at the first y it lifts, holds 2 s, lowers and opens. The angle that held goes into the
+    proposal as `grip_hold_deg`. Use this rather than `grip close` in `arm_jog.py`, which goes straight to 140.
     **Push mode only (opt-in): `grip_push` is unknown until this test.** With the claw empty, in
-    `scripts/teach.py` use `set grip <angle>` in 2-degree steps from the angle that held until the jaw tips just
-    touch (the firmware opens a closed claw after 5 s; the next `set` closes it again). `grip_push` is that angle
-    minus 2 degrees: write it into `calib/pose_grid.json` as `"grip_push"`. Never use the 140 limit: a stalled
-    claw overheats. Until it is set, push mode refuses to run.
-12. Put the gripper marker on the claw tip. `python scripts/repeatability.py --pose B S E G` (a pose that hides no
-    dot; `--target X Y` from a ruler is optional). Cost cap $0.10. Verdict: 2 x standard deviation under 0.5 cm, full
-    corrections are fine; over 1 cm, apply only part of each miss.
+    `scripts/teach.py` (type `enable` first) use `set grip <angle>` in 2-degree steps from the angle that held
+    until the jaw tips just touch (the firmware opens a closed claw after 5 s; the next `set` closes it again).
+    `grip_push` is that angle minus 2 degrees: write it into `calib/pose_grid.json` as `"grip_push"`. Never use
+    the 140 limit: a stalled claw overheats. Until it is set, push mode refuses to run.
+13. Put the gripper marker on the claw tip. `python scripts/repeatability.py --pose B S E G` (a pose that hides no
+    dot; `--target X Y` from a ruler is optional). It asks before enabling. Cost cap $0.10. Verdict: 2 x standard
+    deviation under 0.5 cm, full corrections are fine; over 1 cm, apply only part of each miss.
 
-**Switch off:** home first (`arm_jog`: `home`), then the batteries.
+**Switch off:** `arm_jog`: `home`, then `quit` (it says "Hold the arm", waits 2 s and disables), then the batteries.
 
 **How the arm moves (checked 3 Nov):** every J is ramped in the firmware. Python never sends a J faster than
 10 ms per degree (`Arm.move` refuses it), and the firmware slows any J to at least 10 ms per degree of the biggest
 joint change (`start_move`), then eases in and out (`ease`): average at most 100 degrees per second, peak at most
 150 per second, never more than 3 degrees per 20 ms tick (g++ test). H takes at least 1.5 s. S stops at once and
-holds. The only unramped movement is each servo's first jump to home at start-up.
+holds. J and H are refused until all four servos are on. The only unramped movement is each servo's first jump to
+its starting angle when `enable` switches it on.
 
 ### C6. Teaching the pose grid (scripts/teach.py)
 

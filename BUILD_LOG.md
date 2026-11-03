@@ -153,3 +153,15 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   object word). `repeatability.py` needs only `dots_measured`; tests: it runs with the committed layout, refuses
   unmeasured dots, and still refuses a locked arm (checked by putting the old check back: 3 tests failed).
   `dice_test.jpg` added to .gitignore. No API call.
+- Disarmed start (firmware + Python): at power-on nothing is attached and no signal is sent. `E [b s e g]` switches
+  the servos on one at a time, 400 ms apart, each starting at those angles (default 90); `D` stops and switches
+  them all off (limp). J and H reply `ERR not enabled` until all four are on; `?` ends with ` D` while disarmed;
+  `?`, S, B and D always work; lock and ramp unchanged; `servos_to_attach()` still g++-tested (now from E).
+  Python: `arm.enable()` (waits 1.3 s, checks `?`), `arm.disable()`, a restart mid-run is reported with the boot
+  reason; `session.confirm_and_enable()` (typed yes) in first_moves, grip_test, repeatability, run_mimic and
+  benchmark; `enable` / `disable` in arm_jog and teach; s / Ctrl+C send S then D, errors print the reason then
+  S and D, a normal quit says "Hold the arm", waits 2 s and disables. Grip range 40-140 in both limit files
+  (`GRIP_RANGE`, `grip_range_deg`; open 90 and closed limit 140 unchanged; the limit must be one end of the
+  range). Compiled (301,681 bytes), Windows copy refreshed, not uploaded. needs.md C7 rewritten, B15 (which way the
+  claw closes, with the list of everything that assumes a larger angle closes it). Also added the bridge
+  pass-through test for `B` that the 3 Nov B commit described but had not actually added.

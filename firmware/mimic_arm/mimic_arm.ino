@@ -4,8 +4,12 @@
 //   J <base> <shoulder> <elbow> <grip> <ms>   smooth move        -> OK, or ERR <reason>
 //   H                                         go home            -> OK
 //   ?                                         where are you?     -> A <base> <shoulder> <elbow> <grip>
-//                                                                   (with " L" on the end while locked)
+//                                                                   (" L" on the end while locked,
+//                                                                    " D" while disarmed)
 //   S                                         stop and hold      -> OK
+//   E [<base> <shoulder> <elbow> <grip>]      enable (arm)       -> OK: switch the servos on, starting at these
+//                                                                   angles (default 90 each)
+//   D                                         disable            -> OK: stop, then switch every servo off (limp)
 //   B                                         why did you start? -> B <reason> <seconds since start-up>
 //                                                                   (power-on, brownout, software reset, watchdog, other)
 //
@@ -13,16 +17,19 @@
 // tested on the laptop. This file only reads the serial port and drives the servos.
 //
 // Status 3 Nov: UNLOCKED with the kit's ranges (from its sample code, untested on this arm) for the first powered
-// session (needs.md C7), with the B command. Compiles for esp32:esp32:esp32 (ESP32 core 2.0.12, ESP32Servo 1.2.1);
-// not uploaded yet, so the board still runs the locked build (which has no B). Pins are from the kit's sample code (untested on this arm).
+// session (needs.md C7), with B, and disarmed at power-on (E and D). Grip range 40-140. Compiles for
+// esp32:esp32:esp32 (ESP32 core 2.0.12, ESP32Servo 1.2.1); not uploaded yet, so the board still runs the locked
+// build (which has no B, E or D). Pins are from the kit's sample code (untested on this arm).
 // The servo ports need battery power: USB alone does not move them.
 //
 // While locked (placeholder limits, or not checked by hand) no servo is attached and no angle is ever
-// written: the servos get no signal. Only ? and S work; J and H reply ERR limits not measured.
-// Once unlocked, at start-up the servos are switched on one at a time, 400 ms apart (base, shoulder, elbow,
-// claw: servos_to_attach() in arm_logic.h). A hobby servo cannot report its position, so each one jumps to HOME
-// as it is switched on. Keep HOME a safe pose, and always send H before switching off so the next jump is small.
-// Every J and H after that is ramped (arm_logic.h: start_move and tick).
+// written: the servos get no signal. Only ?, S, B and D work; J, H and E reply ERR limits not measured.
+// Once unlocked, the board still starts DISARMED: nothing is attached and no signal is sent, so switching on (or a
+// restart) never moves the arm. E switches the servos on one at a time, 400 ms apart (base, shoulder, elbow, claw:
+// servos_to_attach() in arm_logic.h), each starting at the angle E gives (default 90). A hobby servo cannot report
+// its position, so each one jumps to that angle as it is switched on: pose the arm there by hand first. J and H
+// reply ERR not enabled until all four are on. Every J and H is ramped (arm_logic.h: start_move and tick).
+// D stops the arm and switches every servo off, so it goes limp (and sags under its own weight).
 #include <ESP32Servo.h>
 #include <esp_system.h>
 #include "arm_logic.h"
@@ -41,31 +48,32 @@ char line[MAX_LINE + 1];
 int line_len = 0;
 bool line_too_long = false;
 unsigned long last_tick = 0;
-unsigned long started_ms = 0;
-int attached = 0;  // how many servos are switched on so far (base first, claw last)
+int switched_on = 0;  // how many servos are attached right now (base first, claw last)
 
-// Switch on any servo that is due (servos_to_attach is 0 while locked, so then this never attaches anything).
-void attach_due_servos() {
-  int due = servos_to_attach(millis() - started_ms);
-  while (attached < due) {
-    servos[attached].setPeriodHertz(50);
-    servos[attached].attach(PINS[attached], 500, 2400);
-    servos[attached].write((int)lroundf(arm.now[attached]));
-    attached++;
+// Make the servos match arm.attached: switch on any that are due, switch off (detach, limp) any that are not.
+// arm.attached is 0 while locked and while disarmed, so then nothing is ever attached.
+void sync_servos() {
+  while (switched_on < arm.attached) {
+    servos[switched_on].setPeriodHertz(50);
+    servos[switched_on].attach(PINS[switched_on], 500, 2400);
+    servos[switched_on].write((int)lroundf(arm.now[switched_on]));
+    switched_on++;
+  }
+  while (switched_on > arm.attached) {
+    switched_on--;
+    servos[switched_on].detach();  // no more signal: the servo goes limp
   }
 }
 
 void write_servos() {
   if (!servos_enabled()) return;  // locked: never write an angle
-  for (int j = 0; j < attached; j++) servos[j].write((int)lroundf(arm.now[j]));
+  for (int j = 0; j < switched_on; j++) servos[j].write((int)lroundf(arm.now[j]));
 }
 
 void setup() {
   Serial.begin(115200);
-  arm_init(arm);
+  arm_init(arm);  // disarmed: nothing is attached until E
   arm.boot_code = (int)esp_reset_reason();  // read once: why this start-up happened (the B command reports it)
-  started_ms = millis();
-  attach_due_servos();  // the base now; the others follow from loop(), 400 ms apart
 }
 
 void loop() {
@@ -93,7 +101,8 @@ void loop() {
   unsigned long now = millis();
   if (now - last_tick >= 20) {
     last_tick = now;
-    attach_due_servos();
+    update_attached(arm, now);
+    sync_servos();
     tick(arm, now);
     write_servos();  // writes where the arm is now; with no move running that is the same angle again
   }

@@ -490,3 +490,20 @@ reach to be measured."
 Two sentences: "Spark is now told in both prompts that it is naming dice, with dice examples, so its names stay in
 the 'colour die' form even when a name has to be retried. The precision test can run as soon as the arm is
 unlocked, because it only needs the measured dots, and a locked arm still refuses it."
+
+### 3 Nov: the arm starts switched off
+
+- Before, the servos switched on as soon as the board started, so plugging in the batteries, or any restart, made
+  the arm jump to its home pose by itself. Now the board starts disarmed: no servo gets a signal until you type
+  `enable`. Then they switch on one at a time, 0.4 s apart, each starting at the angle you give (90 by default).
+  `disable` switches them all off again, and the arm goes limp.
+- Every script asks for a typed yes before enabling, and when it ends, or you press s or Ctrl+C, or something goes
+  wrong, it stops the arm and switches it off. A normal end says "Hold the arm" first, because a limp arm sags.
+- A restart while enabled now makes the arm go limp rather than jump, and the next move reports the restart with
+  its reason (for example a brownout).
+- The grip can now go below its open angle (range 40-140), because Girik's claw may close the other way. Until
+  that is checked, the 140 limit only protects one side; needs.md B15 lists everything that assumes "closed means
+  a larger angle".
+
+Two sentences: "The arm now only comes alive when you tell it to, one servo at a time, and it goes limp whenever a
+script ends, is stopped, or fails. That means power cuts and restarts can no longer make it jump on its own."

@@ -114,7 +114,8 @@ def report(numbers: dict, say=print) -> None:
     say("Verdict: " + verdict(numbers["std_cm"]))
 
 
-def main(argv=None, capture=camera.capture, sleep=time.sleep, say=print, out_root=config.RUNS_DIR) -> int:
+def main(argv=None, capture=camera.capture, sleep=time.sleep, say=print, out_root=config.RUNS_DIR,
+         read=input) -> int:
     parser = argparse.ArgumentParser(description="Send one pose N times and measure the spread with the camera.")
     parser.add_argument("--pose", type=int, nargs=4, required=True, metavar=("BASE", "SHOULDER", "ELBOW", "GRIP"))
     parser.add_argument("--shots", type=int, default=10)
@@ -134,6 +135,7 @@ def main(argv=None, capture=camera.capture, sleep=time.sleep, say=print, out_roo
     out_dir.mkdir(parents=True, exist_ok=True)
 
     def body():
+        session.confirm_and_enable(arm, read, say, sleep)  # the board starts disarmed
         meta_api.reset()
         cache_before, budget_before = meta_api.cache_enabled, config.BUDGET_USD
         meta_api.cache_enabled = False  # every photo is new anyway; this keeps the cost honest
@@ -148,7 +150,7 @@ def main(argv=None, capture=camera.capture, sleep=time.sleep, say=print, out_roo
         (out_dir / "repeatability.json").write_text(json.dumps({"pose": pose, "results": results, "numbers": numbers,
                                                                 "cost_usd": meta_api.cost_so_far()}, indent=2))
 
-    return session.guarded(arm, body, say)
+    return session.guarded(arm, body, say, sleep)
 
 
 if __name__ == "__main__":
