@@ -206,6 +206,26 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
 - `meta_api`: a video call is priced from its frame count before it is sent and refused if it would pass the
   budget; it gets a 300 s timeout and is never retried after a timeout (Meta may still bill it).
 
+### 2.2c Push mode (opt-in, added 3 Nov, Girik's decision): a fallback if the claw cannot hold a block
+
+`motion.plan_push(grid, limits, start, from_cm, to_cm, others_cm)` plans one straight push, before anything moves:
+- **Claw angle `grip_push`** (in `calib/pose_grid.json`): where the empty jaw tips just touch, minus 2 degrees, found
+  in the grip test. **Unknown (null) until the grip test, and push mode refuses to run without it.** Never the
+  140 closed limit: a stalled claw overheats.
+- **Direction:** the straight line from the block's centre to its slot. The claw comes down 3 cm behind the block
+  (on the far side from the slot), closes to `grip_push` in the air first, then lowers to grab height.
+- **Slide** in steps of at most 1.5 cm, all at grab height, until the claw is 2 cm short of the slot (so the
+  block's centre ends on it); back off 1 cm, lift, open. Short steps because one long move turns all the joints
+  together, and the claw would curve off the line and rise or dip between two grab poses.
+- **Grip timer:** the claw-closed time (close to lift) must fit in max_grip_hold_s minus 0.5 s (4.5 s), the same
+  rule as pick and place. A longer push is cut at the last step that fits (about 9 cm per push) and the plan says
+  where the block should end up; the camera check and the next push carry on.
+- **Not knocking other blocks:** every other block's centre must be at least 4 cm from the path (from where the
+  claw lands to the slot), or nothing moves. Every waypoint goes through the taught grid, so the path must stay
+  inside the taught area plus 1 cm.
+- Provisional sizes (a 2 cm block, a claw 1-2 cm across) until measured. Pushes are straight lines only; a block
+  is never pulled.
+
 ### 2.3 Scene layout
 
 - Work area: an A3 sheet taped down. Table coordinates in cm with the origin at the sheet's bottom-left dot.

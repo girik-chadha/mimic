@@ -42,6 +42,7 @@ class PoseGrid:
     grip_closed: int | None
     camera_clear: dict | None   # {"base", "shoulder", "elbow"}, used with the grip open
     placeholder: bool
+    grip_push: int | None = None  # push mode only: where the empty jaw tips just touch, minus 2 degrees (grip test)
 
     def complete_points(self) -> list[TaughtPoint]:
         return [p for p in self.points if p.hover and p.grab]
@@ -58,9 +59,13 @@ class PoseGrid:
     def check_against(self, limits) -> None:
         """Every taught angle must be inside the arm's limits (calib/arm_limits.json)."""
         lo, hi = limits.range_of("grip")
-        for name, value in (("grip_open", self.grip_open), ("grip_closed", self.grip_closed)):
+        for name, value in (("grip_open", self.grip_open), ("grip_closed", self.grip_closed),
+                            ("grip_push", self.grip_push)):
             if value is not None and not lo <= value <= hi:
                 raise KinematicsError(f"{name} {value} is outside the grip range {lo}-{hi} in arm_limits.json.")
+        if self.grip_push is not None and self.grip_push == limits.grip_closed_limit_deg:
+            raise KinematicsError(f"grip_push {self.grip_push} is the closed limit: pushing there would stall the "
+                                  "claw, and a stalled claw overheats. Use where the tips just touch, minus 2.")
         poses = [("camera_clear", self.camera_clear)] + [
             (f"{h} at ({p.x_cm}, {p.y_cm})", getattr(p, h)) for p in self.points for h in HEIGHTS]
         for label, pose in poses:
@@ -102,6 +107,7 @@ def load_grid(path=POSE_GRID_PATH) -> PoseGrid:
         grip_closed=data["grip_closed"],
         camera_clear=data["camera_clear"],
         placeholder=data["placeholder"],
+        grip_push=data.get("grip_push"),
     )
 
 
@@ -118,6 +124,7 @@ def save_grid(grid: PoseGrid, path=POSE_GRID_PATH, note: str | None = None) -> N
         "grip_open": grid.grip_open,
         "grip_closed": grid.grip_closed,
         "camera_clear": grid.camera_clear,
+        "grip_push": grid.grip_push,
         "points": [{"x_cm": p.x_cm, "y_cm": p.y_cm, "hover": p.hover, "grab": p.grab} for p in grid.points],
     }
     with open(path, "w") as f:

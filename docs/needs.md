@@ -334,6 +334,11 @@ start-up, firmware compiled and copied to `C:\Users\girik\mimic_firmware\mimic_a
     2-degree steps (opening again between steps, because of the 5 s grip timer) and asks "did it hold?"; at the
     first y it lifts, holds 2 s, lowers and opens. The angle that held goes into the proposal as `grip_hold_deg`.
     Use this rather than `grip close` in `arm_jog.py`, which goes straight to the 140 limit.
+    **Push mode only (opt-in): `grip_push` is unknown until this test.** With the claw empty, in
+    `scripts/teach.py` use `set grip <angle>` in 2-degree steps from the angle that held until the jaw tips just
+    touch (the firmware opens a closed claw after 5 s; the next `set` closes it again). `grip_push` is that angle
+    minus 2 degrees: write it into `calib/pose_grid.json` as `"grip_push"`. Never use the 140 limit: a stalled
+    claw overheats. Until it is set, push mode refuses to run.
 12. Put the gripper marker on the claw tip. `python scripts/repeatability.py --pose B S E G` (a pose that hides no
     dot; `--target X Y` from a ruler is optional). Cost cap $0.10. Verdict: 2 x standard deviation under 0.5 cm, full
     corrections are fine; over 1 cm, apply only part of each miss.
@@ -352,7 +357,9 @@ holds. The only unramped movement is each servo's first jump to home at start-up
   ever sent inside the **hull** of the taught points (the shape you get by stretching a rubber band around them),
   plus 1 cm; anywhere else is refused.
 - At each point: jog (steps of 1, 2, 5 or 10 degrees, or `set <joint> <angle>`) until the gripper is above the
-  spot, `save hover x y`; lower until it can close on a block, `save grab x y`. Also `save grip_open`,
+  spot, `save hover x y`; lower until it can close on a block, `save grab x y`. For push mode, teach grab with
+  the jaw tips 2-5 mm above the paper (and check that the claw closed to grip_push still clears it): push mode
+  slides the block at grab height. Also `save grip_open`,
   `save grip_closed`, and `save clear` for **camera_clear**: a pose that keeps the arm out of the photo, with no dot
   or block covered (the arm goes there before every photo). Then `finish`.
 - **The arm base must never move relative to the sheet** after teaching: the grid is tied to the sheet. If it

@@ -129,3 +129,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   meta_api: video calls priced before sending, 300 s timeout, no retry after a timeout. Checked locally: SAM's
   317 frame markers match the clip's 317 frames; the clip shrinks to 106 frames / 548 KB. Broke the lost-track
   stop on purpose: 3 tests failed; restored. No API call made.
+- Push mode, step 1 (opt-in): `motion.plan_push` and `push`. The claw closes to `grip_push` (tips just touching
+  minus 2 degrees, never the 140 limit; null in pose_grid.json until the grip test), comes down 3 cm behind the
+  block, slides it straight towards the slot in steps of at most 1.5 cm at grab height, backs off, lifts, opens.
+  A push longer than the grip timer allows is cut short (about 9 cm per push). Refused before moving if another
+  block is within 4 cm of the path or the path leaves the taught area.

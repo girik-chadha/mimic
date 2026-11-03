@@ -424,3 +424,18 @@ of the board, not every battery dip."
 Two sentences: "You can now show Mimic the arrangement by filming yourself building it; SAM follows every block and
 the code reads the slot order from the last moment nothing was moving. Every way that could go wrong (a lost
 block, a video that ends too soon, a cost over 30 cents) stops the run with a plain message before it can mislead."
+
+### 3 Nov: push mode, step 1 (planning a push)
+
+- If the claw cannot hold a block, the arm can still push it. `plan_push` brings the closed claw down behind the
+  block, on the side away from its slot, and slides it in a straight line to the slot, in short steps so the
+  claw stays on the line and at table height.
+- The claw is only closed as far as where its tips just touch, minus 2 degrees (`grip_push`, found in the grip
+  test), never to the 140 limit, so the servo never stalls and overheats. Until that angle is measured, push mode
+  refuses to run.
+- The same 5 s grip timer applies, so a long push is cut into pushes of about 9 cm, with a photo in between.
+  Before anything moves, the plan checks that no other block is within 4 cm of the path.
+
+Two sentences: "Push mode is a fallback that slides a block into its slot with the closed claw instead of lifting
+it, planned completely before the arm moves. It never squeezes the claw shut, never pushes for longer than the grip
+timer allows, and refuses any push whose path passes near another block."

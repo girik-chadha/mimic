@@ -74,8 +74,16 @@ def test_taught_values_must_be_inside_the_arm_limits():
         linear_grid().check_against(tight)
 
 
+def test_grip_push_must_be_in_the_grip_range_and_never_the_closed_limit():
+    with pytest.raises(KinematicsError, match="grip_push 145 is outside the grip range 90-140"):
+        dataclasses.replace(linear_grid(), grip_push=145).check_against(wide_limits())
+    with pytest.raises(KinematicsError, match="grip_push 140 is the closed limit: .* overheats"):
+        dataclasses.replace(linear_grid(), grip_push=140).check_against(wide_limits())
+    dataclasses.replace(linear_grid(), grip_push=126).check_against(wide_limits())
+
+
 def test_save_and_load_round_trip(tmp_path):
-    grid = linear_grid()
+    grid = dataclasses.replace(linear_grid(), grip_push=126)
     kinematics.save_grid(grid, tmp_path / "grid.json")
     loaded = kinematics.load_grid(tmp_path / "grid.json")
     assert loaded == grid
@@ -84,3 +92,4 @@ def test_save_and_load_round_trip(tmp_path):
 def test_committed_grid_is_an_empty_placeholder():
     grid = kinematics.load_grid()
     assert grid.placeholder is True and grid.points == []
+    assert grid.grip_push is None   # unknown until the grip test
