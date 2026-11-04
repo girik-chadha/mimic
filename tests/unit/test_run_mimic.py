@@ -57,7 +57,7 @@ def test_run_mimic_enables_after_a_yes_and_disables_at_the_end(monkeypatch, caps
     transport, runs, read = ready(monkeypatch, "yes")
     assert run_mimic.main([], read=read) == 0
     assert runs == [True]                                  # the run started with the servos on
-    assert transport.sent[:2] == ["?", "E 90 90 90 90"] and transport.sent[-1] == "D"
+    assert transport.sent[:2] == ["?", "E 90 150 90 90"] and transport.sent[-1] == "D"
     assert "Hold the arm" in capsys.readouterr().out
 
 

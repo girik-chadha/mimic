@@ -258,3 +258,9 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   sheet cm, by ruler). No arm, camera or SAM. Same fit as ring_calibrate.py (mimic/ring.py, 0.5 cm check and
   leave-one-out naming), at least 5 points; saves ring.json with `source: "manual"`, placeholder false, slots and
   camera_clear kept. ring_calibrate.py now saves `source: "camera"`; the fit printout is shared (`ring.describe`).
+- Start pose shoulder 90 -> 150 (Girik measured 4 Nov on fresh batteries: the upper arm is vertical at 150); the
+  PROVISIONAL wording is gone. Tests updated: every enable now sends `E 90 150 90 90`, every end ramps to
+  shoulder 150, pick_once's first move goes from 150. The first_moves and grip_test tests use made-up shoulder
+  ranges (85-95, 80-120) that 150 is outside of, so they start at 90; a new test shows a start pose outside the
+  shoulder range refuses to enable. A first_moves proposal (45 degrees around home 90) would cap the shoulder at
+  135, below the start pose: noted in needs.md.

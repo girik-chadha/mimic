@@ -126,10 +126,10 @@ def test_a_disarmed_arm_reports_D_and_refuses_moves():
 def test_enable_sends_E_waits_for_all_four_servos_and_knows_the_pose():
     a, t = disarmed_arm()
     waits = []
-    assert a.enable(sleep=waits.append) == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
-    assert t.sent == ["E 90 90 90 90", "?"] and waits == [arm.ENABLE_WAIT_S] and arm.ENABLE_WAIT_S > 1.2
-    a.move({"base": 95, "shoulder": 90, "elbow": 90, "grip": 90}, ms=800)
-    assert t.sent[-1] == "J 95 90 90 90 800"
+    assert a.enable(sleep=waits.append) == {"base": 90, "shoulder": 150, "elbow": 90, "grip": 90}  # the start pose
+    assert t.sent == ["E 90 150 90 90", "?"] and waits == [arm.ENABLE_WAIT_S] and arm.ENABLE_WAIT_S > 1.2
+    a.move({"base": 95, "shoulder": 150, "elbow": 90, "grip": 90}, ms=800)
+    assert t.sent[-1] == "J 95 150 90 90 800"
 
 
 def start_pose_file(tmp_path, monkeypatch, **angles):
@@ -160,9 +160,11 @@ def test_a_wrong_start_pose_file_is_refused_not_guessed(tmp_path, monkeypatch):
         arm.load_start_pose(path)
 
 
-def test_the_committed_start_pose_is_90_everywhere_until_s0_is_in():
-    assert arm.load_start_pose(say=None) == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
-    assert "PROVISIONAL shoulder" in json.loads(arm.START_POSE_PATH.read_text())["note"]
+def test_the_committed_start_pose_has_the_upper_arm_vertical_at_shoulder_150():
+    assert arm.load_start_pose(say=None) == {"base": 90, "shoulder": 150, "elbow": 90, "grip": 90}   # measured 4 Nov
+    assert "PROVISIONAL" not in json.loads(arm.START_POSE_PATH.read_text())["note"]
+    lo, hi = committed_limits().range_of("shoulder")
+    assert lo <= 150 <= hi            # inside the active shoulder range, or every enable would be refused
 
 
 def test_enable_with_angles_sends_them_and_refuses_out_of_range_ones():

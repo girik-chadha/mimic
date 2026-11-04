@@ -103,9 +103,9 @@ def test_enable_asks_first_and_only_yes_switches_the_servos_on():
     a, t = fake_arm(enabled=False)
     said = []
     pose = session.confirm_and_enable(a, read=lambda q: "yes", say=said.append, sleep=lambda s: None)
-    assert pose == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
-    assert t.sent == ["?", "E 90 90 90 90", "?"] and t.enabled
-    assert "one at a time, 0.4 s apart" in said[0] and "base 90, shoulder 90, elbow 90, grip 90" in said[0]
+    assert pose == {"base": 90, "shoulder": 150, "elbow": 90, "grip": 90}                 # the start pose
+    assert t.sent == ["?", "E 90 150 90 90", "?"] and t.enabled
+    assert "one at a time, 0.4 s apart" in said[0] and "base 90, shoulder 150, elbow 90, grip 90" in said[0]
 
     b, u = fake_arm(enabled=False)
     with pytest.raises(session.Declined, match="nothing was moved"):

@@ -14,6 +14,15 @@ gt = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gt)
 
 
+
+@pytest.fixture(autouse=True)
+def start_pose_inside_these_test_ranges(tmp_path, monkeypatch):
+    """These tests use made-up narrow shoulder ranges (85-95, 80-120): the real start pose (shoulder 150) is
+    outside them, so enabling would be refused, correctly. They are about exploring ranges, so they start at 90."""
+    path = tmp_path / "start_pose_90.json"
+    path.write_text('{"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}')
+    monkeypatch.setattr(arm, "START_POSE_PATH", path)
+
 def proposed_limits(**changes):
     limits = dataclasses.replace(arm.load_limits(config.ARM_LIMITS_PATH),
                                  ranges_deg={"base": (45, 135), "shoulder": (80, 120), "elbow": (60, 120)},

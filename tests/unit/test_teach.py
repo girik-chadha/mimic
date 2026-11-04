@@ -40,11 +40,11 @@ def test_enable_and_disable_commands(tmp_path, monkeypatch):
     monkeypatch.setattr(arm.time, "sleep", lambda s: None)
     tt = teach.Teacher(Arm(t, limits), grid_path, ask=lambda q: "no")
     assert tt.handle("set base 100").startswith("refused: The arm is not enabled")
-    assert tt.handle("enable") == "enabled, servos on at base 90, shoulder 90, elbow 90, grip 90"
+    assert tt.handle("enable") == "enabled, servos on at base 90, shoulder 150, elbow 90, grip 90"
     assert tt.handle("set base 100") == "base now 100"
     assert tt.handle("disable") == "disabled: the servos are off (limp)"
     assert tt.handle("enable 100 90 90 90") == "enabled, servos on at base 100, shoulder 90, elbow 90, grip 90"
-    assert [line for line in t.sent if line[0] in "EDJ"] == ["E 90 90 90 90", "J 100 90 90 90 400", "D",
+    assert [line for line in t.sent if line[0] in "EDJ"] == ["E 90 150 90 90", "J 100 150 90 90 400", "D",
                                                              "E 100 90 90 90"]
 
 

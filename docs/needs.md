@@ -248,9 +248,13 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 - **Bridge time per command, measured** (`pick_once.py --measure-latency`, 4 Nov): 3.5 ms mean, 4.7 ms slowest over
   20 status calls, so `command_s` is 0.01 s in `calib/ring.json` instead of the 0.05 s guess. That gives back about
   0.56 s of claw-closed time per carry: a 60-degree carry is about 3.7 s instead of 4.3 s.
-- **The start pose (4 Nov):** `calib/start_pose.json`, base 90, shoulder S0, elbow 90, grip 90: upper arm
-  vertical, forearm horizontal, claw open. **S0 is not in yet, so the shoulder is PROVISIONAL at 90** (what
-  enabling did before). Every enable starts there (`confirm_and_enable`, `arm_jog`/`teach.py` `enable`), and every
+- **The start pose (4 Nov):** `calib/start_pose.json`, base 90, **shoulder 150**, elbow 90, grip 90: upper arm
+  vertical, forearm horizontal, claw open. **The upper arm is vertical at shoulder 150** (Girik, measured 4 Nov on
+  fresh batteries). So enabling and every script's end now move the shoulder there, not to 90: the arm must be
+  posed that way by hand before enabling. **150 must stay inside the active shoulder range** in arm_limits.json
+  (now 80-180), or every enable is refused. Note: first_moves.py explores around home (90 for every joint), at most
+  45 degrees by default, so a proposal from it would cap the shoulder at 135 and lock out the start pose; use
+  `--max-delta 60` or more for the shoulder before copying its range in. Every enable starts there (`confirm_and_enable`, `arm_jog`/`teach.py` `enable`), and every
   script ramps back there before disabling. If the file is missing, every joint falls back to 90 with a warning; a
   file with a non-number is refused. The firmware's H (HOME, 90 everywhere) is unchanged; `loop.run` (pick and
   place) and `repeatability.py` still use H.

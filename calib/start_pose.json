@@ -1,7 +1,7 @@
 {
-  "note": "The pose every enable starts at (E sends these angles; each servo jumps straight to its angle as it is switched on), and where every script ramps back to before it says 'Hold the arm' and disables. arm_jog's home goes here too (a slow J, not the firmware's H). Pose the arm like it by hand before enabling: upper arm vertical, forearm horizontal, claw open. PROVISIONAL shoulder: Girik's S0 (the shoulder angle with the upper arm vertical) is not in yet, so it is 90, which is what enabling did before (4 Nov). If this file is missing, every joint falls back to 90 with a warning.",
+  "note": "The pose every enable starts at (E sends these angles; each servo jumps straight to its angle as it is switched on), and where every script ramps back to before it says 'Hold the arm' and disables. arm_jog's home goes here too (a slow J, not the firmware's H). Pose the arm like it by hand before enabling: upper arm vertical, forearm horizontal, claw open. Shoulder 150: the upper arm is vertical there (measured 4 Nov on fresh batteries, Girik). If this file is missing, every joint falls back to 90 with a warning.",
   "base": 90,
-  "shoulder": 90,
+  "shoulder": 150,
   "elbow": 90,
   "grip": 90
 }

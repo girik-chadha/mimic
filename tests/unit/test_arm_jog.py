@@ -49,10 +49,10 @@ def test_grip_home_status_stop(fake):
     assert jog.handle(a, "home").startswith("home: to the start pose")
     assert jog.handle(a, "grip close").startswith("refused: grip_hold_deg is not known yet")  # never the limit
     assert jog.handle(a, "grip open") == "grip open"
-    assert jog.handle(a, "status") == ("{'base': 90, 'shoulder': 90, 'elbow': 90, 'grip': 90, 'locked': False, "
+    assert jog.handle(a, "status") == ("{'base': 90, 'shoulder': 150, 'elbow': 90, 'grip': 90, 'locked': False, "
                                        "'armed': True}")
     assert jog.handle(a, "stop") == "stopped"
-    assert t.sent == ["?", "J 90 90 90 90 1000", "J 90 90 90 90 500", "?", "S"]
+    assert t.sent == ["?", "J 90 150 90 90 1800", "J 90 150 90 90 500", "?", "S"]   # 60 degrees x 30 ms home
 
 
 def test_grip_close_goes_to_grip_hold_once_it_is_known():
@@ -73,10 +73,10 @@ def test_a_grip_step_onto_the_closed_limit_warns(fake):
 
 def test_step_past_a_limit_is_refused_and_not_sent(fake):
     a, t = fake
-    jog.handle(a, "home")
-    reply = jog.handle(a, "shoulder -15")
+    jog.handle(a, "home")                                       # the start pose: shoulder 150
+    reply = jog.handle(a, "shoulder -75")
     assert reply == "refused: shoulder 75 degrees is outside its range 80-180."
-    assert t.sent == ["?", "J 90 90 90 90 1000"]
+    assert t.sent == ["?", "J 90 150 90 90 1800"]
 
 
 @pytest.mark.parametrize("typed", ["", "wrist +5", "base 5", "base +five", "fly"])
@@ -109,12 +109,12 @@ def test_enable_and_disable(monkeypatch):
     a = Arm(t, limits)
     monkeypatch.setattr(arm.time, "sleep", lambda s: None)
     assert jog.handle(a, "base +5").startswith("refused: The arm is not enabled")
-    assert jog.handle(a, "enable") == "enabled, servos on at base 90, shoulder 90, elbow 90, grip 90"
+    assert jog.handle(a, "enable") == "enabled, servos on at base 90, shoulder 150, elbow 90, grip 90"
     assert jog.handle(a, "grip -5") == "grip now 85"            # below the open stop: the range is 40-140
     assert jog.handle(a, "disable") == "disabled: the servos are off (limp)"
     assert jog.handle(a, "enable 100 85 70 90") == "enabled, servos on at base 100, shoulder 85, elbow 70, grip 90"
     assert jog.handle(a, "enable 100 85") == jog.HELP
-    assert [line for line in t.sent if line[0] in "EDJ"] == ["E 90 90 90 90", "J 90 90 90 85 400", "D",
+    assert [line for line in t.sent if line[0] in "EDJ"] == ["E 90 150 90 90", "J 90 150 90 85 400", "D",
                                                              "E 100 85 70 90"]
 
 

@@ -51,14 +51,14 @@ def test_the_default_pick_and_drop_sends_exactly_the_planned_moves_and_never_H(m
     code, sent, prompts, said = run(monkeypatch, ["--base-pick", "100", "--base-drop", "120"])
     assert code == 0
     moves = j_lines(sent)
-    assert [m[:4] for m in moves[:7]] == [[100, 90, 90, 90], [100, 163, 90, 90], [100, 165, 90, 90],
+    assert [m[:4] for m in moves[:7]] == [[100, 150, 90, 90], [100, 163, 90, 90], [100, 165, 90, 90],
                                           [100, 167, 90, 90], [100, 169, 90, 90], [100, 171, 90, 90],
                                           [100, 173, 90, 90]]                      # open, above, down in 2s
     assert moves[7][:4] == [100, 173, 90, 23] and moves[8][:4] == [100, 153, 90, 23]   # close, lift 20
     assert moves[9][:4] == [120, 153, 90, 23]                                          # swing to the drop
     assert [m[1] for m in moves[10:20]] == list(range(155, 174, 2))                    # down in 2-degree steps
     assert moves[20][:4] == [120, 173, 90, 90] and moves[21][:4] == [120, 153, 90, 90]  # open, lift away
-    assert moves[22] == [90, 90, 90, 90, 63 * 30]                # then a slow ramp back to the start pose
+    assert moves[22] == [90, 150, 90, 90, 1000]                  # then a slow ramp back to the start pose (at least 1 s)
     assert len(moves) == 23
     assert all(m[2] == 90 for m in moves)                       # the dead elbow: always 90 (an empty socket)
     assert max(m[1] for m in moves) == 173                      # never past the pick angle, so never past 175
@@ -69,7 +69,7 @@ def test_the_default_pick_and_drop_sends_exactly_the_planned_moves_and_never_H(m
 def test_the_shoulder_moves_at_25_ms_per_degree_and_the_base_and_claw_at_the_limits_speed(monkeypatch):
     code, sent, prompts, said = run(monkeypatch, ["--base-pick", "100", "--base-drop", "120"])
     moves = j_lines(sent)
-    assert moves[1][4] == 73 * 25            # shoulder 90 -> 163
+    assert moves[1][4] == 13 * 25            # shoulder 150 (the start pose) -> 163
     assert moves[2][4] == 2 * 25             # each 2-degree lowering step
     assert moves[7][4] == 67 * 10            # close 90 -> 23
     assert moves[9][4] == 20 * 10            # swing 100 -> 120
@@ -186,7 +186,7 @@ def test_pick_only_lifts_holds_2_s_and_opens_in_the_air(monkeypatch):
     moves = j_lines(sent)
     assert moves[-4][:4] == [100, 173, 90, 23] and moves[-3][:4] == [100, 153, 90, 23]   # close, lift
     assert moves[-2][:4] == [100, 153, 90, 90]                                           # open, still lifted
-    assert moves[-1][:4] == [90, 90, 90, 90]                                             # back to the start pose
+    assert moves[-1][:4] == [90, 150, 90, 90]                                            # back to the start pose
     assert all(m[0] == 100 for m in moves[1:-1])                                         # no swing
     assert 2.0 in waits and sent[-1] == "D"
     steps, hold_s, _ = po.plan(LIMITS, START, base_pick=100, base_drop=100, pick_only=True, **DEFAULTS)

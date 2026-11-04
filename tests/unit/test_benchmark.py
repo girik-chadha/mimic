@@ -83,5 +83,5 @@ def test_benchmark_enables_after_a_yes_and_disables_at_the_end(monkeypatch, tmp_
     monkeypatch.setattr(loop, "run", lambda *a, **k: run_summary(True, 3, 0.8, 0.04))
     typed = iter(["yes"])
     assert bench.main(["--runs", "1"], read=lambda q: next(typed, "")) == 0
-    assert transport.sent[:2] == ["?", "E 90 90 90 90"] and transport.sent[-1] == "D"
+    assert transport.sent[:2] == ["?", "E 90 150 90 90"] and transport.sent[-1] == "D"
     assert "Hold the arm" in capsys.readouterr().out

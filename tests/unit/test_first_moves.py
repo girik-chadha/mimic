@@ -15,6 +15,15 @@ fm = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fm)
 
 
+
+@pytest.fixture(autouse=True)
+def start_pose_inside_these_test_ranges(tmp_path, monkeypatch):
+    """These tests use made-up narrow shoulder ranges (85-95, 80-120): the real start pose (shoulder 150) is
+    outside them, so enabling would be refused, correctly. They are about exploring ranges, so they start at 90."""
+    path = tmp_path / "start_pose_90.json"
+    path.write_text('{"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}')
+    monkeypatch.setattr(arm, "START_POSE_PATH", path)
+
 def limits_for_test(shoulder=(80, 140), elbow=(30, 150)):
     """Base wide open (so only --max-delta caps it), shoulder with only 10 degrees below home."""
     return dataclasses.replace(REAL_LOAD_LIMITS(config.ARM_LIMITS_PATH),
@@ -124,6 +133,13 @@ def test_it_enables_first_and_a_no_moves_nothing(monkeypatch, tmp_path):
     assert code == 1 and not out.exists()
     assert sent[0].sent == ["?"] and "Not enabled: nothing was moved." in said
     assert any("one at a time, 0.4 s apart" in line for line in said)
+
+
+def test_a_start_pose_outside_the_shoulder_range_refuses_to_enable(monkeypatch, tmp_path):
+    monkeypatch.setattr(arm, "START_POSE_PATH", config.ROOT / "calib" / "start_pose.json")   # the real one: 150
+    code, out, said = run_main(monkeypatch, tmp_path, ["yes"])
+    assert code == 1 and any("enable: shoulder 150 degrees is outside its range 85-95" in line for line in said)
+    assert not out.exists()
 
 
 def test_real_arm_refused_while_locked(monkeypatch, tmp_path):
