@@ -654,3 +654,21 @@ photo reads 15 frames and keeps the last."
 
 Two sentences: "The ring can now be fitted from five ruler measurements instead of the camera, using exactly the
 same maths and checks. The saved file records whether its numbers came from the camera or from a ruler."
+
+### 4 Nov: simulation mode, part 1
+
+- The real arm cannot run the task yet (the ring is not calibrated), so `run_mimic.py --ring --sim` runs
+  everything else for real: one real photo is calibrated from its dots, Spark names the dice, SAM measures them,
+  and ring mode's own planner checks and plans every carry. Only the arm and the ring are made up: a simulated arm
+  answers every command like the firmware, picks up the die under the claw when it closes at table height and puts
+  it down when it opens, and its "camera check" reads where the simulation put the dice.
+- To make sure the simulation uses the same planner as the real run, the camera-check-and-correct loop was moved
+  into one function, `ring_loop.carry`. The real run gives it a step that parks and takes a photo; the simulation
+  gives it a step that parks and reads its own world.
+- Honesty is built in: every output's name starts with `simulation_`, the JSON says `"simulation": true`, the
+  pictures and the video carry "SIMULATION" in their metadata, and every video frame has a SIMULATED EXECUTION
+  banner. The dice are moved onto the made-up ring, and the video shows where SAM really saw them.
+
+Two sentences: "Simulation mode runs Mimic's real eyes and real planner on a real photo, but sends the moves to a
+simulated arm on a made-up ring, because the real ring is not calibrated yet. The move list it saves is exactly what
+the real arm would be sent, and every file and every video frame says it is a simulation."

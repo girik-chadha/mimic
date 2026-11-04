@@ -129,6 +129,13 @@ From Meta's pricing page (read 27 Oct) and third-party docs as marked.
   saved Spark replies above were recorded with the old prompts on `desk.jpeg` (lighters, not dice): they still
   test reading the replies and the rename loop, but no real reply to the new prompts has been recorded yet. That
   needs a photo of the dice on the sheet (B14).
+- **B14: yes (settled 4 Nov, one real run of `run_mimic.py --ring --sim` on `tests/fixtures/photos/dice_sheet.jpg`,
+  $0.0156 in all).** With the dice line in the prompt, Spark replied `["red die", "black die", "blue die"]` (1,349
+  tokens in, 921 out, $0.0056), and SAM found exactly 1 box for each name on the first try, so no rename was
+  needed. The same photo calibrated from its 6 dots with the check dots 0.19 and 0.14 cm off, and SAM put the dice
+  at (11.7, 6.7), (18.1, 6.6) and (24.4, 6.5) cm. Saved: `spark_name_objects_dice_sheet.txt`,
+  `sam_photo_dice_sheet_small_coloured_dot.txt`, `sam_photo_dice_sheet_{red,black,blue}_die.txt`. The photo itself
+  is not committed.
 
 ### A5c. Spark with two photos (B11, settled 2 Nov)
 
@@ -343,7 +350,6 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
 | B13 | The demo video, on the first real `show_demo.py` run: does SAM accept the shrunk video (10 fps H.264, made by ffmpeg, not a phone)? How long does a video call take (our timeout for video is 300 s; the 28 Oct call was never timed)? Does a track keep its id while a hand moves the block (A3's open question; if not, `show_demo.py` stops with "2 tracks")? **Short grabs blow out on this camera (A9, 4 Nov):** the first frames are nearly white (brightness about 247), so a video's first second may be useless to SAM; show_demo.py reads the last settled frame, which is fine, but tracks may start late. | `python scripts/show_demo.py demo.mp4 --save-replies` on an 8-10 s video of the real sheet. Since 3 Nov it needs only the measured dots (`dots_measured`); the slot positions are still placeholders, so the blocks must sit within 3 cm of the slots in `layout.json` or it stops with "not in a slot". About $0.10-0.13 for 3 blocks. | Dots measured 3 Nov; when the video is recorded |
-| B14 | Does Spark name the dice "colour die" with the new prompt line, and does SAM find exactly 1 box for each such name (two dice of similar colours could share one)? | One real `brain.name_objects` call on a photo of the dice on the sheet; save Spark's reply and each SAM reply as fixtures. About $0.01-0.02. | When the dice photo is taken |
 | B12 | Does opening COM7 reset the board? The bridge sets DTR and RTS low before opening so that it should not. If it does, every session restarts the arm (since 3 Nov: it comes back disarmed, so an enabled arm goes limp at every session start) and a brownout is hidden by the next power-on. | After the upload (C7 step 4): `arm_jog.py`, type `boot` at once, `quit`, wait a minute, repeat. If the seconds are always 2-3, opening resets the board. | First powered session |
 
 ---

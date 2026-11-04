@@ -111,3 +111,42 @@ def test_ring_mode_asks_before_enabling_runs_the_ring_loop_and_disables(monkeypa
     assert grabs[-1] == (40, "Camo")                      # the options win
     assert "pose the arm like the start pose: upper arm vertical, forearm horizontal, claw open" in prompts[0]
     assert transport.sent[-1] == "D" and "Hold the arm" in capsys.readouterr().out
+
+
+# ---------- simulation mode (run_mimic.py --ring --sim) ----------
+
+@pytest.mark.parametrize("argv, problem", [
+    (["--sim", "--photo", "p.jpg"], "--sim runs ring mode: use --ring --sim"),
+    (["--ring", "--sim"], "--sim needs --photo"),
+    (["--ring", "--photo", "p.jpg"], "--photo only work with --ring --sim"),
+    (["--ring", "--sim-miss-deg", "6"], "--sim-miss-deg only work with --ring --sim"),
+    (["--ring", "--instruction", "row red, blue"], "--instruction only work with --ring --sim"),
+    (["--ring", "--instruction", "stack black, blue, red"], "stacking is simulation-only"),
+    (["--instruction", "Stack red"], "stacking is simulation-only"),
+])
+def test_simulation_options_are_checked_before_anything_runs(monkeypatch, capsys, argv, problem):
+    monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("serial bridge opened"))
+    monkeypatch.setattr(run_mimic.sim, "run", lambda *a, **k: pytest.fail("simulation ran"))
+    assert run_mimic.main(argv) == 1
+    assert problem in capsys.readouterr().out
+
+
+def test_ring_sim_runs_the_simulation_and_opens_no_serial_port(monkeypatch, capsys):
+    monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("serial bridge opened"))
+    monkeypatch.setattr(camera, "capture", lambda *a, **k: pytest.fail("camera used"))
+    calls = []
+    monkeypatch.setattr(run_mimic.sim, "run", lambda *a: calls.append(a) or {
+        "success": True, "moves": [{"result": "PASS"}] * 3, "attempts": 3, "max_error_cm": 0.0, "cost_usd": 0.013,
+        "out_dir": "runs/x_simulation"})
+    assert run_mimic.main(["--ring", "--sim", "--photo", "p.jpg", "--instruction", "row red, blue",
+                           "--sim-miss-deg", "6"]) == 0
+    assert calls == [("p.jpg", "row red, blue", 6.0)]
+    assert "SIMULATION SUCCESS: 3 of 3 dice placed" in capsys.readouterr().out
+
+
+def test_a_refused_simulation_says_so(monkeypatch, capsys):
+    def refuse(*a):
+        raise run_mimic.sim.SimError("'purple' matches 0 of the dice Spark named")
+    monkeypatch.setattr(run_mimic.sim, "run", refuse)
+    assert run_mimic.main(["--ring", "--sim", "--photo", "p.jpg", "--instruction", "row purple"]) == 1
+    assert "STOPPED (simulation): 'purple' matches 0" in capsys.readouterr().out

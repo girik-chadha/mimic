@@ -78,6 +78,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] Ring mode, part 2: `mimic/ring_loop.py`, `run_mimic.py --ring` (slots on the ring, 5.5 cm apart; every move checked first; angular miss corrected up to 2 degrees, 2 retries); tested with a fake ring world (4 Nov)
 - [ ] After calibrating and setting `slots_deg`: a first `run_mimic.py --ring` with 2 or 3 dice (needs.md C7 step 12c)
 - [ ] Decide the layout for the ring: slots and the mess area must lie on it (needs.md A10d)
+- [x] Simulation mode, part 1: `run_mimic.py --ring --sim --photo ...`: real SAM and Spark on one photo, ring mode's own planner and checks (`ring_loop.carry`, shared with the real run), a simulated arm on a MADE-UP ring; `simulation_video.mp4` (title card, SIMULATED EXECUTION banner, INJECTED TEST MISS with `--sim-miss-deg`), `simulation_moves.json`, "simulation" in every name and in the metadata; photo order or `--instruction "row ..."`; one real run on dice_sheet.jpg, $0.0156 (4 Nov)
+- [ ] Simulation mode, part 2: `--instruction "stack ..."` (simulation only), and `report.py` for a simulation run (`simulation_report.html`, `simulation_summary.png`, with the banner)
 - [ ] First powered session (needs.md C7) from step 3's upload: ranges with `first_moves.py`, copy into both files, upload; `grip_test.py`
 - [ ] Precision test B6: `repeatability.py`
 - [x] Kinematics: taught-pose grid (`kinematics.py`, `calib/pose_grid.json`, `scripts/teach.py`), tested with fakes (2 Nov)
@@ -99,7 +101,7 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] Demo as a video: `scripts/show_demo.py` (shrink to 10 fps / 720p, warning + typed yes, $0.30 cap, settled frame, arrival order), `mimic/video.py`, `sam.track`; tested on the saved 317-frame reply and fakes (3 Nov)
 - [ ] First real `show_demo.py` run on an 8-10 s demo video (needs.md B13; after the dots are measured)
 - [x] Naming prompt: one line of scene context, the objects are small painted dice named "colour die" (3 Nov; no API call)
-- [ ] Record Spark's real naming reply on a photo of the dice (needs.md B14)
+- [x] Record Spark's real naming reply on a photo of the dice (needs.md B14): `["red die", "black die", "blue die"]`, 1 SAM box each, no rename (4 Nov, in the first simulation run)
 - [ ] Measure the arm's base position, its reach, and the mess area into `calib/layout.json`
 - [ ] **Gate 4 at 21:00**: 3 blocks, 3 runs out of 5. Otherwise shrink the task.
 

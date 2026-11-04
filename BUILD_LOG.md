@@ -264,3 +264,14 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   ranges (85-95, 80-120) that 150 is outside of, so they start at 90; a new test shows a start pose outside the
   shoulder range refuses to enable. A first_moves proposal (45 degrees around home 90) would cap the shoulder at
   135, below the start pose: noted in needs.md.
+- Simulation mode, part 1 (`run_mimic.py --ring --sim --photo ...`, `mimic/sim.py`, `mimic/sim_video.py`,
+  `mimic/marks.py`): one real photo goes through the real perception (SAM dots, Spark naming, SAM positions, $0.30
+  cap) and ring mode's own planner and checks; the moves go to a simulated arm on a MADE-UP ring (centre (18.5, 27)
+  cm, radius 20 cm, slots at base 22, 38, 54; pick numbers from ring.json). The camera-check loop was moved out of
+  `ring_loop.run` into `ring_loop.carry` so the real run and the simulation run the same code (its 15 tests pass
+  unchanged). Outputs in `runs/<time>_simulation/`, every name starting `simulation_`: the move list (printed as
+  JSON, every line the arm would be sent), summary, attempts, the photo and its dots (JPEG comment "SIMULATION"),
+  and a 20 fps video (2 s title card, SIMULATED EXECUTION banner on every frame, INJECTED TEST MISS while a
+  `--sim-miss-deg` miss is corrected, "SIMULATION" in the mp4's title and comment). Real run on dice_sheet.jpg:
+  $0.0156, Spark named red, black and blue die with 1 SAM box each (B14 settled), 3 of 3 placed; the injected-miss
+  rerun came from the cache ($0) and showed RETRY then PASS at 0.7 cm.

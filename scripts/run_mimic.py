@@ -8,6 +8,15 @@
     --camera-name NAME                     the Windows webcam, e.g. Camo (else MIMIC_CAMERA, then, in ring mode,
                                            camera_name in ring.json, then "e2eSoft iVCam")
 
+    python scripts/run_mimic.py --ring --sim --photo tests/fixtures/photos/dice_sheet.jpg
+    --instruction "row black, blue, red"   simulation only: the target typed (default: the photo order, left to right)
+    --sim-miss-deg 6                       simulation only: put the first die down 6 degrees off once (shown as an
+                                           INJECTED TEST MISS), so the camera check and retry show
+
+Simulation mode (mimic/sim.py): real SAM and Spark calls on one real photo and the real ring-mode planner, but the
+moves go to a simulated arm on a MADE-UP ring. Nothing is uploaded and no serial port or camera is opened. Outputs go
+to runs/<time>_simulation/ (simulation_video.mp4, simulation_moves.json, ...), every name marked "simulation".
+
 Needs: the sheet measured (calib/layout.json), the pose grid taught (scripts/teach.py), the arm unlocked
 (needs.md C5), the phone webcam app (iVCam or Camo) running on Windows. Everything is checked before the serial port is even opened.
 Logs go to runs/<time>/ (photos, attempts.jsonl, summary.json).
@@ -16,7 +25,7 @@ import argparse
 import sys
 
 from mimic import arm as arm_module
-from mimic import camera, kinematics, loop, ring, ring_loop, scene, session
+from mimic import brain, camera, kinematics, loop, meta_api, ring, ring_loop, scene, session, sim, sim_video
 from mimic.arm import Arm, ArmError
 
 
@@ -28,10 +37,22 @@ def main(argv=None, read=input) -> int:
                         help="ring mode (elbow taped): pick and drop on the claw's ring (needs calib/ring.json)")
     parser.add_argument("--camera-frames", type=int, help="frames per photo grab, keeping the last")
     parser.add_argument("--camera-name", help="the Windows webcam, e.g. Camo")
+    parser.add_argument("--sim", action="store_true",
+                        help="with --ring: simulated arm on a made-up ring; real SAM and Spark on --photo")
+    parser.add_argument("--photo", help="--sim: the real photo SAM and Spark look at")
+    parser.add_argument("--instruction", help='--sim: the target typed, e.g. "row black, blue, red"')
+    parser.add_argument("--sim-miss-deg", type=float, default=0.0,
+                        help="--sim: put the first die down this many degrees off once (an INJECTED TEST MISS)")
     args = parser.parse_args(argv)
     if args.ring and args.push:
         print("STOPPED: --ring and --push cannot be used together.")
         return 1
+    problem = _sim_option_problem(args)
+    if problem:
+        print(f"STOPPED: {problem}")
+        return 1
+    if args.sim:
+        return _main_sim(args.photo, args.instruction, args.sim_miss_deg)
     if args.ring:
         return _main_ring(read, args.camera_frames, args.camera_name)
     try:
@@ -52,6 +73,37 @@ def main(argv=None, read=input) -> int:
 
     # s, Ctrl+C or an error: S then D; a normal end: "hold the arm", then D. The bridge closes either way.
     return session.guarded(arm, body)
+
+
+def _sim_option_problem(args) -> str | None:
+    """The simulation's options only make sense together; a stack can never go to the real arm."""
+    if args.instruction and args.instruction.strip().lower().startswith("stack") and not args.sim:
+        return ("stacking is simulation-only: with the elbow taped, lifting the claw also moves it along the "
+                "radius, so the real arm cannot put a die on top of another. Add --ring --sim.")
+    if not args.sim:
+        extra = [o for o, v in (("--photo", args.photo), ("--instruction", args.instruction),
+                                ("--sim-miss-deg", args.sim_miss_deg)) if v]
+        return f"{', '.join(extra)} only work with --ring --sim." if extra else None
+    if not args.ring:
+        return "--sim runs ring mode: use --ring --sim."
+    if not args.photo:
+        return "--sim needs --photo, the real photo SAM and Spark look at."
+    return None
+
+
+def _main_sim(photo, instruction, miss_deg) -> int:
+    """Simulation mode: no serial port, no camera, no upload. Real SAM and Spark calls on the photo."""
+    try:
+        summary = sim.run(photo, instruction, miss_deg)
+    except (sim.SimError, sim_video.SimVideoError, scene.SceneError, ring.RingError, ring_loop.RingLayoutError,
+            ArmError, brain.NamingFailed, meta_api.BudgetExceeded, ValueError) as error:
+        print(f"STOPPED (simulation): {error}")
+        return 1
+    placed = sum(1 for m in summary["moves"] if m["result"] == "PASS")
+    print(f"SIMULATION {'SUCCESS' if summary['success'] else 'FINISHED WITH FAILURES'}: {placed} of "
+          f"{len(summary['moves'])} dice placed, {summary['attempts']} attempts, worst error "
+          f"{summary['max_error_cm']} cm, ${summary['cost_usd']}. Outputs: {summary['out_dir']}")
+    return 0 if summary["success"] else 2
 
 
 def _main_ring(read, camera_frames=None, camera_name=None) -> int:

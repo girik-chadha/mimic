@@ -18,6 +18,10 @@ mimic/                     the Python package
   ring.py                  (4 Nov) the ring the claw reaches with the elbow fixed: fit, base_angle_for, point_at
   pickdrop.py              (4 Nov) pick and drop moves on the ring, planned and checked (pick_once, ring mode)
   ring_loop.py             (4 Nov) ring mode: run_mimic.py --ring, the whole task on the ring with the camera
+  sim.py                   (4 Nov) simulation mode: run_mimic.py --ring --sim; real SAM/Spark on one photo,
+                           the real ring-mode planner, a simulated arm on a made-up ring
+  sim_video.py             (4 Nov) the simulation's top-down video (OpenCV frames, Windows ffmpeg)
+  marks.py                 (4 Nov) "simulation" written into a JPEG's comment or a PNG's text chunk
   video.py                 (3 Nov) demo video: shrink to 10 fps / 720p, settled frame, arrival order
   brain.py                 Spark calls: name_objects(photo), diagnose(before, after, move)
   scene.py                 read_target(photo) -> ordered names; read_positions(photo) -> px
@@ -38,7 +42,7 @@ scripts/
   show_demo.py             (3 Nov) the demo as a video: target order and arrival order out (opt-in;
                            run_mimic.py still takes a demo photo)
   arm_jog.py               move one joint at a time from the terminal
-  run_mimic.py             the full loop
+  run_mimic.py             the full loop (--ring: ring mode; --ring --sim: simulation mode)
   benchmark.py             N runs, prints success rate, retries, cost
   spikes/                  day-2 test scripts, kept as a record (sam_test.py, ...)
 tests/

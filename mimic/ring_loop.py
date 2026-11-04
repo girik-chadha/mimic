@@ -126,6 +126,65 @@ def check_mess(positions: dict, moves: list, ring, limits) -> None:
             raise RingLayoutError(f"{move.name} to slot {move.slot}: {error}") from None
 
 
+def carry(arm, moves: list, positions: dict, ring, limits, look, log, say, sleep, finished: list,
+          on_try=None) -> list:
+    """Every move with its camera check, slot 1 first (the steps in this module's docstring).
+
+    look(shot) parks the arm out of the photo and returns (photo name, every target die's position); log(attempt)
+    records one try. Each finished move is added to `finished` as {"name", "slot", "result", "final_error_cm"}, so
+    a run stopped later still keeps it. on_try(move, attempt), if given, hears about each try before it runs (the
+    simulation, mimic/sim.py, labels its video with it). The simulation runs this same function with a look() that
+    reads its made-up world instead of a photo.
+    """
+    shots = 0
+    for move in moves:
+        slot_deg = ring.slots_deg[move.slot - 1]
+        from_cm, correction, result, error_cm = positions[move.name], 0.0, "FAIL", None
+        for attempt in range(1, MAX_TRIES + 1):
+            check_clear(move.name, slot_deg, positions, ring)
+            try:
+                pick_deg = ring.base_angle_for(*from_cm)
+            except RingError as error:
+                say(f"  {move.name} -> slot {move.slot}: cannot pick it up again: {error}")
+                break
+            drop_deg = slot_deg + correction
+            steps, hold_s, _ = pick_drop_plan(ring, limits, arm.known_pose(), pick_deg, drop_deg)
+            if on_try:
+                on_try(move, attempt)
+            say(f"  {move.name}: pick at base {round(pick_deg)}, drop at {round(drop_deg)} "
+                f"(claw closed {hold_s:.2f} s)")
+            pickdrop.run_steps(arm, steps, say, sleep)
+            shots += 1
+            photo_name, positions = look(shots)
+            measured = positions[move.name]
+            error_cm = math.dist(measured, move.to_cm)
+            angle_miss = ring.angle_for(*measured) - slot_deg
+            radial_miss = ring.off_ring_cm(*measured)
+            passed = error_cm <= PASS_CM
+            result = "PASS" if passed else ("RETRY" if attempt < MAX_TRIES else "FAIL")
+            next_correction = None
+            if not passed and attempt < MAX_TRIES:
+                next_correction = max(-MAX_CORRECTION_DEG, min(MAX_CORRECTION_DEG, correction - angle_miss))
+            log({"mode": "ring", "move": move.slot, "name": move.name, "attempt": attempt,
+                 "slot_deg": slot_deg, "pick_deg": round(pick_deg), "drop_deg": round(drop_deg),
+                 "slot_cm": move.to_cm, "measured_cm": measured, "miss_cm": round(error_cm, 2),
+                 "angle_miss_deg": round(angle_miss, 2), "radial_miss_cm": round(radial_miss, 2),
+                 "result": result, "next_correction_deg": next_correction, "claw_closed_s": round(hold_s, 2),
+                 "photo": photo_name})
+            say(f"  {move.name} -> slot {move.slot}, try {attempt}: {error_cm:.1f} cm from the slot "
+                f"({angle_miss:+.1f} degrees, {radial_miss:+.1f} cm along the radius) -> {result}")
+            if passed:
+                break
+            if abs(radial_miss) > PASS_CM:
+                say("  most of that miss is along the radius, which a base correction cannot fix")
+            if next_correction is not None:
+                say(f"  -> aiming {next_correction:+.1f} degrees from the slot")
+                correction, from_cm = next_correction, measured
+        finished.append({"name": move.name, "slot": move.slot, "result": "PASS" if result == "PASS" else "FAIL",
+                         "final_error_cm": round(error_cm, 2) if error_cm is not None else None})
+    return finished
+
+
 def run(arm, capture, layout, ring, limits, wait_for_user=input, out_root=config.RUNS_DIR, say=print,
         sleep=time.sleep) -> dict:
     preflight(layout, ring, limits)
@@ -161,56 +220,17 @@ def run(arm, capture, layout, ring, limits, wait_for_user=input, out_root=config
         moves = plan.plan_moves(positions, target, slots_cm)
         check_mess(positions, moves, ring, limits)  # before anything moves
 
-        shots = 0
-        for move in moves:
-            slot_deg = ring.slots_deg[move.slot - 1]
-            from_cm, correction, result, error_cm = positions[move.name], 0.0, "FAIL", None
-            for attempt in range(1, MAX_TRIES + 1):
-                check_clear(move.name, slot_deg, positions, ring)
-                try:
-                    pick_deg = ring.base_angle_for(*from_cm)
-                except RingError as error:
-                    say(f"  {move.name} -> slot {move.slot}: cannot pick it up again: {error}")
-                    break
-                drop_deg = slot_deg + correction
-                steps, hold_s, _ = pick_drop_plan(ring, limits, arm.known_pose(), pick_deg, drop_deg)
-                say(f"  {move.name}: pick at base {round(pick_deg)}, drop at {round(drop_deg)} "
-                    f"(claw closed {hold_s:.2f} s)")
-                pickdrop.run_steps(arm, steps, say, sleep)
-                shots += 1
-                latest, latest_map = photo(f"after_{shots}.jpg")
-                positions = scene.read_positions(latest, target, latest_map, layout)
-                measured = positions[move.name]
-                error_cm = math.dist(measured, move.to_cm)
-                angle_miss = ring.angle_for(*measured) - slot_deg
-                radial_miss = ring.off_ring_cm(*measured)
-                passed = error_cm <= PASS_CM
-                result = "PASS" if passed else ("RETRY" if attempt < MAX_TRIES else "FAIL")
-                next_correction = None
-                if not passed and attempt < MAX_TRIES:
-                    next_correction = max(-MAX_CORRECTION_DEG, min(MAX_CORRECTION_DEG, correction - angle_miss))
-                summary["attempts"] += 1
-                with open(attempts_path, "a") as f:
-                    f.write(json.dumps({
-                        "mode": "ring", "move": move.slot, "name": move.name, "attempt": attempt,
-                        "slot_deg": slot_deg, "pick_deg": round(pick_deg), "drop_deg": round(drop_deg),
-                        "slot_cm": move.to_cm, "measured_cm": measured, "miss_cm": round(error_cm, 2),
-                        "angle_miss_deg": round(angle_miss, 2), "radial_miss_cm": round(radial_miss, 2),
-                        "result": result, "next_correction_deg": next_correction, "claw_closed_s": round(hold_s, 2),
-                        "photo": Path(latest).name, "cost_so_far_usd": round(meta_api.cost_so_far(), 4),
-                        "time_s": round(time.monotonic() - started, 1)}) + "\n")
-                say(f"  {move.name} -> slot {move.slot}, try {attempt}: {error_cm:.1f} cm from the slot "
-                    f"({angle_miss:+.1f} degrees, {radial_miss:+.1f} cm along the radius) -> {result}")
-                if passed:
-                    break
-                if abs(radial_miss) > PASS_CM:
-                    say("  most of that miss is along the radius, which a base correction cannot fix")
-                if next_correction is not None:
-                    say(f"  -> aiming {next_correction:+.1f} degrees from the slot")
-                    correction, from_cm = next_correction, measured
-            summary["moves"].append({"name": move.name, "slot": move.slot,
-                                     "result": "PASS" if result == "PASS" else "FAIL",
-                                     "final_error_cm": round(error_cm, 2) if error_cm is not None else None})
+        def look(shot: int):
+            latest, latest_map = photo(f"after_{shot}.jpg")
+            return Path(latest).name, scene.read_positions(latest, target, latest_map, layout)
+
+        def log(attempt: dict) -> None:
+            summary["attempts"] += 1
+            attempt.update(cost_so_far_usd=round(meta_api.cost_so_far(), 4), time_s=round(time.monotonic() - started, 1))
+            with open(attempts_path, "a") as f:
+                f.write(json.dumps(attempt) + "\n")
+
+        carry(arm, moves, positions, ring, limits, look, log, say, sleep, finished=summary["moves"])
 
         summary["success"] = all(m["result"] == "PASS" for m in summary["moves"])
         errors = [m["final_error_cm"] for m in summary["moves"] if m["final_error_cm"] is not None]
