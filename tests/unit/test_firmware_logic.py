@@ -38,5 +38,15 @@ def test_measured_but_not_checked_by_hand_still_refuses(tmp_path):
 
 def test_moves_clamps_ramps_and_grip_timer(tmp_path):
     result = build_and_run(tmp_path, "-DLIMITS_ARE_PLACEHOLDER=0", "-DLIMITS_CHECKED_BY_HAND=1")
+    assert "grip closes downwards (closed limit 20)" in result.stdout   # the committed setting (4 Nov)
+    assert "ok   grip never closes past its limit" in result.stdout
+    assert result.returncode == 0, result.stdout
+
+
+def test_the_same_rules_hold_for_a_claw_that_closes_upwards(tmp_path):
+    # The closed limit is the one setting for the direction: on the other side of open, every rule flips with it.
+    result = build_and_run(tmp_path, "-DLIMITS_ARE_PLACEHOLDER=0", "-DLIMITS_CHECKED_BY_HAND=1",
+                           "-DGRIP_CLOSED_LIMIT=140")
+    assert "grip closes upwards (closed limit 140)" in result.stdout
     assert "ok   grip never closes past its limit" in result.stdout
     assert result.returncode == 0, result.stdout

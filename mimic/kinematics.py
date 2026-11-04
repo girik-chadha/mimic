@@ -42,7 +42,7 @@ class PoseGrid:
     grip_closed: int | None
     camera_clear: dict | None   # {"base", "shoulder", "elbow"}, used with the grip open
     placeholder: bool
-    grip_push: int | None = None  # push mode only: where the empty jaw tips just touch, minus 2 degrees (grip test)
+    grip_push: int | None = None  # push mode only: 2 degrees more open than where the empty jaw tips touch
 
     def complete_points(self) -> list[TaughtPoint]:
         return [p for p in self.points if p.hover and p.grab]
@@ -65,7 +65,7 @@ class PoseGrid:
                 raise KinematicsError(f"{name} {value} is outside the grip range {lo}-{hi} in arm_limits.json.")
         if self.grip_push is not None and self.grip_push == limits.grip_closed_limit_deg:
             raise KinematicsError(f"grip_push {self.grip_push} is the closed limit: pushing there would stall the "
-                                  "claw, and a stalled claw overheats. Use where the tips just touch, minus 2.")
+                                  "claw, and a stalled claw overheats. Use 2 degrees more open than where the tips just touch.")
         poses = [("camera_clear", self.camera_clear)] + [
             (f"{h} at ({p.x_cm}, {p.y_cm})", getattr(p, h)) for p in self.points for h in HEIGHTS]
         for label, pose in poses:

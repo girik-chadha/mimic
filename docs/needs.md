@@ -211,6 +211,30 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
   So the bridge, the serial link, the protocol and the firmware's lock all work on the real hardware.
   No servo has been driven yet.
 
+### A10c. The claw closes with a LOWER angle (B15, settled 4 Nov by Girik)
+
+- **A lower grip angle closes this claw; a higher one opens it. Open, and where the firmware's 5 s relaxation
+  returns it, is 90.** Everything before 4 Nov assumed the opposite.
+- **One setting decides the direction:** the closed limit (`GRIP_CLOSED_LIMIT` in `arm_logic.h`,
+  `grip_closed_limit_deg` in `arm_limits.json`, kept equal by the sync test). Below open (90) means a lower angle
+  closes; above open would mean a higher angle closes. There is no separate direction flag, so the two can never
+  disagree. The g++ tests run both ways (the committed limit, and the limit moved to 140).
+- **Closed limit 20, PROVISIONAL:** the empty jaws do not touch anywhere down to 40; below 40 is not checked yet
+  (C7 step 9). If they touch at 20 or above, the limit goes up to the touching angle plus 2, so the jaws can never
+  be driven into each other with no die.
+- **Grip range 10-140** is the servo's whole range, but the grip is only ever sent from the closed limit up to 140:
+  the firmware clamps there, and `Arm.move` refuses anything outside 20-140 before sending it.
+- **`grip_hold_deg`** (in `arm_limits.json`, `null` until found) is what `grip close` uses: never the closed limit,
+  because a die between the jaws would stall the claw. `grip_test.py` finds it: from `--start` (default 50) it
+  closes 2 degrees at a time towards the limit, at the first "holding? y" adds 3 degrees further closed (lower),
+  never past the limit, then checks the hold through a lift.
+- What flipped with the setting: the firmware clamp, `range_of("grip")` and `load_limits`'s checks, `grip close`
+  (now `grip_hold_deg`), `grip_test.py` (direction, `--start`, +3), the `grip_push` rule ("2 degrees more open than
+  where the tips touch", in motion.py, kinematics.py, pose_grid.json and C7). Unchanged because it never assumed a
+  direction: the 5 s relaxation (more than 5 degrees from 90 on either side counts as closed; it relaxes to 90;
+  `max_grip_hold_s` stays 5), motion.py's timing, teach.py. Side effect kept on purpose: a grip opened wider than
+  95 is also brought back to 90 after 5 s.
+
 ### A10b. Why the board last started: the B command (3 Nov, firmware not uploaded yet)
 
 - `B` replies `B <reason> <seconds since start-up>`, e.g. `B brownout 42`. Reasons: power-on, brownout, software
@@ -238,14 +262,13 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 
 | # | Question | Test that settles it | When |
 |---|---|---|---|
-| B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). **3 Nov: the kit's own ranges, from its sample code and untested on this arm, are in `calib/arm_limits.json` and `arm_logic.h` for the first powered session: base 0-180, shoulder 80-180, elbow 30-120, grip open 90 / closed limit 140, home 90 for every joint.** The grip closed limit was raised from 120 to 140 the same day (the kit's own limit is 150): a 19 mm die needs the jaws closer than 120 would allow. How far the jaws move per degree is not measured yet, so `grip_test.py`'s 2-degree steps find the angle that holds. **3 Nov: grip range widened to 40-140 to find which way the claw closes (B15): Girik's claw may close by decreasing the angle.** | `scripts/first_moves.py` (needs.md C7) measures the real ranges; link lengths and gripper opening with a ruler. | First powered session |
+| B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). **3 Nov: the kit's own ranges, from its sample code and untested on this arm, are in `calib/arm_limits.json` and `arm_logic.h` for the first powered session: base 0-180, shoulder 80-180, elbow 30-120, grip open 90 / closed limit 140, home 90 for every joint.** The grip closed limit was raised from 120 to 140 the same day (the kit's own limit is 150): a 19 mm die needs the jaws closer than 120 would allow. How far the jaws move per degree is not measured yet, so `grip_test.py`'s 2-degree steps find the angle that holds. **4 Nov: a lower angle closes this claw (A10c): open 90, closed limit 20 (provisional), range 10-140; the 140 above no longer applies.** | `scripts/first_moves.py` (needs.md C7) measures the real ranges; link lengths and gripper opening with a ruler. | First powered session |
 | B6 | How precise is the arm at our table distances? | `scripts/repeatability.py --pose B S E G`: the same pose 10 times from alternating sides, the camera measures the claw-tip marker; spread (mean, standard deviation, max), backlash, verdict against the 1.5 cm tolerance. | First powered session |
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
 | B13 | The demo video, on the first real `show_demo.py` run: does SAM accept the shrunk video (10 fps H.264, made by ffmpeg, not a phone)? How long does a video call take (our timeout for video is 300 s; the 28 Oct call was never timed)? Does a track keep its id while a hand moves the block (A3's open question; if not, `show_demo.py` stops with "2 tracks")? | `python scripts/show_demo.py demo.mp4 --save-replies` on an 8-10 s video of the real sheet. Since 3 Nov it needs only the measured dots (`dots_measured`); the slot positions are still placeholders, so the blocks must sit within 3 cm of the slots in `layout.json` or it stops with "not in a slot". About $0.10-0.13 for 3 blocks. | Dots measured 3 Nov; when the video is recorded |
 | B14 | Does Spark name the dice "colour die" with the new prompt line, and does SAM find exactly 1 box for each such name (two dice of similar colours could share one)? | One real `brain.name_objects` call on a photo of the dice on the sheet; save Spark's reply and each SAM reply as fixtures. About $0.01-0.02. | When the dice photo is taken |
-| B15 | **Which way does the claw close? (Girik, 3 Nov: my claw may close by decreasing the angle.)** Everything so far assumes a larger angle closes it. To test it, the grip range is widened to 40-140 in both limit files (open 90 and closed limit 140 unchanged), so `grip -5` from the open stop is allowed. **Until it is settled the 140 limit only guards the high side: if decreasing closes the claw, nothing but the 5 s relaxation stops it squeezing down to 40.** What assumes "closed = larger angle" (not changed yet): the closed limit's place (`GRIP_CLOSED_LIMIT 140` in arm_logic.h, `grip_closed_limit_deg` in arm_limits.json); `Arm.grip(closed=True)` and `arm_jog`'s `grip close` (go straight to 140); `grip_test.py` (steps towards the closed limit, from open); the `grip_push` rule ("tips touch, minus 2 degrees") in motion.py's comments, the kinematics error text, pose_grid.json's note and C7 step 12, and the check that only refuses grip_push equal to 140; the B4 note (closer than 120 needs a larger angle); the g++ test's `GRIP_DIR` (follows the limit). Already direction-free: the firmware's 5 s relaxation (it counts the grip as closed more than 5 degrees from open on either side and relaxes it to open), the grip clamp (the range), and motion.py's grip timing (taught angles). | C7 step 9: `grip -5` from open, watch the jaws. Then move the closed limit to the closing side in both files and fix the list. | First powered session |
 | B12 | Does opening COM7 reset the board? The bridge sets DTR and RTS low before opening so that it should not. If it does, every session restarts the arm (since 3 Nov: it comes back disarmed, so an enabled arm goes limp at every session start) and a brownout is hidden by the next power-on. | After the upload (C7 step 4): `arm_jog.py`, type `boot` at once, `quit`, wait a minute, repeat. If the seconds are always 2-3, opening resets the board. | First powered session |
 
 ---
@@ -313,7 +336,8 @@ In every script, **s** at any prompt or **Ctrl+C** sends S (stop) then D (limp) 
 the reason, then sends S and D; a normal `quit` says "Hold the arm", waits 2 s and disables. If anything buzzes,
 strains or smells: switch the batteries off.
 
-**Before power** (steps 1-3 prepared 3 Nov: kit ranges in both files, grip closed limit 140 and grip range 40-140,
+**Before power** (steps 1-3 prepared 3-4 Nov: kit ranges in both files; grip closes with a lower angle, open 90,
+closed limit 20 (provisional), range 10-140;
 unlocked, disarmed start with E and D, B command, firmware compiled and copied to
 `C:\Users\girik\mimic_firmware\mimic_arm`; not uploaded yet)
 1. Write the kit's own joint ranges (B4) into **both** `calib/arm_limits.json` and
@@ -344,10 +368,12 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
    **Whenever the arm twitches, drops or stops answering, type `boot` straight away:** `brownout` (or a small
    number of seconds you did not expect) means the ESP32 restarted: it comes back disarmed, so the arm goes limp.
    Switch off and check the batteries.
-9. **Which way does the claw close? (B15)** Still in `arm_jog`, with the arm enabled and the claw empty:
-   `grip -5` (to 85) and watch the jaws, then `grip +5` back to 90. Write down whether 85 opened or closed it.
-   Until this is known, do not step the grip further below open than about 10 degrees: the 140 closed limit only
-   guards the high side, and the range now goes down to 40 (see B15).
+9. **Do the empty jaws touch at 20 or above? (A10c)** Still in `arm_jog`, with the arm enabled and the claw empty:
+   `grip -50` (to 40), then `grip -5` at a time (35, 30, 25, 20), watching the tips each time. Python refuses
+   anything below 20. After 5 s closed the firmware opens the claw back to 90; the next `grip -5` then closes it
+   again from 90 to the next angle, slowed by the speed limit, which is fine. **If the tips touch at 20 or above:**
+   `grip open` at once and tell Claude the angle: the closed limit goes up to that angle plus 2 in both files, and
+   you upload again. Finish with `grip open`.
 
 **Ranges**
 10. `python scripts/first_moves.py`: it asks before enabling (type yes once the arm is posed at 90). Then base,
@@ -362,18 +388,20 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     (hold the arm), switch the batteries off, upload (step 3), then power on again (steps 6-8).
 
 **Grip and repeatability**
-12. **Only if step 9 showed that a larger angle closes the claw** (`grip_test.py` steps towards 140; if the claw
-    closes by decreasing the angle, stop here and fix the grip direction first, B15):
-    `python scripts/grip_test.py --lift "<the lift you wrote down, e.g. shoulder -4>"` (one or more joints, 10
-    degrees in total at most). It asks before enabling. At home with the claw open, place the cube while nothing is
-    sent, press Enter. It closes in 2-degree steps (opening again between steps, because of the 5 s grip timer) and
-    asks "did it hold?"; at the first y it lifts, holds 2 s, lowers and opens. The angle that held goes into the
-    proposal as `grip_hold_deg`. Use this rather than `grip close` in `arm_jog.py`, which goes straight to 140.
+12. `python scripts/grip_test.py --lift "<the lift you wrote down, e.g. shoulder -4>"` (one or more joints, 10
+    degrees in total at most; `--start 50` is the default first angle). It asks before enabling. At home with the
+    claw open (90), place the die between the jaws while nothing is sent, press Enter. It closes towards the limit
+    in 2-degree steps from `--start` (50, 48, 46 ...), opening to 90 between steps because of the 5 s grip timer,
+    and asks "holding? y/n". At the first y, grip_hold is that angle plus 3 degrees further closed (lower), never
+    past the closed limit; then it lifts, holds 2 s, lowers and opens to check. If held, grip_hold goes into the
+    proposal as `grip_hold_deg`: **copy it into `calib/arm_limits.json`**. `grip close` in `arm_jog.py` uses it
+    (and refuses until it is set); it never goes to the closed limit.
     **Push mode only (opt-in): `grip_push` is unknown until this test.** With the claw empty, in
-    `scripts/teach.py` (type `enable` first) use `set grip <angle>` in 2-degree steps from the angle that held
-    until the jaw tips just touch (the firmware opens a closed claw after 5 s; the next `set` closes it again).
-    `grip_push` is that angle minus 2 degrees: write it into `calib/pose_grid.json` as `"grip_push"`. Never use
-    the 140 limit: a stalled claw overheats. Until it is set, push mode refuses to run.
+    `scripts/teach.py` (type `enable` first) use `set grip <angle>` in 2-degree steps from grip_hold towards the
+    limit (lower) until the jaw tips just touch (the firmware opens a closed claw after 5 s; the next `set` closes
+    it again). `grip_push` is 2 degrees more open than that, so the touching angle plus 2 (if they never touch
+    before the limit, the limit plus 2): write it into `calib/pose_grid.json` as `"grip_push"`. Never use the
+    closed limit itself: a stalled claw overheats. Until it is set, push mode refuses to run.
 13. Put the gripper marker on the claw tip. `python scripts/repeatability.py --pose B S E G` (a pose that hides no
     dot; `--target X Y` from a ruler is optional). It asks before enabling. Cost cap $0.10. Verdict: 2 x standard
     deviation under 0.5 cm, full corrections are fine; over 1 cm, apply only part of each miss.

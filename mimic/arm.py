@@ -43,18 +43,25 @@ class ArmError(RuntimeError):
 class ArmLimits:
     pins: dict[str, int]
     ranges_deg: dict[str, tuple[int, int]]   # base, shoulder, elbow
-    grip_open_deg: int
-    grip_closed_limit_deg: int               # never close further (the grip servo overheats)
-    grip_range_deg: tuple[int, int]          # the grip's whole range; the closed limit is one end of it
+    grip_open_deg: int                       # open, and where the firmware's 5 s relaxation returns the grip
+    grip_closed_limit_deg: int               # never close further; below open means a lower angle closes the claw
+    grip_range_deg: tuple[int, int]          # the grip servo's whole range; only the open side of the limit is used
     home_deg: dict[str, int]
     min_ms_per_degree: int                   # speed limit
     max_grip_hold_s: float                   # the firmware relaxes a closed grip after this long
     placeholder: bool
     limits_checked_by_hand: bool
+    grip_hold_deg: int | None = None         # what "grip close" uses: found by grip_test.py; None until then
+
+    @property
+    def grip_close_dir(self) -> int:
+        """-1 if a lower angle closes the claw, +1 if a higher one does. The closed limit's side of open decides."""
+        return -1 if self.grip_closed_limit_deg < self.grip_open_deg else 1
 
     def range_of(self, joint: str) -> tuple[int, int]:
-        if joint == "grip":
-            return self.grip_range_deg
+        if joint == "grip":  # from the closed limit to the end of the range on the open side
+            lo, hi = self.grip_range_deg
+            return (self.grip_closed_limit_deg, hi) if self.grip_close_dir < 0 else (lo, self.grip_closed_limit_deg)
         return self.ranges_deg[joint]
 
 
@@ -73,6 +80,7 @@ def load_limits(path=config.ARM_LIMITS_PATH) -> ArmLimits:
         max_grip_hold_s=data["max_grip_hold_s"],
         placeholder=data["placeholder"],
         limits_checked_by_hand=data["limits_checked_by_hand"],
+        grip_hold_deg=data.get("grip_hold_deg"),
     )
     if sorted(limits.pins) != sorted(JOINTS) or len(set(limits.pins.values())) != 4:
         raise ArmError(f"arm_limits.json needs 4 different pins, one per joint: {limits.pins}")
@@ -86,9 +94,15 @@ def load_limits(path=config.ARM_LIMITS_PATH) -> ArmLimits:
     if not 0 <= lo < hi <= 180 or not lo <= limits.grip_open_deg <= hi:
         raise ArmError(f"arm_limits.json: grip range {lo}-{hi} must be low-high within 0-180 and include open "
                        f"({limits.grip_open_deg}).")
-    if limits.grip_closed_limit_deg not in (lo, hi):
-        raise ArmError(f"arm_limits.json: the grip closed limit {limits.grip_closed_limit_deg} must be one end of "
-                       f"the grip range {lo}-{hi}, so no angle can go past it.")
+    if not lo <= limits.grip_closed_limit_deg <= hi:
+        raise ArmError(f"arm_limits.json: the grip closed limit {limits.grip_closed_limit_deg} is outside the grip "
+                       f"range {lo}-{hi}.")
+    hold = limits.grip_hold_deg
+    if hold is not None:
+        d, open_deg, limit = limits.grip_close_dir, limits.grip_open_deg, limits.grip_closed_limit_deg
+        if not ((hold - open_deg) * d > 0 and (hold - limit) * d <= 0):
+            raise ArmError(f"arm_limits.json: grip_hold_deg {hold} must be on the closing side of open "
+                           f"({open_deg}) and not past the closed limit ({limit}).")
     for joint in JOINTS:
         lo, hi = limits.range_of(joint)
         if not lo <= limits.home_deg[joint] <= hi:
@@ -311,9 +325,14 @@ class Arm:
         self.angles = target
 
     def grip(self, closed: bool) -> None:
+        """Close to grip_hold_deg (never to the closed limit: a die between the jaws would stall the claw), or open."""
+        self._refuse_real_move_with_unchecked_limits()
         current = self.known_pose()
         pose = dict(current)
-        pose["grip"] = self.limits.grip_closed_limit_deg if closed else self.limits.grip_open_deg
+        if closed and self.limits.grip_hold_deg is None:
+            raise ArmError("grip_hold_deg is not known yet: find it with scripts/grip_test.py (needs.md C7) and copy it "
+                           "into calib/arm_limits.json. 'grip close' never goes to the closed limit.")
+        pose["grip"] = self.limits.grip_hold_deg if closed else self.limits.grip_open_deg
         change = abs(pose["grip"] - current["grip"])
         self.move(pose, ms=max(500, change * self.limits.min_ms_per_degree))
 

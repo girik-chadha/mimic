@@ -18,8 +18,15 @@
 #ifndef LIMITS_CHECKED_BY_HAND
 #define LIMITS_CHECKED_BY_HAND 1
 #endif
-#define GRIP_OPEN 90
-#define GRIP_CLOSED_LIMIT 140      // never close further than this (the grip servo overheats; kit's own limit 150)
+#define GRIP_OPEN 90               // open, and where the 5 s relaxation returns the grip
+// The closed limit is the ONE setting for the claw's direction: below GRIP_OPEN means a lower angle closes the claw
+// (Girik's claw, 4 Nov), above it means a higher angle closes it. Never close further than this.
+// PROVISIONAL (4 Nov): 20. The empty jaws do not touch anywhere down to 40; below 40 is not checked yet. If they
+// touch at 20 or above, raise it (to the touching angle plus 2) in BOTH files.
+#ifndef GRIP_CLOSED_LIMIT
+#define GRIP_CLOSED_LIMIT 20
+#endif
+#define GRIP_CLOSE_DIR (GRIP_CLOSED_LIMIT < GRIP_OPEN ? -1 : 1)  // -1: a lower angle closes
 #define MIN_MS_PER_DEGREE 10       // speed limit: a move of 20 degrees takes at least 200 ms
 #define MAX_GRIP_HOLD_MS 5000      // a closed grip relaxes after this long
 #define MAX_LINE 64                // longer command lines are rejected
@@ -28,8 +35,8 @@ const int PINS[4] = {16, 17, 2, 4};          // base, shoulder, elbow, grip (kit
 const int MIN_ANGLE[3] = {0, 80, 30};        // base, shoulder, elbow
 const int MAX_ANGLE[3] = {180, 180, 120};    // base, shoulder, elbow
 const int HOME[4] = {90, 90, 90, 90};        // base, shoulder, elbow, grip
-const int GRIP_RANGE[2] = {40, 140};         // the grip's whole range (3 Nov: below open too, to find which way the
-                                             // claw closes); GRIP_CLOSED_LIMIT must be one end of it
+const int GRIP_RANGE[2] = {10, 140};         // the grip servo's whole range (4 Nov); the grip is only ever sent from
+                                             // GRIP_CLOSED_LIMIT to the far end on the open side (clamp_joint)
 
 #define GRIP_CLOSED_THRESHOLD 5    // the grip counts as closed once it is this far from open
 #define HOME_MS 1500               // how long H takes (at least; the speed limit can make it longer)
@@ -97,15 +104,16 @@ inline void update_attached(ArmState &a, unsigned long now_ms) {
 // J and H are only allowed once all four servos are switched on.
 inline bool armed(const ArmState &a) { return a.enabled && a.attached == 4; }
 
-// Keep an angle inside its joint's range. For the grip, the range is open .. closed limit.
+// Keep an angle inside its joint's range. For the grip: never past the closed limit on the closing side, and never
+// past the end of GRIP_RANGE on the open side.
 inline int clamp_joint(int joint, int angle) {
   int lo, hi;
   if (joint < 3) {
     lo = MIN_ANGLE[joint];
     hi = MAX_ANGLE[joint];
   } else {
-    lo = GRIP_RANGE[0];
-    hi = GRIP_RANGE[1];
+    lo = GRIP_CLOSE_DIR < 0 ? GRIP_CLOSED_LIMIT : GRIP_RANGE[0];
+    hi = GRIP_CLOSE_DIR < 0 ? GRIP_RANGE[1] : GRIP_CLOSED_LIMIT;
   }
   if (angle < lo) return lo;
   if (angle > hi) return hi;

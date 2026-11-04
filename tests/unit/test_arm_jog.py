@@ -37,12 +37,21 @@ def test_step_time_respects_the_speed_limit(fake):
 def test_grip_home_status_stop(fake):
     a, t = fake
     assert jog.handle(a, "home") == "home"
-    assert jog.handle(a, "grip close") == "grip close"
+    assert jog.handle(a, "grip close").startswith("refused: grip_hold_deg is not known yet")  # never the limit
     assert jog.handle(a, "grip open") == "grip open"
     assert jog.handle(a, "status") == ("{'base': 90, 'shoulder': 90, 'elbow': 90, 'grip': 90, 'locked': False, "
                                        "'armed': True}")
     assert jog.handle(a, "stop") == "stopped"
-    assert t.sent == ["H", "J 90 90 90 140 500", "J 90 90 90 90 500", "?", "S"]
+    assert t.sent == ["H", "J 90 90 90 90 500", "?", "S"]
+
+
+def test_grip_close_goes_to_grip_hold_once_it_is_known():
+    limits = dataclasses.replace(arm.load_limits(config.ARM_LIMITS_PATH), grip_hold_deg=45)
+    t = FakeTransport(limits, enabled=True)
+    a = Arm(t, limits)
+    assert jog.handle(a, "grip close") == "grip close"
+    assert t.sent[-1] == "J 90 90 90 45 500"                    # a lower angle closes this claw
+    assert jog.handle(a, "grip -30").startswith("refused: grip 15 degrees is outside its range 20-140")
 
 
 def test_step_past_a_limit_is_refused_and_not_sent(fake):

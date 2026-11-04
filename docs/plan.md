@@ -188,7 +188,11 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
   on one at a time (`servos_to_attach()`, now counted from E), `D` switches them all off. `J` and `H` reply
   `ERR not enabled` until all four are on; `?`, `S`, `B` and `D` always work. The lock and the ramp are unchanged.
   Python: `arm.enable()` / `arm.disable()`; every script asks before enabling; `s`, Ctrl+C and errors send S then
-  D; a normal quit says "Hold the arm" and disables. Grip range 40-140 (`GRIP_RANGE`), closed limit 140 one end of it.
+  D; a normal quit says "Hold the arm" and disables.
+- (4 Nov, Girik) **A lower angle closes this claw.** The closed limit is the one setting for the direction (below
+  open 90 = lower closes): `GRIP_CLOSED_LIMIT 20` (provisional), `GRIP_RANGE` 10-140, and the clamp never sends
+  the grip past the limit. `grip close` goes to `grip_hold_deg` (found by `grip_test.py`), never to the limit.
+  The 5 s relaxation still returns the grip to 90 (needs.md A10c).
 - (3 Nov) `B` is read-only and always allowed, like `?` and `S`. The reason comes from the ESP32's reset code
   (mapping in `arm_logic.h`, tested with g++; the numbers are checked against the ESP32's own names at compile time).
   It shows ESP32 resets only, not a sag in the servo battery that leaves the ESP32 running (needs.md A10b).
@@ -217,7 +221,7 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
 ### 2.2c Push mode (opt-in, added 3 Nov, Girik's decision): a fallback if the claw cannot hold a block
 
 `motion.plan_push(grid, limits, start, from_cm, to_cm, others_cm)` plans one straight push, before anything moves:
-- **Claw angle `grip_push`** (in `calib/pose_grid.json`): where the empty jaw tips just touch, minus 2 degrees, found
+- **Claw angle `grip_push`** (in `calib/pose_grid.json`): 2 degrees more open than where the empty jaw tips touch, found
   in the grip test. **Unknown (null) until the grip test, and push mode refuses to run without it.** Never the
   140 closed limit: a stalled claw overheats.
 - **Direction:** the straight line from the block's centre to its slot. The claw comes down 3 cm behind the block

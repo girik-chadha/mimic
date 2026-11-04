@@ -1,22 +1,26 @@
-"""First powered session, step 2: find the grip angle that holds a cube, at the home pose.
+"""First powered session, step 2: find grip_hold, the grip angle that holds a die, at the home pose.
 
     python scripts/grip_test.py --lift "shoulder -4"            the real arm
-    python scripts/grip_test.py --lift "shoulder -4 elbow +2" --dry-run
+    python scripts/grip_test.py --lift "shoulder -4 elbow +2" --start 50 --dry-run
 
-Uses the ranges in calib/arm_limits_proposed.json (from first_moves.py), and the real arm must be unlocked.
-1. The arm goes home with the claw open. While you place the cube between the open jaws nothing is sent;
+Uses the joint ranges in calib/arm_limits_proposed.json (from first_moves.py) and the grip settings in
+calib/arm_limits.json (first_moves never measures the grip); the real arm must be unlocked.
+The closing direction comes from the closed limit (on this claw a LOWER angle closes it, 4 Nov).
+1. The arm goes home with the claw open (90). While you place the die between the open jaws nothing is sent;
    press Enter when it is there.
-2. The claw closes in 2-degree steps. Each step: close, hold 1.5 s, open again, then you are asked
-   "did it hold the cube? y/n". It opens between steps because the firmware lets go of any grip held
-   closed for 5 s, and your answer can take longer than that.
-3. At the first y: close, lift (--lift: one or more joints, 10 degrees in total at most), hold 2 s,
-   lower, open. The planned time the grip is closed must stay under max_grip_hold_s minus 0.5 s, or
-   nothing moves.
-4. If the cube stayed held, the angle is written into the proposal as grip_hold_deg (use it as
-   grip_closed when teaching). calib/arm_limits.json is never changed.
-s at any prompt, or Ctrl+C, sends S (stop) and exits.
+2. The claw closes towards the closed limit in 2-degree steps, starting at --start (default 50). Each step: close,
+   hold 1.5 s, open again, then you are asked "holding? y/n". It opens between steps because the firmware lets
+   go of any grip held closed for 5 s, and your answer can take longer than that.
+3. At the first y, grip_hold is that angle plus 3 degrees further closed, never past the closed limit. Then the
+   lift check at grip_hold: close, lift (--lift: one or more joints, 10 degrees in total at most), hold 2 s,
+   lower, open. The planned time the grip is closed must stay under max_grip_hold_s minus 0.5 s, or nothing moves.
+4. If the die stayed held, grip_hold is written into the proposal as grip_hold_deg: copy it into
+   calib/arm_limits.json ('grip close' uses it) and use it as grip_closed when teaching. arm_limits.json is never
+   changed here.
+s at any prompt, or Ctrl+C, sends S (stop) then D (servos off) and exits.
 """
 import argparse
+import dataclasses
 import json
 import sys
 import time
@@ -26,6 +30,8 @@ from mimic import config, session
 from mimic.arm import ArmError
 
 GRIP_STEP_DEG = 2
+HOLD_EXTRA_DEG = 3           # grip_hold = the first angle that held, plus this much further closed
+DEFAULT_START_DEG = 50       # the first angle tried (Girik, 4 Nov: the empty jaws do not touch down to 40)
 STEP_HOLD_S = 1.5
 LIFT_HOLD_S = 2.0
 MAX_LIFT_DEG = 10
@@ -65,20 +71,39 @@ def _move(arm, pose: dict, ms: int, sleep) -> None:
     sleep(ms / 1000 + 0.1)
 
 
-def run_test(arm, lift: dict, ask, say=print, sleep=time.sleep) -> int | None:
-    """Returns the grip angle that held the cube through the lift, or None."""
+def check_start(limits, start: int) -> None:
+    """--start must close the claw (be on the closing side of open) and not be past the closed limit."""
+    d, open_deg, limit = limits.grip_close_dir, limits.grip_open_deg, limits.grip_closed_limit_deg
+    if not ((start - open_deg) * d > 0 and (start - limit) * d <= 0):
+        raise GripTestError(f"--start {start} must be between open ({open_deg}) and the closed limit ({limit}), "
+                            f"on the closing side.")
+
+
+def hold_angle(limits, held_at: int, say=print) -> int:
+    """HOLD_EXTRA_DEG further closed than the first angle that held, but never past the closed limit."""
+    d, limit = limits.grip_close_dir, limits.grip_closed_limit_deg
+    hold = held_at + d * HOLD_EXTRA_DEG
+    if (hold - limit) * d > 0:
+        say(f"  {held_at} + {HOLD_EXTRA_DEG} degrees closed would pass the closed limit {limit}: using {limit}.")
+        hold = limit
+    return hold
+
+
+def run_test(arm, lift: dict, ask, say=print, sleep=time.sleep, start: int = DEFAULT_START_DEG) -> int | None:
+    """Returns grip_hold: the first angle that held, plus 3 degrees further closed, if it held through the lift."""
     limits = arm.limits
+    check_start(limits, start)
     allowed = limits.max_grip_hold_s - HOLD_MARGIN_S
     home = dict(limits.home_deg, grip=limits.grip_open_deg)
     _move(arm, home, _ms(arm, home, STEP_MS_PER_DEGREE), sleep)
-    ask("Place the cube between the open jaws (nothing is being sent), then press Enter: ")
+    ask("Place the die between the open jaws (nothing is being sent), then press Enter: ")
 
-    direction = 1 if limits.grip_closed_limit_deg > limits.grip_open_deg else -1
-    angle = limits.grip_open_deg
+    direction = limits.grip_close_dir   # -1 on this claw: a lower angle closes it
+    angle = start - direction * GRIP_STEP_DEG  # so the first step below is exactly --start
     while True:
         angle += direction * GRIP_STEP_DEG
         if (angle - limits.grip_closed_limit_deg) * direction > 0:
-            say("Reached the grip's closed limit without a hold: check the cube size and the claw.")
+            say("Reached the grip's closed limit without a hold: check the die size and the claw.")
             return None
         closed = dict(home, grip=angle)
         close_ms = _ms(arm, closed, STEP_MS_PER_DEGREE)
@@ -89,10 +114,14 @@ def run_test(arm, lift: dict, ask, say=print, sleep=time.sleep) -> int | None:
         _move(arm, closed, close_ms, lambda s: None)
         sleep(close_ms / 1000 + STEP_HOLD_S)
         _move(arm, home, _ms(arm, home, STEP_MS_PER_DEGREE), sleep)
-        if _yes(ask, "did it hold the cube? y/n (s = stop): "):
+        if _yes(ask, "holding? y/n (s = stop): "):
             break
 
-    # the real test: close, lift, hold 2 s, lower, open, at normal speed so the grip timer is respected
+    held_at = angle
+    angle = hold_angle(limits, held_at, say)
+    say(f"Held at {held_at}: grip_hold = {angle} ({HOLD_EXTRA_DEG} degrees further closed, never past the limit)")
+
+    # the lift check: close, lift, hold 2 s, lower, open, at normal speed so the grip timer is respected
     closed = dict(home, grip=angle)
     lifted = dict(closed, **{j: closed[j] + d for j, d in lift.items()})
     steps = [("close", closed), ("lift", lifted), ("lower", closed)]
@@ -111,9 +140,9 @@ def run_test(arm, lift: dict, ask, say=print, sleep=time.sleep) -> int | None:
         if label == "lift":
             sleep(LIFT_HOLD_S)
     _move(arm, home, _ms(arm, home, limits.min_ms_per_degree), sleep)
-    if _yes(ask, "was the cube held all the way through the lift? y/n (s = stop): "):
+    if _yes(ask, "was the die held all the way through the lift? y/n (s = stop): "):
         return angle
-    say(f"Not held through the lift. Try again; the next run can start nearer {angle}.")
+    say(f"Not held through the lift. Try again, for example with --start {held_at}.")
     return None
 
 
@@ -128,6 +157,9 @@ def main(argv=None, read=input, sleep=time.sleep, say=print, proposed_path=PROPO
     parser = argparse.ArgumentParser(description="Find the grip angle that holds a cube.")
     parser.add_argument("--lift", required=True, help='e.g. "shoulder -4" or "shoulder -4 elbow +2" (10 degrees max)')
     parser.add_argument("--dry-run", action="store_true", help="the fake arm")
+    parser.add_argument("--start", type=int, default=DEFAULT_START_DEG,
+                        help=f"first grip angle tried (default {DEFAULT_START_DEG}); then 2-degree steps towards the "
+                             "closed limit")
     args = parser.parse_args(argv)
     try:
         lift = parse_lift(args.lift)
@@ -143,20 +175,25 @@ def main(argv=None, read=input, sleep=time.sleep, say=print, proposed_path=PROPO
     try:
         active = arm_module.load_limits()
         arm = session.connect(args.dry_run, active, echo=say)  # a locked arm is refused here
-        arm.limits = arm_module.load_limits(proposed_path)       # the ranges you approved
-    except ArmError as error:
+        proposed = arm_module.load_limits(proposed_path)         # the joint ranges you approved
+        arm.limits = dataclasses.replace(                        # ...and the grip settings in force now
+            proposed, grip_open_deg=active.grip_open_deg, grip_closed_limit_deg=active.grip_closed_limit_deg,
+            grip_range_deg=active.grip_range_deg, grip_hold_deg=active.grip_hold_deg)
+        check_start(arm.limits, args.start)
+    except (ArmError, GripTestError) as error:
         say(f"STOPPED: {error}")
         return 1
 
     def body():
         session.confirm_and_enable(arm, read, say, sleep)  # the board starts disarmed
-        angle = run_test(arm, lift, lambda q: session.ask(q, read), say, sleep)
+        angle = run_test(arm, lift, lambda q: session.ask(q, read), say, sleep, start=args.start)
         if angle is None:
             return 2
         data = json.loads(proposed_path.read_text())
         data["grip_hold_deg"] = angle
         proposed_path.write_text(json.dumps(data, indent=2) + "\n")
-        say(f"grip_hold_deg = {angle} written to {proposed_path} (use it as grip_closed when teaching).")
+        say(f"grip_hold_deg = {angle} written to {proposed_path}: copy it into calib/arm_limits.json "
+            "('grip close' uses it) and use it as grip_closed when teaching.")
 
     return session.guarded(arm, body, say, sleep)
 

@@ -165,3 +165,16 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   range). Compiled (301,681 bytes), Windows copy refreshed, not uploaded. needs.md C7 rewritten, B15 (which way the
   claw closes, with the list of everything that assumes a larger angle closes it). Also added the bridge
   pass-through test for `B` that the 3 Nov B commit described but had not actually added.
+
+## 4 Nov 2026
+
+- Claw direction flipped (Girik: a lower angle closes it, open 90). The closed limit is the one setting for the
+  direction: `GRIP_CLOSED_LIMIT 20` / `grip_closed_limit_deg` 20, PROVISIONAL (the empty jaws do not touch down to
+  40); `GRIP_RANGE` / `grip_range_deg` 10-140. The firmware clamps the grip between the closed limit and 140;
+  `range_of("grip")` is 20-140. The 5 s relaxation still returns to 90; max_grip_hold_s stays 5. New
+  `grip_hold_deg` (null until found): `grip close` uses it, never the limit. `grip_test.py --start 50`: 2-degree
+  steps towards the limit, at the first "holding? y" 3 degrees further closed (never past the limit), then the lift
+  check; it takes the grip settings from arm_limits.json, not from an older proposal. g++ tests build both ways
+  (limit 20 and 140); breaking the clamp on purpose failed 3 checks in the downward build. Compiled (301,681
+  bytes), Windows copy refreshed, not uploaded. B15 moved to needs.md A10c. The "claw fixed" plan is cancelled
+  (the claw works).

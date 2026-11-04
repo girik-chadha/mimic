@@ -507,3 +507,18 @@ unlocked, because it only needs the measured dots, and a locked arm still refuse
 
 Two sentences: "The arm now only comes alive when you tell it to, one servo at a time, and it goes limp whenever a
 script ends, is stopped, or fails. That means power cuts and restarts can no longer make it jump on its own."
+
+### 4 Nov: the claw closes the other way
+
+- Girik found that a lower angle closes this claw and a higher one opens it; open is 90. All the grip code had
+  assumed the opposite.
+- Rather than a separate "direction" switch, the closed limit itself says which way is closed: it is below 90, so
+  lower is closed. Moving that one number to the other side of 90 flips the firmware's clamp, the Python checks,
+  `grip close` and the grip test together, and the tests check both directions.
+- The closed limit (20 for now) is where the empty jaws stop short of touching, so the servo can never be driven
+  into itself. A separate "hold" angle, found by the grip test (the first angle that holds the die, plus 3 degrees
+  more closed), is what "grip close" uses.
+
+Two sentences: "One number, the closed limit, now decides which way the claw closes, so the whole system flipped to
+match this claw by changing it. The claw closes to a measured hold angle, never to its limit, so it cannot squeeze
+itself or a die hard enough to stall and overheat."

@@ -90,7 +90,7 @@ def go_camera_clear(arm, grid, limits, sleep=time.sleep) -> None:
 
 # ---------- push mode (opt-in: run_mimic.py --push), for when the claw cannot hold a block ----------
 #
-# The claw, closed to grip_push (where its empty tips just touch, minus 2 degrees: never the closed limit, because a
+# The claw, closed to grip_push (2 degrees more open than where its empty tips touch: never the closed limit, because a
 # stalled claw overheats), comes down behind the block and slides it in a straight line towards its slot:
 #
 #     hover behind (open) -> close to grip_push -> lower to grab height -> slide in short steps -> back off -> lift -> open

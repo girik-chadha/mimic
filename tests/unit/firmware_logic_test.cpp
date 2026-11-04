@@ -60,12 +60,13 @@ static void test_always() {
   CHECK(strcmp(send(a, "E 90 90 90 90 7", 0), "ERR bad command") == 0, "E with extra numbers rejected");
   CHECK(strcmp(send(a, "EX", 0), "ERR bad command") == 0, "EX is not E");
   CHECK(!a.enabled, "a bad E enables nothing");
-  // grip range: open and the closed limit inside it, and the closed limit is one end, so nothing goes past it
+  // grip: the closed limit sets the direction (GRIP_CLOSE_DIR); open and the limit are both inside the range
   CHECK(GRIP_RANGE[0] < GRIP_RANGE[1], "grip range is low-high");
   CHECK(GRIP_RANGE[0] <= GRIP_OPEN && GRIP_OPEN <= GRIP_RANGE[1], "grip open is inside the grip range");
-  CHECK(GRIP_RANGE[0] <= HOME[3] && HOME[3] <= GRIP_RANGE[1], "grip home is inside the grip range");
-  CHECK(GRIP_CLOSED_LIMIT == GRIP_RANGE[0] || GRIP_CLOSED_LIMIT == GRIP_RANGE[1],
-        "the grip closed limit is one end of the range (the range never goes past it)");
+  CHECK(GRIP_RANGE[0] <= GRIP_CLOSED_LIMIT && GRIP_CLOSED_LIMIT <= GRIP_RANGE[1], "grip closed limit is inside the range");
+  CHECK(GRIP_CLOSE_DIR == (GRIP_CLOSED_LIMIT < GRIP_OPEN ? -1 : 1) && GRIP_CLOSED_LIMIT != GRIP_OPEN,
+        "the closing direction comes from which side of open the closed limit is on");
+  CHECK(clamp_joint(3, HOME[3]) == HOME[3], "grip home is an allowed angle");
   CHECK(servos_enabled() == limits_ok(), "servos are enabled exactly when the limits are ok");
   CHECK(strcmp(send(a, "S", 0), "OK") == 0, "S always works");
 
@@ -242,8 +243,12 @@ static void test_clamps() {
   int inside = (MIN_ANGLE[1] + MAX_ANGLE[1]) / 2;
   CHECK(clamp_joint(1, inside) == inside, "an angle inside the range is unchanged");
   CHECK(clamp_joint(3, GRIP_CLOSED_LIMIT + 30 * GRIP_DIR) == GRIP_CLOSED_LIMIT, "grip never closes past its limit");
-  CHECK(clamp_joint(3, GRIP_OPEN - 5) == GRIP_OPEN - 5, "grip can go 5 degrees below open (range 40-140)");
-  CHECK(clamp_joint(3, GRIP_RANGE[0] - 10) == GRIP_RANGE[0], "grip never goes below its range");
+  CHECK(clamp_joint(3, GRIP_CLOSED_LIMIT + 1 * GRIP_DIR) == GRIP_CLOSED_LIMIT, "grip: 1 degree past the limit is clamped");
+  CHECK(clamp_joint(3, GRIP_CLOSED_LIMIT) == GRIP_CLOSED_LIMIT, "grip can close right up to its limit");
+  CHECK(clamp_joint(3, GRIP_OPEN + 5 * GRIP_DIR) == GRIP_OPEN + 5 * GRIP_DIR, "grip can close 5 degrees from open");
+  int open_end = GRIP_DIR < 0 ? GRIP_RANGE[1] : GRIP_RANGE[0];  // the far end of the range, on the open side
+  CHECK(clamp_joint(3, open_end) == open_end, "grip can open to the end of its range");
+  CHECK(clamp_joint(3, open_end - 10 * GRIP_DIR) == open_end, "grip never opens past the end of its range");
 
   ArmState a = enabled_arm();
   char line[64];
@@ -329,10 +334,11 @@ static void test_grip_relaxes() {
   char line[64];
   snprintf(line, sizeof line, "J %d %d %d %d 500", HOME[0], HOME[1], HOME[2], GRIP_CLOSED_LIMIT);
   send(a, line, 0);
-  run_until(a, 20, 600);
+  unsigned long arrive = a.ms;  // the move time, after the speed limit (90 -> 20 takes 700 ms)
+  run_until(a, 20, arrive + 100);
   CHECK(near(a.now[3], GRIP_CLOSED_LIMIT), "the grip closes");
   unsigned long closed_at = a.grip_closed_since;
-  run_until(a, 620, closed_at + MAX_GRIP_HOLD_MS - 20);
+  run_until(a, arrive + 120, closed_at + MAX_GRIP_HOLD_MS - 20);
   CHECK(near(a.now[3], GRIP_CLOSED_LIMIT), "the grip stays closed until the hold time is up");
   run_until(a, closed_at + MAX_GRIP_HOLD_MS, closed_at + MAX_GRIP_HOLD_MS + 2000);
   CHECK(near(a.now[3], GRIP_OPEN), "after the hold time the grip relaxes to open");
@@ -344,7 +350,8 @@ static void test_grip_relaxes() {
 }
 
 int main() {
-  printf("limits flags: placeholder=%d checked_by_hand=%d\n", LIMITS_ARE_PLACEHOLDER, LIMITS_CHECKED_BY_HAND);
+  printf("limits flags: placeholder=%d checked_by_hand=%d; grip closes %s (closed limit %d)\n", LIMITS_ARE_PLACEHOLDER,
+         LIMITS_CHECKED_BY_HAND, GRIP_CLOSE_DIR < 0 ? "downwards" : "upwards", GRIP_CLOSED_LIMIT);
   test_always();
   if (limits_ok()) {
     test_staggered_start();

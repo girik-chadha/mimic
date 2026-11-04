@@ -51,7 +51,7 @@ def test_set_goes_through_the_range_and_speed_limits(teacher):
     tt, t, _ = teacher
     assert tt.handle("set base 150") == "base now 150"
     assert t.sent[-1] == "J 150 90 90 90 600"            # 60 degrees * 10 ms
-    assert tt.handle("set grip 200").startswith("refused: grip 200 degrees is outside its range 40-140")
+    assert tt.handle("set grip 200").startswith("refused: grip 200 degrees is outside its range 10-140")
 
 
 def test_saving_poses_and_finishing(teacher):

@@ -62,7 +62,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] Push mode, step 2: `run_mimic.py --push` (opt-in; furthest slot first, every block measured after every push, knocks logged or stop), `teach_plan.py --push` extra points; tested with a fake pushing world (3 Nov)
 - [ ] `grip_push`: find it in the grip test (needs.md C7 step 11); push mode refuses to run until then
 - [x] Disarmed start: `E` (enable, one servo every 400 ms, starting angles) and `D` (disable, limp) in the firmware; `arm.enable()` / `arm.disable()`; every arm script asks before enabling; s / Ctrl+C / errors send S then D; quit disables. Grip range 40-140. g++ and fakes tested, compiled, copied to Windows (3 Nov, not uploaded)
-- [ ] B15: which way does the claw close? (C7 step 9: `grip -5` from open). Then move the closed limit to the closing side and fix everything that assumes closed = larger angle (needs.md B15)
+- [x] Claw direction (4 Nov, Girik): a lower angle closes it. Closed limit 20 (provisional) is the one setting for the direction; range 10-140; `grip_hold_deg` via `grip_test.py --start 50` (+3 degrees closed); everything that assumed a larger angle closes it flipped (needs.md A10c). Compiled, copied to Windows, not uploaded
+- [ ] After the upload: check the empty jaws for a touch at 20 or above (needs.md C7 step 9); if they touch, raise the closed limit to that angle plus 2 in both files
 - [ ] First powered session (needs.md C7) from step 3's upload: ranges with `first_moves.py`, copy into both files, upload; `grip_test.py`
 - [ ] Precision test B6: `repeatability.py`
 - [x] Kinematics: taught-pose grid (`kinematics.py`, `calib/pose_grid.json`, `scripts/teach.py`), tested with fakes (2 Nov)
