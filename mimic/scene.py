@@ -10,6 +10,7 @@ instead of sending the arm to a guess. The fixed facts about the sheet live in c
 """
 import json
 import math
+import statistics
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
@@ -147,12 +148,36 @@ def dot_size(box: sam.Box) -> float:
     return max(box.x2 - box.x1, box.y2 - box.y1) / box.w
 
 
+DOT_FALLBACK_PROMPTS = ("small circle",)  # 4 Nov: on a close phone photo "small coloured dot" missed orange and brown
+SIZE_SPREAD = (0.5, 1.8)   # the dots are all the same size: a dot is this many times the median candidate's size
+SAME_BOX = 0.5             # two boxes whose centres are closer than half a box are the same thing
+
+
+def _dot_sized(boxes: list, lo: float, hi: float) -> tuple[list, list]:
+    """(dot-sized boxes, the rest). The size is judged against the other candidates, not the whole image, so a
+    photo taken closer or further away works: within SIZE_SPREAD of the median. The image-width limits in
+    layout.json (dot_size_frac) are only a broad sanity range (specks, the sheet itself)."""
+    sane = [b for b in boxes if lo <= dot_size(b) <= hi]
+    if not sane:
+        return [], list(boxes)
+    middle = statistics.median(dot_size(b) for b in sane)
+    kept = [b for b in sane if SIZE_SPREAD[0] * middle <= dot_size(b) <= SIZE_SPREAD[1] * middle]
+    return kept, [b for b in boxes if b not in kept]
+
+
 def find_dots(image_path: str, layout: Layout) -> tuple[list[tuple[float, float]], list[sam.Box]]:
-    """One SAM call. Returns (centres of dot-sized boxes, boxes dropped for being too small or too big)."""
+    """SAM's boxes for the dot prompt; if fewer than 6 are dot-sized, also those for DOT_FALLBACK_PROMPTS (one more
+    call each), merged. Returns (centres of dot-sized boxes, boxes dropped for their size). Which 6 are the dots is
+    decided by the layout's geometry afterwards (choose_dots): the check dots must land within 0.5 cm."""
     lo, hi = layout.dot_size_frac
-    kept, dropped = [], []
-    for box in sam.find(image_path, layout.dot_prompt):
-        (kept if lo <= dot_size(box) <= hi else dropped).append(box)
+    boxes = list(sam.find(image_path, layout.dot_prompt))
+    for prompt in DOT_FALLBACK_PROMPTS:
+        if len(_dot_sized(boxes, lo, hi)[0]) >= len(ROLES):
+            break
+        for box in sam.find(image_path, prompt):
+            if all(math.dist(box.centre, o.centre) > SAME_BOX * max(o.x2 - o.x1, o.y2 - o.y1) for o in boxes):
+                boxes.append(box)
+    kept, dropped = _dot_sized(boxes, lo, hi)
     return [b.centre for b in kept], dropped
 
 

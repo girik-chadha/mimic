@@ -181,6 +181,11 @@ GOAL_EXAMPLES = ('Goals that work: "put black on blue, then red on black" (a sta
                  'die up), "row black, blue, red" (slots 1, 2, 3), "stack black, blue, red" (bottom first), or leave '
                  "it empty for the photo's left-to-right order.")
 PAIR = re.compile(r"^(?:(?:and|then|put|place)\s+)*(?:the\s+)?(.+?)\s+on\s+(?:top\s+of\s+)?(?:the\s+)?(.+)$")
+NOUN = r"(?:die|dice|block|blocks|cube|cubes|object|objects|one)"
+# "... stack the black die on top of the blue die ..." -> ("black", "blue"): the word before "on" (skipping a noun
+# like "die") and the word after "on", "on top of" or "on the". Used when the goal is a longer sentence.
+PAIR_IN_SENTENCE = re.compile(r"\b([a-z]+)(?:\s+" + NOUN + r")?\s+on\s+(?:top\s+of\s+)?(?:the\s+)?([a-z]+)\b")
+MAX_NAME_WORDS = 3   # a clause whose X or Y is longer than this is a sentence: scan it for pairs instead
 
 
 def parse_goal(text: str) -> tuple[str, list]:
@@ -201,17 +206,20 @@ def parse_goal(text: str) -> tuple[str, list]:
             raise SimError(f"Not understood: {text!r}. {GOAL_EXAMPLES}") from None
     if " on " not in f" {text} ":
         raise SimError(f"Not understood: {text!r}. {GOAL_EXAMPLES}")
-    pairs = []
+    pairs, sentence = [], False
     for clause in (c.strip() for c in re.split(r",|\bthen\b", text)):
         clause = re.sub(r"^(?:and\s+)+|\s+and$", "", clause).strip()
         if not clause:
             continue
         found = PAIR.match(clause)
-        if not found:
-            raise SimError(f"Not understood: {clause!r}. {GOAL_EXAMPLES}")
+        if not found or any(len(part.split()) > MAX_NAME_WORDS for part in found.groups()):
+            sentence = True   # not a short "X on Y" clause: read the whole goal as a sentence
+            break
         pairs.append((found.group(1).strip(), found.group(2).strip()))
+    if sentence:
+        pairs = PAIR_IN_SENTENCE.findall(text)
     if not pairs:
-        raise SimError(f"Not understood: {text!r}. {GOAL_EXAMPLES}")
+        raise SimError(f"No \"X on Y\" found in {text!r}. {GOAL_EXAMPLES}")
     return "pairs", pairs
 
 

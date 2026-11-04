@@ -338,6 +338,11 @@ NAMES3 = ["red die", "black die", "blue die"]
     ("put black on blue, then red on black", "pairs", ["blue die", "black die", "red die"]),
     ("Put the black die on the blue die and then red on top of black", "pairs", ["blue die", "black die", "red die"]),
     ("red on blue", "pairs", ["blue die", "red die"]),
+    ("black on blue, sideways", "pairs", ["blue die", "black die"]),   # a pair is found, so it is not refused
+    ("This is my esp32 robot arm and I want you to write hardware code to stack the black die on top of the blue die "
+     "and then the red die on top of the black die in a three die stack", "pairs", ["blue die", "black die", "red die"]),
+    ("Please put the black one on the blue, and the red block on top of the black.", "pairs",
+     ["blue die", "black die", "red die"]),
 ])
 def test_goals_that_code_can_read(text, mode, order):
     parsed_mode, spec = sim.parse_goal(text)
@@ -348,7 +353,8 @@ def test_goals_that_code_can_read(text, mode, order):
 @pytest.mark.parametrize("text, problem", [
     ("make a tower", "Not understood: 'make a tower'. Goals that work: \"put black on blue"),
     ("row", "Not understood: 'row'"),
-    ("black on blue, sideways", "Not understood: 'sideways'"),
+    ("I want you to write hardware code for my robot arm, please", "Not understood: .*Goals that work"),
+    ("turn it on", 'No "X on Y" found in'),
 ])
 def test_other_goals_are_refused_with_an_example_before_any_call(text, problem):
     with pytest.raises(sim.SimError, match=problem):

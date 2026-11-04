@@ -7,6 +7,8 @@ import numpy as np
 import pytest
 
 from mimic import calib, config, sam, scene
+
+REPLIES = config.ROOT / "tests" / "fixtures" / "meta_responses"
 from mimic.calib import Calib, CalibrationError
 from mimic.sam import Box
 from mimic.scene import HeightCorrection, Layout, SceneError
@@ -453,18 +455,18 @@ def test_real_replies_have_six_dot_sized_boxes_and_nothing_else():
         assert all(lo <= s <= hi for s in sizes), (stem, sizes)
 
 
-def test_a_38_px_die_is_kept_as_a_candidate_and_then_left_out(monkeypatch):
-    # The fake camera's photos are 1920 px wide, so a die that is 38 px on a 1280-px frame (fraction 0.0297) is 57 px.
+def test_a_die_twice_the_size_of_the_dots_is_dropped_for_its_size(monkeypatch):
+    # The fake camera's photos are 1920 px wide, so a die that is 38 px on a 1280-px frame (fraction 0.0297) is 57 px:
+    # 1.9 times the 30-px dots. Sizes are judged against the other dots, so it is dropped (4 Nov).
     die_px = round(38 / 1280 * 1920)
     die = dot_box(camera((10, 20)), size=die_px)
-    layout = make_layout(dot_size_frac=(0.012, 0.030))
-    assert 0.029 < scene.dot_size(die) <= 0.030                  # inside the size range: a candidate
+    layout = make_layout(dot_size_frac=(0.005, 0.08))
     dots = [dot_box(camera(cm), size=30) for cm in DOTS_CM.values()]
     fake_sam(monkeypatch, {DOT_PROMPT: dots + [die]})
     centres, dropped = scene.find_dots(PHOTO, layout)
-    assert len(centres) == 7 and dropped == []
+    assert len(centres) == 6 and dropped == [die]
     ordered, leftovers = scene.choose_dots(centres, layout)
-    assert leftovers == [die.centre]                             # the die is the one left out
+    assert leftovers == []
     for seen_px, role in zip(ordered, scene.ROLES):
         assert math.dist(seen_px, camera(DOTS_CM[role])) <= 1, role
 
@@ -475,3 +477,17 @@ def test_real_ivcam_frame_reply_has_six_dot_sized_boxes():
     lo, hi = layout.dot_size_frac
     assert len(replies[layout.dot_prompt]) == 6
     assert all(lo <= scene.dot_size(b) <= hi for b in replies[layout.dot_prompt])
+
+
+def test_a_photo_taken_closer_calibrates_with_the_fallback_prompt(monkeypatch):
+    """A real phone photo (4 Nov, 1600 px wide, taken closer): "small coloured dot" found 4 of the 6 dots, one of them
+    at 0.0312 of the width (over the old 0.030 limit); "small circle" found all 6, a speck and a hole in the arm's plate.
+    The size test is relative to the other dots, and the layout's geometry picks the 6."""
+    replies = {name: sam.parse_boxes((REPLIES / f"sam_photo_close_upload_{name.replace(' ', '_')}.txt").read_text())
+               for name in ("small coloured dot", "small circle")}
+    asked = []
+    monkeypatch.setattr(sam, "find", lambda path, name, use_cache=True: asked.append(name) or replies[name])
+    calib = scene.calibrate("close_upload.jpg", scene.load_layout())
+    assert asked == ["small coloured dot", "small circle"]
+    errors = [calib.check(px, cm) for px, cm in zip(calib.pixel_pts[4:], calib.table_pts_cm[4:])]
+    assert max(errors) < 0.5

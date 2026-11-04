@@ -68,6 +68,8 @@ class FakeWorld:
         if name == self.layout.dot_prompt:
             dots = [box_at(cm, 25) for cm in self.layout.dots_cm.values()]
             return dots[:5] if base in self.hide_dot_at else dots
+        if name in scene.DOT_FALLBACK_PROMPTS:
+            return []   # a hidden dot stays hidden
         self.asked.append(name)
         x, y = self.tip(base)
         dx, dy = self.marker_shift.get(base, (0, 0))
@@ -169,6 +171,8 @@ def frame_with(tmp_path, monkeypatch, marker_boxes):
     cv2.imwrite(str(photo), np.full((H, W, 3), 230, np.uint8))
 
     def find(image_path, name, use_cache=True):
+        if name in scene.DOT_FALLBACK_PROMPTS:
+            return []
         if name == layout.dot_prompt:
             return [Box(*(round(v) for v in (x - 12, y - 12, x + 12, y + 12)), W, H)
                     for x, y in (real_frame_px(cm) for cm in layout.dots_cm.values())]

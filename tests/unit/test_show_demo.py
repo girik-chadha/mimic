@@ -68,6 +68,8 @@ class FakeDemo:
         return video.video_info(dst)
 
     def find(self, image_path, name, use_cache=True):
+        if name in scene.DOT_FALLBACK_PROMPTS:
+            return []   # a covered dot stays covered
         self.events.append(("find", name))
         self.budgets.append(config.BUDGET_USD)
         frame = int(re.search(r"frame_(\d+)\.jpg$", str(image_path)).group(1))

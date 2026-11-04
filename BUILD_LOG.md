@@ -339,3 +339,12 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   arm." Chips appear only once Spark has named the objects in the user's photo (read from the live log, or from the
   run's naming record on a replay): one per name, in the colour the name says, otherwise ink; nothing hard-coded.
   Every fixed "die"/"dice" on the page now says "object". A replay shows that run's photo under the chips.
+- A real upload failed with "Found 3 dots, need exactly 6": a phone photo taken closer (1600 px wide). On it SAM's
+  "small coloured dot" returned only 4 boxes (orange and brown not found at all), and blue was dropped for size (0.0312
+  of the width, over the 0.030 limit). Fixes: if fewer than 6 dot-sized boxes are found, `scene.find_dots` also asks
+  for "small circle" (one more SAM call), which found all 6 plus a speck and a hole in the arm's plate; a dot's size is
+  now judged against the other candidates (0.5-1.8 times the median), with the image-width limits only a broad sanity
+  range (0.005-0.08); the layout's geometry still picks the 6. That photo now calibrates with the check dots 0.19 and
+  0.16 cm off. Its two SAM replies are fixtures ($0.0075 of new calls). The goal parser now finds "X on Y" and "X on
+  top of Y" inside a longer sentence (the word before "on", skipping a noun like "die"), and refuses only when no pair
+  is found, still before any API call.
