@@ -310,3 +310,7 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   code; the carries), Plan (each try in plain words: base, shoulder from above the pick to the table, grip, lift,
   swing, drop, with the claw-closed time drawn against 4.5 s). The simulation summary now keeps SAM's boxes, the
   naming rounds, how the goal was read and the plan numbers; `scene.read_positions` can hand back the boxes it used.
+- One real run through the demo page's server with the cache off (approved, 4 Nov 22:56 GMT): the sample photo and
+  "put black on blue, then red on black". Every call live: $0.0230 of the $0.30 cap (SAM dots $0.0025; Spark naming
+  and 3 SAM checks to $0.0155; 3 SAM positions to $0.0230). Spark named red, black and blue die again; check dots
+  0.19 and 0.14 cm; the simulated stack 3 of 3. Session spend on real calls: $0.0386.
