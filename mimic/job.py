@@ -50,46 +50,55 @@ def made_up_ring(job: dict, real) -> ring_module.Ring:
     return dataclasses.replace(real, placeholder=False, points=[], **geometry)
 
 
-def what_to_measure(order: list[str]) -> str:
+def what_to_measure(moved: list[str], levels: int, bottom: str | None = None) -> str:
+    where = (f"the base angle where {bottom} lies (it stays put and the pile is built on it)" if bottom
+             else "the base angle to build the stack at")
     return ("Real stacking needs calib/stack.json, measured by hand on the arm (elbow taped), then placeholder set to "
-            f"false: pick_base_deg, the base angle where each die sits on the ring ({', '.join(order)}); "
-            "drop_base_deg, the base angle to build the stack at; drop_shoulder_by_level, the shoulder angle to let "
-            f"go at for each of the {len(order)} levels (level 1 on the table, then each one die higher: a smaller "
-            "angle), found by jogging with scripts/arm_jog.py.")
+            f"false: pick_base_deg, the base angle where each die to be carried sits on the ring ({', '.join(moved)}); "
+            f"drop_base_deg, {where}; drop_shoulder_by_level, the shoulder angle to let go at for each of the {levels} "
+            "levels (level 1 on the table, then each one die higher: a smaller angle), found by jogging with "
+            "scripts/arm_jog.py.")
 
 
-def load_stack(order: list[str], path=None) -> dict:
+def load_stack(moved: list[str], levels: int, path=None, bottom: str | None = None) -> dict:
+    """calib/stack.json, refused unless it has a pick angle for every die carried, the stack's base angle and a
+    let-go shoulder angle for every level."""
     path = Path(path or STACK_PATH)
+    needed = what_to_measure(moved, levels, bottom)
     if not path.exists():
-        raise JobError(f"{path} is missing. " + what_to_measure(order))
+        raise JobError(f"{path} is missing. " + needed)
     stack = json.loads(path.read_text())
     if stack.get("placeholder", True):
-        raise JobError(f"{path} is still a placeholder. " + what_to_measure(order))
-    missing = [n for n in order if not isinstance(stack.get("pick_base_deg", {}).get(n), int)]
-    levels = stack.get("drop_shoulder_by_level") or []
-    if missing or not isinstance(stack.get("drop_base_deg"), int) or len(levels) < len(order) or not all(
-            isinstance(v, int) for v in levels[:len(order)]):
+        raise JobError(f"{path} is still a placeholder. " + needed)
+    missing = [n for n in moved if not isinstance(stack.get("pick_base_deg", {}).get(n), int)]
+    shoulders = stack.get("drop_shoulder_by_level") or []
+    if missing or not isinstance(stack.get("drop_base_deg"), int) or len(shoulders) < levels or not all(
+            isinstance(v, int) for v in shoulders[:levels]):
         raise JobError(f"{path} is incomplete" + (f" (no pick angle for {', '.join(missing)})" if missing else "") +
-                       ". " + what_to_measure(order))
+                       ". " + needed)
     return stack
 
 
 def carries(job: dict, ring, dry_run: bool, stack_path=None) -> list[dict]:
-    """[{"name", "pick", "drop", "shoulder_drop"}] in order. Real angles come from the real calibration only."""
+    """[{"name", "pick", "drop", "shoulder_drop"}], one per die carried (a pile built where its bottom die lies does
+    not carry that die). Real angles come from the real calibration only."""
     order, stack = job["target"], job["stack"]
+    moved = [c["name"] for c in job["carries"]]
     slot_of = {c["name"]: c["slot"] for c in job["carries"]}
     if dry_run:  # the simulation's own angles, on its made-up ring
-        return [{"name": n, "pick": round(ring.angle_for(*job["placed_cm"][n])),
-                 "drop": round(ring.slots_deg[slot_of[n] - 1]), "shoulder_drop": None} for n in order]
-    if stack:
-        measured = load_stack(order, stack_path)
+        def drop(c):
+            return round(ring.angle_for(*c["to_cm"])) if "to_cm" in c else round(ring.slots_deg[c["slot"] - 1])
+        return [{"name": c["name"], "pick": round(ring.angle_for(*job["placed_cm"][c["name"]])), "drop": drop(c),
+                 "shoulder_drop": None} for c in job["carries"]]
+    if stack:   # level = the die's place in the pile, bottom first
+        measured = load_stack(moved, len(order), stack_path, order[0] if job.get("stack_in_place") else None)
         return [{"name": n, "pick": measured["pick_base_deg"][n], "drop": measured["drop_base_deg"],
-                 "shoulder_drop": measured["drop_shoulder_by_level"][level]} for level, n in enumerate(order)]
+                 "shoulder_drop": measured["drop_shoulder_by_level"][order.index(n)]} for n in moved]
     ring.check_ready()
-    if max(slot_of[n] for n in order) > len(ring.slots_deg):
+    if max(slot_of[n] for n in moved) > len(ring.slots_deg):
         raise JobError(f"calib/ring.json has {len(ring.slots_deg)} slots; this job needs {max(slot_of.values())}.")
     out = []
-    for n in order:
+    for n in moved:
         try:
             pick = ring.base_angle_for(*job["seen_cm"][n])   # where SAM measured it, on the real ring
         except RingError as error:
@@ -202,7 +211,8 @@ What the program does on the real arm, and what it refuses:
 1. A row: each die is picked where SAM measured it, on the real ring (`calib/ring.json`, which must be calibrated, with
    `slots_deg` set), and dropped in its real slot. A die more than 1 cm off the ring is refused.
 2. A stack: the pick angles, the stack's base angle and the shoulder angle to let go at for each level come from
-   `calib/stack.json`, measured by hand. While it is a placeholder the program refuses and says what to measure.
+   `calib/stack.json`, measured by hand. While it is a placeholder the program refuses and says what to measure. A
+   pile built where its bottom die lies (an "X on Y" goal) does not move that die: `drop_base_deg` is where it lies.
 3. Every base angle must be inside 80-120; every carry is planned and checked against `calib/arm_limits.json`, the
    shoulder stop and the 4.5 s grip rule before the serial bridge is opened.
 4. The start pose, a typed yes to enable, each carry once (no camera: no checks, no retries), then back to the start
@@ -219,7 +229,8 @@ def job_from_run(run_dir) -> dict:
     if not summary.get("carries"):
         raise JobError(f"{run_dir.name} has no planned carries (it was refused or is from an older version).")
     return {"run": run_dir.name, "photo": summary["photo"], "stack": bool(summary["stack"]),
-            "target": summary["target"], "carries": summary["carries"], "seen_cm": summary["seen_cm"],
+            "stack_in_place": bool(summary.get("stack_in_place")), "target": summary["target"],
+            "carries": summary["carries"], "seen_cm": summary["seen_cm"],
             "placed_cm": summary["placed_cm"], "made_up_ring": summary["made_up_ring"]}
 
 

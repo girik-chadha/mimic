@@ -43,6 +43,7 @@ from mimic import arm as arm_module
 from mimic import brain, config, marks, meta_api, pickdrop, plan, ring_loop, scene, session, sim_video
 from mimic import ring as ring_module
 from mimic.arm import Arm, FakeTransport
+from mimic.ring import RingError
 
 # The made-up ring: centre near the arm's base at the top of the sheet, radius chosen so it passes close to dice
 # lying across the middle of the sheet. Base 90 points straight down the sheet (theta = phi - 180). Slots on the
@@ -105,6 +106,7 @@ class SimArm(FakeTransport):
         self.miss = miss              # (name, degrees): that die's first put-down lands this far off
         self.injected = None          # {"name", "degrees", "t_s", "attempt"} once the miss has happened
         self.log = []                 # one entry per line sent
+        self.stack = False            # a stack: the carry label says "the stack", not a slot
 
     def sleep(self, seconds: float) -> None:
         self.clock += seconds
@@ -115,7 +117,8 @@ class SimArm(FakeTransport):
         self.step = text.strip().split(": base ")[0]
 
     def on_try(self, move, attempt: int) -> None:
-        self.carrying, self.try_of = f"{move.name} -> slot {move.slot}, try {attempt}", (move.name, attempt)
+        where = "the stack" if self.stack else f"slot {move.slot}"
+        self.carrying, self.try_of = f"{move.name} -> {where}, try {attempt}", (move.name, attempt)
 
     def positions(self, names: list) -> dict:
         return {n: self.dice[n] for n in names if self.dice.get(n) is not None}
@@ -258,6 +261,21 @@ def photo_order(positions: dict) -> list[str]:
     return sorted(positions, key=lambda n: positions[n][0])
 
 
+def pile_in_place(placed: dict, order: list[str], ring, limits):
+    """For "X on Y" goals: the pile is built where its bottom die already lies, which stays put, if the arm can
+    reach it and every carry onto it passes ring mode's checks. Returns (moves, a copy of the ring whose only slot
+    is that spot); raises RingLayoutError or RingError if not, and the caller builds on slot 1 instead."""
+    bottom = order[0]
+    angle = ring.base_angle_for(*placed[bottom])
+    lo, hi = limits.range_of("base")
+    if not lo <= round(angle) <= hi:
+        raise ring_loop.RingLayoutError(f"{bottom} is at base {angle:.0f}, outside the base range {lo}-{hi}")
+    spot = dataclasses.replace(ring, slots_deg=[angle])
+    moves = [plan.Move(n, tuple(placed[n]), tuple(placed[bottom]), slot=1) for n in order[1:]]
+    ring_loop.check_mess(placed, moves, spot, limits, stack_base=bottom)
+    return moves, spot
+
+
 def stack_moves(placed: dict, order: list[str], ring) -> list:
     """Every die to slot 1, the first at the bottom (simulation only: STACK_WHY)."""
     if not order:
@@ -330,7 +348,7 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
         summary["goal_read"] = {"mode": mode, "spec": spec}
         how = "photo order, left to right" if mode == "photo" else "read from the goal by code"
         if stack:
-            say(f"Target ({how}): a stack on slot 1, bottom first: {', '.join(target)}. SIMULATION ONLY: {STACK_WHY}")
+            say(f"Target ({how}): a stack, bottom first: {', '.join(target)}. SIMULATION ONLY: {STACK_WHY}")
         else:
             say(f"Target ({how}), slot 1 first: {', '.join(target)}")
 
@@ -341,15 +359,26 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
                 f"{the_ring.angle_for(*placed[name]):.0f}, ({placed[name][0]:.1f}, {placed[name][1]:.1f}) cm, "
                 f"moved {math.dist(seen[name], placed[name]):.1f} cm")
         slots_cm = [the_ring.point_at(a) for a in the_ring.slots_deg]
-        moves = stack_moves(placed, target, the_ring) if stack else plan.plan_moves(placed, target, slots_cm)
-        ring_loop.check_mess(placed, moves, the_ring, limits)
+        carry_ring, in_place = the_ring, False
+        if mode == "pairs":   # "X on Y": build where the bottom die lies, if it can be reached there
+            try:
+                moves, carry_ring = pile_in_place(placed, target, the_ring, limits)
+                in_place = True
+                say(f"  the pile is built where {target[0]} lies (base {carry_ring.slots_deg[0]:.0f}); it stays put")
+            except (ring_loop.RingLayoutError, RingError) as error:
+                say(f"  {target[0]} cannot be the base where it lies ({error}); building the pile on slot 1 instead")
+        if not in_place:
+            moves = stack_moves(placed, target, the_ring) if stack else plan.plan_moves(placed, target, slots_cm)
+            ring_loop.check_mess(placed, moves, the_ring, limits)
+        summary["stack_in_place"] = in_place
         summary["seen_cm"] = {n: [round(v, 2) for v in seen[n]] for n in dice}       # SAM, in the real photo
         summary["placed_cm"] = {n: [round(v, 2) for v in placed[n]] for n in dice}   # on the made-up ring
-        summary["carries"] = [{"name": m.name, "slot": m.slot} for m in moves]
+        summary["carries"] = [{"name": m.name, "slot": m.slot, "to_cm": [round(v, 2) for v in m.to_cm]} for m in moves]
 
         # Execution on the simulated arm, exactly as run_mimic.py --ring drives the real one.
         miss = (moves[0].name, miss_deg) if miss_deg else None
         world = SimArm(limits, the_ring, placed, say=say, miss=miss)
+        world.stack = stack
         arm = Arm(world, limits)
         attempts_path = out_dir / "simulation_attempts.jsonl"
         attempts = []
@@ -377,8 +406,9 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
                 arm.enable(start, sleep=world.sleep)   # E at the start pose, like confirm_and_enable
                 park()                                  # the real run parks at camera_clear for its photos
                 first_carry_s.append(world.clock)
-                ring_loop.carry(arm, moves, placed, the_ring, limits, look, log, world.say, world.sleep,
-                                finished=summary["moves"], on_try=world.on_try, stack=stack)
+                ring_loop.carry(arm, moves, placed, carry_ring, limits, look, log, world.say, world.sleep,
+                                finished=summary["moves"], on_try=world.on_try, stack=stack,
+                                already_stacked=target[:1] if in_place else None)
                 world.carrying, world.step = "", "back to the start pose"
             except Exception as error:
                 summary["error"] = f"{type(error).__name__}: {error}"

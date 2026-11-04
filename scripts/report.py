@@ -137,7 +137,8 @@ def build_html(run_dir: Path) -> str:
     sim = prefix_of(run_dir) == SIM
     things = "dice" if str(summary.get("mode", "")).startswith("ring") else "blocks"
     placed = sum(1 for m in summary.get("moves", []) if m["result"] == "PASS")
-    where = "stacked on slot 1" if summary.get("stack") else f"placed within {PASS_CM} cm"
+    where = (f"placed within {PASS_CM} cm" if not summary.get("stack") else
+             f"stacked on the {summary['target'][0]}" if summary.get("stack_in_place") else "stacked on slot 1")
     headline = (f"{placed} of {len(summary.get('moves', []))} {things} {where}"
                 if summary.get("moves") else f"No {things} placed")
     facts = [f"{summary.get('attempts', 0)} attempts",

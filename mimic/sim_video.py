@@ -117,7 +117,7 @@ def overlay_texts(story: Story, t: float) -> list[str]:
     if t > story.end_s:
         moves = story.summary["moves"]
         placed = sum(1 for m in moves if m["result"] == "PASS")
-        texts.append(f"Finished (simulated): {placed} of {len(moves)} dice stacked on slot 1" if story.stack else
+        texts.append(f"Finished (simulated): {placed} of {len(moves)} dice stacked" if story.stack else
                      f"Finished (simulated): {placed} of {len(moves)} dice within 1.5 cm of their slots")
     return texts
 
@@ -234,10 +234,11 @@ def draw_panel(img, story: Story, state: dict, t: float, thumb) -> None:
     y = BANNER_H + 58
     for move in story.moves:
         pick = story.ring.angle_for(*story.placed[move.name])
-        slot_deg = story.ring.slots_deg[move.slot - 1]
+        slot_deg = round(story.ring.angle_for(*move.to_cm))   # the slot, or the spot a pile is built on
         mine = [a for a in done if a["name"] == move.name]
         now = state["carrying"].startswith(move.name + " ->")
-        status = (f"{mine[-1]['result']}, {mine[-1]['miss_cm']:.1f} cm from the slot" if mine else "waiting")
+        target = "its spot on the stack" if story.stack else "the slot"
+        status = (f"{mine[-1]['result']}, {mine[-1]['miss_cm']:.1f} cm from {target}" if mine else "waiting")
         if now and (not mine or mine[-1]["result"] == "RETRY"):
             status = "now" + (f" (last try: {status})" if mine else "")
         colour = RED if now else INK
@@ -256,7 +257,8 @@ def draw_panel(img, story: Story, state: dict, t: float, thumb) -> None:
     y += 26 + 22 * len(lines) + 14
     _text(img, "LAST CAMERA CHECK (simulated)", (x, y), 0.55, INK, 2)
     last = done[-1] if done else None
-    text = (f"{last['name']} -> slot {last['move']}, try {last['attempt']}: {last['miss_cm']:.1f} cm -> "
+    goes = "the stack" if story.stack else f"slot {last['move']}" if last else ""
+    text = (f"{last['name']} -> {goes}, try {last['attempt']}: {last['miss_cm']:.1f} cm -> "
             f"{last['result']}" if last else "-")
     _text(img, text[:52], (x, y + 24), 0.5, INK)
     if thumb is not None:

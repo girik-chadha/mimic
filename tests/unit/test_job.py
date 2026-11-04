@@ -105,3 +105,18 @@ def test_a_drop_shoulder_above_the_lift_is_refused():
     with pytest.raises(pickdrop.PickError, match="drop shoulder 150 must be lower down than the lifted angle 160"):
         pickdrop.plan(limits, arm.load_start_pose(), 100, 110, shoulder_pick=180, grip_hold=20, lift=20, approach=10,
                       stop_at=183, shoulder_drop=150)
+
+
+def test_a_pile_built_in_place_carries_only_the_dice_on_top(tmp_path, monkeypatch):
+    the_job = job.job_from_run(a_job(tmp_path, monkeypatch, "put black on blue, then red on black"))
+    assert the_job["stack_in_place"] is True
+    said = []
+    assert job.main(the_job, ["--dry-run"], read=lambda q: "yes", say=said.append) == 0
+    assert [line.strip() for line in said if line.endswith("drop at base 106")] == [
+        "black die: pick at base 88, drop at base 106", "red die: pick at base 72, drop at base 106"]
+    path = tmp_path / "stack.json"
+    path.write_text(json.dumps({"placeholder": False, "drop_base_deg": 100, "drop_shoulder_by_level": [180, 176, 172],
+                                "pick_base_deg": {"black die": 110, "red die": 116}}))   # no angle needed for blue
+    monkeypatch.setattr(job, "STACK_PATH", path)
+    planned = job.carries(the_job, ring_module.load_ring(), dry_run=False)
+    assert [(c["name"], c["shoulder_drop"]) for c in planned] == [("black die", 176), ("red die", 172)]

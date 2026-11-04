@@ -3,6 +3,7 @@
 No hardware, no API calls, no ffmpeg (the encode step is faked). The dice sit about where they are in
 tests/fixtures/photos/dice_sheet.jpg: red, black, blue from left to right across the middle of the sheet.
 """
+import dataclasses
 import json
 import math
 
@@ -366,8 +367,29 @@ def test_pairs_that_do_not_make_one_pile_are_refused(text, problem):
         sim.resolve_goal(mode, spec, NAMES3, SEEN)
 
 
-def test_a_pairs_goal_runs_as_a_simulated_stack(tmp_path, monkeypatch):
+def test_a_pairs_goal_builds_the_pile_where_the_bottom_die_lies(tmp_path, monkeypatch):
     fakes = Fakes(tmp_path, monkeypatch)
     summary = fakes.run("put black on blue, then red on black")
-    assert summary["stack"] is True and summary["target"] == ["blue die", "black die", "red die"]
-    assert summary["success"] is True
+    assert summary["stack"] is True and summary["stack_in_place"] is True and summary["success"] is True
+    assert summary["target"] == ["blue die", "black die", "red die"]
+    assert [m["name"] for m in summary["moves"]] == ["black die", "red die"]        # blue is never carried
+    log = fakes.stories[0].log
+    assert log[-1]["dice"]["blue die"] == log[0]["dice"]["blue die"]                # where it was at the start
+    assert not any(e["event"] == "picked up blue die" for e in log)
+    assert log[-1]["level"] == {"blue die": 0, "black die": 1, "red die": 2}
+    assert any("the pile is built where blue die lies (base 106); it stays put" in line for line in fakes.said)
+
+
+def test_a_pile_whose_bottom_die_cannot_be_reached_goes_on_slot_1(tmp_path, monkeypatch):
+    ring = the_ring()
+    placed = sim.place_on_ring(SEEN, ring)
+    limits = dataclasses.replace(arm.load_limits(), ranges_deg={"base": (0, 100), "shoulder": (80, 180),
+                                                                "elbow": (30, 120)})
+    with pytest.raises(ring_loop.RingLayoutError, match="blue die is at base 106, outside the base range 0-100"):
+        sim.pile_in_place(placed, ["blue die", "black die", "red die"], ring, limits)
+    fakes = Fakes(tmp_path, monkeypatch)
+    monkeypatch.setattr(sim, "pile_in_place", lambda *a: (_ for _ in ()).throw(ring_loop.RingLayoutError("too far")))
+    summary = fakes.run("put black on blue, then red on black")
+    assert summary["stack_in_place"] is False and [m["name"] for m in summary["moves"]] == [
+        "blue die", "black die", "red die"]
+    assert any("building the pile on slot 1 instead" in line for line in fakes.said)

@@ -720,3 +720,11 @@ the limits, the start pose, a typed yes, and stop-then-disable on Ctrl+C."
 Two sentences: "The tabs show the judges each stage of the pipeline with its own numbers: SAM's boxes and calibration
 error, Spark's names, and every carry's angles. The claw-time bars show the plan stays inside the safety limit that
 the firmware enforces."
+
+### 4 Nov: a pile built where its bottom die lies
+
+- "Put black on blue" now leaves blue where it is and builds the pile on it, as in the real stacking clip, as long as
+  the arm can reach blue there and every carry passes the usual checks; otherwise the pile goes on slot 1.
+
+Two sentences: "For "X on Y" goals the bottom die stays put and the others are carried onto it, if the arm can reach
+it. The same safety checks run as for any other move, and if they fail the pile is built on slot 1 instead."

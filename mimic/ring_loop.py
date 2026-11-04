@@ -98,8 +98,9 @@ def check_clear(name: str, slot_deg: float, positions: dict, ring) -> None:
                                   "Clear it by hand.")
 
 
-def check_mess(positions: dict, moves: list, ring, limits) -> None:
-    """Before any move: every die reachable, spaced out, and every pick and drop within the 4.5 s grip rule."""
+def check_mess(positions: dict, moves: list, ring, limits, stack_base: str | None = None) -> None:
+    """Before any move: every die reachable, spaced out, and every pick and drop within the 4.5 s grip rule.
+    stack_base (simulation only): the die a pile is built on, which is allowed to be at the drop spot."""
     names = list(positions)
     for name in names:
         try:
@@ -116,7 +117,7 @@ def check_mess(positions: dict, moves: list, ring, limits) -> None:
     for move in moves:
         slot_deg = ring.slots_deg[move.slot - 1]
         for name in names:
-            if name != move.name and math.dist(positions[name], ring.point_at(slot_deg)) < MIN_SPACING_CM:
+            if name not in (move.name, stack_base) and math.dist(positions[name], ring.point_at(slot_deg)) < MIN_SPACING_CM:
                 raise RingLayoutError(f"{name} is {math.dist(positions[name], ring.point_at(slot_deg)):.1f} cm from slot "
                                       f"{move.slot} (base {slot_deg:g}), where {move.name} is going: move it at least "
                                       f"{MIN_SPACING_CM} cm away.")
@@ -127,7 +128,7 @@ def check_mess(positions: dict, moves: list, ring, limits) -> None:
 
 
 def carry(arm, moves: list, positions: dict, ring, limits, look, log, say, sleep, finished: list,
-          on_try=None, stack: bool = False) -> list:
+          on_try=None, stack: bool = False, already_stacked: list | None = None) -> list:
     """Every move with its camera check, slot 1 first (the steps in this module's docstring).
 
     look(shot) parks the arm out of the photo and returns (photo name, every target die's position); log(attempt)
@@ -138,8 +139,9 @@ def carry(arm, moves: list, positions: dict, ring, limits, look, log, say, sleep
 
     stack=True is for the simulation only (run_mimic.py refuses a stack on the real arm): every move goes to the same
     slot, and the dice already placed on the stack may be at that slot (every other die must still be clear of it).
+    already_stacked: dice on the stack before the first move (a pile built where its bottom die lies).
     """
-    shots, stacked = 0, []
+    shots, stacked = 0, list(already_stacked or [])
     for move in moves:
         slot_deg = ring.slots_deg[move.slot - 1]
         from_cm, correction, result, error_cm = positions[move.name], 0.0, "FAIL", None

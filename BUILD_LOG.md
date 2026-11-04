@@ -314,3 +314,9 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   "put black on blue, then red on black". Every call live: $0.0230 of the $0.30 cap (SAM dots $0.0025; Spark naming
   and 3 SAM checks to $0.0155; 3 SAM positions to $0.0230). Spark named red, black and blue die again; check dots
   0.19 and 0.14 cm; the simulated stack 3 of 3. Session spend on real calls: $0.0386.
+- "X on Y" goals now build the pile where the bottom die already lies, which stays put, when the arm can reach it
+  there (its base angle inside the limits) and every carry onto it passes ring mode's checks (`sim.pile_in_place`);
+  otherwise the pile goes on slot 1 as before, and the log says why. `ring_loop.check_mess(stack_base=...)` and
+  `carry(already_stacked=...)` let that die sit at the drop spot; the real run never sets either. The arm program
+  carries only the dice on top (a measured `stack.json` then needs no pick angle for the bottom die). Cached run of
+  "put black on blue, then red on black": blue stays at base 106, black and red carried onto it, 2 of 2.

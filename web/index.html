@@ -375,10 +375,12 @@ function fillTabs(s, folder) {
   const read = s.goal_read || {mode: "photo"};
   const how = {photo: "No goal typed: the photo's left-to-right order, slot 1 first.",
     row: "A row, slot 1 first.", stack: "A stack on slot 1, bottom first.",
-    pairs: "Pairs read as one pile, bottom first, built on slot 1: " +
+    pairs: "Pairs read as one pile, bottom first, built " + (s.stack_in_place ? "where " + escape(s.target[0]) +
+      " lies (it stays put): " : "on slot 1: ") +
       (read.spec || []).map((p) => `${escape(p[0])} on ${escape(p[1])}`).join(", then ") + "."}[read.mode];
   const carries = (s.target || []).map((name, i) => s.stack
-    ? `${escape(name)} ${i === 0 ? "to slot 1 (the bottom)" : "on top of " + escape(s.target[i - 1])}`
+    ? `${escape(name)} ${i === 0 ? (s.stack_in_place ? "stays where it lies (the bottom)" : "to slot 1 (the bottom)")
+                                 : "on top of " + escape(s.target[i - 1])}`
     : `${escape(name)} to slot ${i + 1}`);
   $("view-spark").innerHTML = `<div class="columns"><div>
       <h3>Muse Spark 1.3 named the dice</h3><p class="muted" style="margin:0 0 4px">SAM 3.1 checked each name: a good
