@@ -211,6 +211,20 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
   So the bridge, the serial link, the protocol and the firmware's lock all work on the real hardware.
   No servo has been driven yet.
 
+### A10d. The elbow is dead: the claw meets the table on a ring (4 Nov, Girik, by hand)
+
+- **The elbow servo is dead and unplugged, and the forearm is taped.** With the elbow fixed, reach and height are
+  linked: the claw tip is at table height only at **shoulder 173**, on a ring around the base axis. A **smaller**
+  shoulder angle lifts it (and moves it along the radius at the same time).
+- **Grip 23 holds the 19 mm die through a 20-degree shoulder lift** (that is `grip -67` from 90), proven by hand.
+- **IO2 still gets a 90-degree signal after E.** It goes into an empty socket, which is harmless. Nothing in the
+  firmware or Python needed changing for the dead elbow: the firmware never senses servos (it counts all four as
+  switched on), and every move sends the elbow as 90, inside its range. The "elbow_fixed" plan (3-4 Nov) was dropped.
+- **What this means for the full task:** the claw can only reach the table on that ring, so slots and the mess area
+  must lie on it. The straight slot row and the rectangular mess area in `layout.json` do not, and pushes in a
+  straight line are no longer possible (only along the ring, by turning the base). `scripts/pick_once.py` picks and
+  drops one die on the ring by base angle, without the camera.
+
 ### A10c. The claw closes with a LOWER angle (B15, settled 4 Nov by Girik)
 
 - **A lower grip angle closes this claw; a higher one opens it. Open, and where the firmware's 5 s relaxation
@@ -422,6 +436,23 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     it again). `grip_push` is 2 degrees more open than that, so the touching angle plus 2 (if they never touch
     before the limit, the limit plus 2): write it into `calib/pose_grid.json` as `"grip_push"`. Never use the
     closed limit itself: a stalled claw overheats. Until it is set, push mode refuses to run.
+12b. **Pick once, on the ring (4 Nov, elbow dead, A10d):** `scripts/pick_once.py` picks a die at one base angle
+    and puts it down at another, at shoulder 173 (table height), with grip 23 by default. In this order:
+    - `python scripts/pick_once.py --measure-latency`: times 20 harmless status calls (nothing moves) and prints a
+      `--command-s` to use instead of the 0.05 s guess for the bridge.
+    - `python scripts/pick_once.py --base-pick 100 --base-drop 120 --dry-run`: practise, and read the printed plan.
+    - **Pose the shoulder near 90 by hand first: enable jumps every joint to 90.** If the arm is resting with the
+      claw on the table (shoulder near 173), the shoulder would jump about 80 degrees, unramped.
+    - `python scripts/pick_once.py --base-pick 100 --pick-only --command-s <measured>`: pick, lift 20, hold 2 s,
+      open in the air (the die drops from the lift height).
+    - `python scripts/pick_once.py --base-pick 100 --base-drop 120 --command-s <measured>`: the whole pick and drop.
+    Before anything moves it prints the plan and the claw-closed time (from the start of closing until the open
+    command, counting each move, its 0.1 s wait and the bridge time per command) and refuses if that is over
+    4.5 s: with the defaults, a swing of about 80 degrees is the most. The shoulder is never sent past `--stop-at`
+    (175). Base angles outside 80-120 (what you approved) print a warning; `calib/arm_limits.json` still allows
+    0-180. It never sends H: it lifts away, then "Hold the arm", 2 s, and disables, so the arm drops about 20
+    degrees onto the table, possibly onto the die it just placed. Watch the shoulder while the claw is down at 173:
+    nothing times out a shoulder pressing into the table if the tape slips.
 13. Put the gripper marker on the claw tip. `python scripts/repeatability.py --pose B S E G` (a pose that hides no
     dot; `--target X Y` from a ruler is optional). It asks before enabling. Cost cap $0.10. Verdict: 2 x standard
     deviation under 0.5 cm, full corrections are fine; over 1 cm, apply only part of each miss.

@@ -57,8 +57,10 @@ def ask(prompt: str, read=input, flush=discard_typed_ahead) -> str:
     return answer
 
 
-def confirm_and_enable(arm: Arm, read=input, say=print, sleep=None, angles: dict | None = None) -> dict:
-    """Say what enabling does, ask for a typed yes, then switch the servos on. Returns the pose."""
+def confirm_and_enable(arm: Arm, read=input, say=print, sleep=None, angles: dict | None = None,
+                       note: str = "") -> dict:
+    """Say what enabling does, ask for a typed yes, then switch the servos on. Returns the pose.
+    note, if given, starts the question itself (for example how to pose the arm first)."""
     status = arm.status()
     if status["armed"]:
         say("The arm is already enabled: its servos are on.")
@@ -66,8 +68,8 @@ def confirm_and_enable(arm: Arm, read=input, say=print, sleep=None, angles: dict
     pose = angles or {j: ENABLE_DEFAULT_DEG for j in JOINTS}
     say("Enabling switches the servos on one at a time, 0.4 s apart (base, shoulder, elbow, claw), and each jumps "
         "straight to " + ", ".join(f"{j} {pose[j]}" for j in JOINTS) + " from wherever it is now.")
-    answer = ask("Is the arm posed there by hand, the area clear, and a hand on the switch? Type yes to enable: ",
-                 read)
+    question = "Is the arm posed there by hand, the area clear, and a hand on the switch? Type yes to enable: "
+    answer = ask(f"{note} {question}" if note else question, read)
     if answer != "yes":
         raise Declined("Not enabled: nothing was moved.")
     return arm.enable(angles, sleep=sleep)

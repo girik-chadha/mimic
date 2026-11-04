@@ -29,6 +29,7 @@ firmware/
   mimic_arm/mimic_arm.ino  ESP32: tiny command protocol, smooth moves, safety limits
 scripts/
   plan_from_photos.py      Gate 1 demo: two photos in, plan out
+  pick_once.py             (4 Nov, elbow dead) pick one die on the ring at a base angle, drop it at another
   show_demo.py             (3 Nov) the demo as a video: target order and arrival order out (opt-in;
                            run_mimic.py still takes a demo photo)
   arm_jog.py               move one joint at a time from the terminal

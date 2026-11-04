@@ -193,3 +193,14 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   limits_checked_by_hand false; `grip_test.py` refuses it with what is missing. `session.ask` now throws away
   anything typed before a question appears (termios flush on a real terminal), so an early answer typed while the
   arm moves can no longer answer the next question.
+- Elbow servo dead and unplugged, forearm taped (Girik): the claw tip is at table height at shoulder 173 on a ring
+  around the base axis, and grip 23 held the die through a 20-degree lift, by hand. New `scripts/pick_once.py`:
+  open, base to the pick angle, shoulder to pick - approach, down in 2-degree steps, close to 23, lift 20, swing,
+  down in 2-degree steps, open, lift away, then "Hold the arm" and disable (no H). Everything planned and checked
+  before the enable question: ranges from arm_limits.json, the shoulder never past `--stop-at` 175, and the
+  claw-closed time (each move, its 0.1 s wait and 0.05 s per command; shoulder at 25 ms per degree, base and claw
+  at the limits' 10) must fit 4.5 s: 3.87 s for a 20-degree swing, about 80 degrees at most. `--pick-only`,
+  `--measure-latency` (20 status calls, suggests `--command-s`), `--dry-run`; a warning for base angles outside
+  the approved 80-120. The enable question now starts "Pose the shoulder near 90 by hand first". Breaking the
+  4.5 s refusal on purpose failed 3 tests; restored. The elbow_fixed plan is dropped: IO2 sends 90 into an empty
+  socket, which is harmless (needs.md A10d).

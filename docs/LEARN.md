@@ -549,3 +549,19 @@ so a die that only holds at full squeeze is reported rather than gripped."
 Two sentences: "The range-finding script now saves after every joint and can pick up where it stopped, so a stop
 never loses finished work. It also ignores anything typed while the arm is moving, so every yes or no is an answer
 to a move you have actually watched."
+
+### 4 Nov: picking up one die with a dead elbow
+
+- The elbow servo died, so the forearm is taped in place. Now the claw touches the table at only one shoulder angle
+  (173), on a ring around the base. Lifting the claw also moves it along the radius, so dice and slots have to be
+  on that ring.
+- `pick_once.py` does one pick and drop on the ring by base angle. It works out the whole sequence first and
+  checks it: every angle inside the limits, the shoulder never past 175, and the claw closed for at most 4.5 s (the
+  firmware lets go after 5 s). It counts every move, every wait and the time each command takes to reach the arm,
+  and refuses before anything moves if the swing is too far.
+- No code had to change for the dead elbow: the board never senses whether a servo is plugged in, so its signal
+  simply goes into an empty socket.
+
+Two sentences: "With the elbow taped, the claw reaches the table only on one ring around the base, and a new script
+picks a die up on that ring and puts it down at another angle. It plans every move first and refuses to start if
+the claw would be closed long enough for the firmware's 5-second safety release to drop the die."
