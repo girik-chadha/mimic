@@ -94,7 +94,7 @@ Instant Policy (Vosylius and Johns, arXiv [2411.12633](https://arxiv.org/abs/241
 
 - Meta SAM 3.1 and Muse Spark 1.3, through the Meta Model API.
 - Open-source libraries, used as-is: OpenAI Python SDK, NumPy, OpenCV, python-dotenv, pyserial, pytest; ESP32 Arduino core 2.0.12 and ESP32Servo 1.2.1 for the firmware; FFmpeg (run as a separate program) for the camera and the simulation video; Python's standard-library web server for the demo page.
-- Fonts on the demo page: Archivo and JetBrains Mono, under the SIL Open Font License 1.1 (licences in `web/fonts/`).
+- Fonts on the demo page: Archivo, Instrument Serif and JetBrains Mono, under the SIL Open Font License 1.1 (licences in `web/fonts/`).
 - KEYESTUDIO ESP32 4-DOF arm kit hardware. The servo pin numbers were read from the kit's sample code; none of the kit's sample code is used.
 - An AI coding assistant (Claude Code) helped write the code and docs; see the first lines of this file.
 

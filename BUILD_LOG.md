@@ -326,3 +326,11 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   submission checklist, every field to fill in. Key scan (4 Nov 23:05 GMT): the API key's value is in none of the 8,970
   working-tree files (ignored ones included) and none of the 1,057 objects in git's store; no `.env` file was ever
   committed; `.env` is ignored.
+- Demo page redesign, bright: a warm off-white canvas with two slowly drifting colour blurs (electric blue, coral)
+  under a fine grid (24 px lines at about 5% ink, 120 px at about 9%, faded towards the edges, a little stronger on
+  the intro, brightening in blue in a 200 px circle that follows the mouse) and a light grain. An intro with "Mimic"
+  in Instrument Serif (bundled, OFL), its letters easing in, "Show a robot once." with "once" in italic, over the
+  blurred workspace; Start or Enter collapses it. Rounded white cards with soft shadows, an electric-blue main
+  action, glossy die chips in the dice's real colours, a progress line (a moving dot while a step runs, a tick when it
+  is done), SAM's boxes popping onto the photo in each die's colour, and a springy "Arm program ready" card. Reduced
+  motion turns every animation off. The "Expected simulation" label sits on the video.

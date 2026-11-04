@@ -7,203 +7,315 @@
 <style>
 @font-face { font-family: "Archivo"; src: url("/fonts/archivo-latin-wdth-normal.woff2") format("woff2");
   font-weight: 100 900; font-stretch: 62% 125%; font-display: swap; }
+@font-face { font-family: "Instrument Serif"; src: url("/fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Instrument Serif"; src: url("/fonts/instrument-serif-latin-400-italic.woff2") format("woff2");
+  font-weight: 400; font-style: italic; font-display: swap; }
 @font-face { font-family: "JetBrains Mono"; src: url("/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2");
   font-weight: 100 800; font-display: swap; }
 :root {
-  --bg: #0A1A2F; --panel: #10253F; --grid: #1E3A5F; --cyan: #4FD1FF; --mint: #7CFFB2; --amber: #FFC857;
-  --text: #E8F1FA; --muted: #8FA8C2; --line: #24476F; --deep: #081526;
+  --canvas: #FBF7F0; --ink: #14121F; --soft: #6B6880; --blue: #2D5BFF; --coral: #FF5A36; --sun: #FFC21A;
+  --mint: #12C98A; --card: rgba(255, 255, 255, .82); --hair: rgba(20, 18, 31, .07);
+  --shadow: 0 1px 2px rgba(20, 18, 31, .05), 0 18px 48px -18px rgba(20, 18, 31, .18);
+  --spring: cubic-bezier(.34, 1.56, .64, 1); --ease: cubic-bezier(.2, .8, .2, 1);
+  --mx: -500px; --my: -500px;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
-  margin: 0; color: var(--text); font: 14px/1.45 "Archivo", system-ui, sans-serif; font-stretch: 100%;
-  background-color: var(--bg);
+  margin: 0; color: var(--ink); background: var(--canvas); font: 15px/1.5 "Archivo", system-ui, sans-serif;
+  display: grid; grid-template-columns: 324px minmax(0, 1fr); grid-template-rows: 58px minmax(0, 1fr) 136px;
+  gap: 14px; padding: 14px 18px 16px; min-height: 100vh; overflow: hidden;
+}
+:focus-visible { outline: 3px solid rgba(45, 91, 255, .45); outline-offset: 2px; border-radius: 10px; }
+.serif { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; letter-spacing: -.01em; }
+.soft { color: var(--soft); }
+.pass { color: var(--mint); } .miss { color: var(--coral); }
+
+/* ---------- the canvas: drifting colour, the grid over it, a little grain ---------- */
+.bg { position: fixed; inset: 0; pointer-events: none; z-index: -1; overflow: hidden; }
+.blob { position: absolute; width: 62vmax; height: 62vmax; border-radius: 50%; filter: blur(90px); opacity: .3; }
+.blob.blue { background: var(--blue); left: -18vmax; top: -24vmax; animation: drift-a 38s ease-in-out infinite alternate; }
+.blob.coral { background: var(--coral); right: -20vmax; bottom: -30vmax; opacity: .27;
+  animation: drift-b 44s ease-in-out infinite alternate; }
+@keyframes drift-a { to { transform: translate(14vmax, 10vmax) scale(1.08); } }
+@keyframes drift-b { to { transform: translate(-12vmax, -9vmax) scale(.94); } }
+.grid, .glow {
+  position: absolute; inset: 0;
   background-image:
-    linear-gradient(rgba(30, 58, 95, .55) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(30, 58, 95, .55) 1px, transparent 1px),
-    linear-gradient(rgba(30, 58, 95, .25) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(30, 58, 95, .25) 1px, transparent 1px);
+    linear-gradient(var(--line-major) 1px, transparent 1px), linear-gradient(90deg, var(--line-major) 1px, transparent 1px),
+    linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
   background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
-  display: grid; grid-template-columns: 316px minmax(0, 1fr); grid-template-rows: 48px minmax(0, 1fr) 150px;
-  gap: 12px; padding: 12px 16px; min-height: 100vh;
 }
-:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-h1, h2 { font-stretch: 122%; font-weight: 640; margin: 0; letter-spacing: .005em; }
-h1 { font-size: 21px; } h2 { font-size: 15px; }
-.muted { color: var(--muted); }
-.panel {
-  background: var(--panel); border: 1px solid var(--grid); border-radius: 4px; position: relative; min-height: 0;
-  background-image:
-    linear-gradient(var(--cyan), var(--cyan)), linear-gradient(var(--cyan), var(--cyan)),
-    linear-gradient(var(--cyan), var(--cyan)), linear-gradient(var(--cyan), var(--cyan));
-  background-size: 12px 1px, 1px 12px, 12px 1px, 1px 12px;
-  background-position: top left, top left, bottom right, bottom right; background-repeat: no-repeat;
-}
-header { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; }
-header .mark { width: 30px; height: 30px; flex: none; }
-header .tag { color: var(--muted); font-stretch: 100%; }
-header .spacer { flex: 1; }
-.meter { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; }
-.meter .bar { width: 120px; height: 6px; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
-.meter .bar i { display: block; height: 100%; width: 0; background: var(--cyan); }
-.state { padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
-.state.running { color: var(--cyan); border-color: var(--cyan); }
-.state.done { color: var(--mint); border-color: var(--mint); }
-.state.stopped { color: var(--amber); border-color: var(--amber); }
+.grid { --line: rgba(20, 18, 31, .07); --line-major: rgba(20, 18, 31, .125); opacity: .72; transition: opacity 1.2s var(--ease);
+  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 50%, #000 35%, transparent 100%);
+          mask-image: radial-gradient(ellipse 75% 70% at 50% 50%, #000 35%, transparent 100%); }
+body.intro .grid { opacity: 1; }
+.glow { --line: rgba(45, 91, 255, .32); --line-major: rgba(45, 91, 255, .5);
+  -webkit-mask-image: radial-gradient(circle 100px at var(--mx) var(--my), #000 0%, transparent 100%);
+          mask-image: radial-gradient(circle 100px at var(--mx) var(--my), #000 0%, transparent 100%); }
+.grain { position: absolute; inset: 0; opacity: .07; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 
-aside { padding: 14px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+/* ---------- the intro ---------- */
+#intro {
+  position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; text-align: center; padding: 24px;
+  background: rgba(251, 247, 240, .5); -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  backdrop-filter: blur(16px) saturate(1.15); transition: opacity .7s var(--ease), transform .7s var(--ease);
+}
+body:not(.intro) #intro { opacity: 0; transform: translateY(-3vh) scale(1.02); pointer-events: none; }
+#intro .eyebrow { color: var(--soft); font-size: 15px; letter-spacing: .01em; margin: 0 0 6px; }
+#intro h1 { font-size: clamp(120px, 17vw, 210px); line-height: .9; margin: 0; }
+#intro h1 span { display: inline-block; opacity: 0; transform: translateY(.18em); filter: blur(6px);
+  animation: letter .9s var(--ease) forwards; }
+@keyframes letter { to { opacity: 1; transform: none; filter: none; } }
+#intro h1 span:nth-child(1) { animation-delay: .12s; } #intro h1 span:nth-child(2) { animation-delay: .21s; }
+#intro h1 span:nth-child(3) { animation-delay: .3s; } #intro h1 span:nth-child(4) { animation-delay: .39s; }
+#intro h1 span:nth-child(5) { animation-delay: .48s; }
+#intro .line { font-size: 40px; margin: 6px 0 4px; }
+#intro .line em { color: var(--blue); }
+#intro p.lede { max-width: 540px; margin: 8px auto 26px; color: var(--soft); font-size: 17px; }
+#intro .start { display: flex; gap: 14px; justify-content: center; align-items: center; }
+#intro .dice { display: flex; gap: 10px; justify-content: center; margin: 22px 0 0; }
+
+/* ---------- pieces ---------- */
+.card { background: var(--card); border-radius: 22px; box-shadow: var(--shadow); min-height: 0;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+button, .button {
+  font: inherit; font-weight: 600; font-stretch: 104%; border: 0; border-radius: 999px; cursor: pointer;
+  padding: 9px 18px; transition: transform .15s var(--ease), box-shadow .2s var(--ease), background .2s;
+}
+button:active, .button:active { transform: translateY(1px) scale(.97); }
+.primary { background: var(--blue); color: #fff; box-shadow: 0 6px 16px -8px rgba(45, 91, 255, .7); }
+.primary:hover { box-shadow: 0 12px 28px -8px rgba(45, 91, 255, .75); }
+.ghost { background: rgba(45, 91, 255, .08); color: var(--blue); }
+.ghost:hover { background: rgba(45, 91, 255, .14); }
+button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.die {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px 3px 9px; border-radius: 999px; color: #fff;
+  font-weight: 600; font-size: 13.5px; white-space: nowrap; transition: transform .2s var(--spring);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .35), rgba(255, 255, 255, 0) 55%), var(--c, #8a8799);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 6px 14px -6px var(--c, #8a8799);
+}
+.die::before { content: ""; width: 8px; height: 8px; border-radius: 3px; background: rgba(255, 255, 255, .9); }
+.die:hover { transform: translateY(-2px) rotate(-3deg); }
+.die.red { --c: #F0302A; } .die.black { --c: #1E1B29; } .die.blue { --c: #2D5BFF; } .die.green { --c: #12A86E; }
+.die.yellow { --c: #E8A900; } .die.orange { --c: #FF7A1A; } .die.purple { --c: #8B3DFF; } .die.white { --c: #9C98AA; }
+
+/* ---------- header and the progress line ---------- */
+header { grid-column: 1 / -1; display: flex; align-items: center; gap: 18px; padding: 0 6px; }
+header .brand { display: flex; align-items: baseline; gap: 10px; flex: none; }
+header .brand b { font-size: 38px; line-height: 1; }
+header .brand i { font-family: "Instrument Serif", serif; font-size: 20px; color: var(--soft); }
+.steps { flex: 1; display: flex; align-items: center; min-width: 0; list-style: none; margin: 0; padding: 0; }
+.steps li { display: flex; align-items: center; gap: 6px; color: var(--soft); font-size: 13px; white-space: nowrap; }
+.steps li + li::before {
+  content: ""; width: 18px; height: 2px; border-radius: 2px; margin: 0 6px 0 4px; background: rgba(20, 18, 31, .1);
+}
+.steps li.done + li::before { background: var(--mint); }
+.steps .mark { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: rgba(20, 18, 31, .07); position: relative; overflow: hidden; }
+.steps li.running { color: var(--ink); }
+.steps li.running .mark { background: rgba(45, 91, 255, .14); }
+.steps li.running .mark::after { content: ""; position: absolute; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--blue); animation: orbit 1.1s var(--ease) infinite; }
+@keyframes orbit { 0% { transform: translateX(-9px); } 50% { transform: translateX(9px); } 100% { transform: translateX(-9px); } }
+.steps li.done { color: var(--ink); }
+.steps li.done .mark { background: var(--mint); }
+.steps li.done .mark::after { content: ""; width: 7px; height: 4px; border: 2px solid #fff; border-top: 0; border-right: 0;
+  transform: translate(0, -1px) rotate(-45deg); animation: tick .35s var(--spring); }
+@keyframes tick { from { transform: translate(0, -1px) rotate(-45deg) scale(0); } }
+.steps li.failed { color: var(--coral); } .steps li.failed .mark { background: var(--coral); }
+.cost { flex: none; display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; font-size: 14px; }
+.cost .bar { width: 60px; height: 6px; border-radius: 6px; background: rgba(20, 18, 31, .08); overflow: hidden; }
+.cost .bar i { display: block; height: 100%; width: 0; background: var(--sun); transition: width .4s var(--ease); }
+.state { padding: 4px 12px; border-radius: 999px; background: rgba(20, 18, 31, .06); font-size: 13px; font-weight: 600; }
+.state.running { background: rgba(45, 91, 255, .12); color: var(--blue); }
+.state.done { background: rgba(18, 201, 138, .14); color: #0B8F62; }
+.state.stopped { background: rgba(255, 90, 54, .14); color: #C7361A; }
+
+/* ---------- left: the scene and the goal ---------- */
+aside { padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 9px; overflow: auto; }
+aside > * { flex-shrink: 0; }
+aside .titled { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+aside .titled button { padding: 6px 12px; font-size: 13px; }
+h2 { font-family: "Instrument Serif", serif; font-weight: 400; font-size: 25px; line-height: 1; margin: 2px 0 0; }
 .drop {
-  border: 1px dashed #2C5582; border-radius: 4px; background: var(--deep); height: 150px; display: grid;
-  place-items: center; text-align: center; padding: 8px; cursor: pointer; overflow: hidden; color: var(--muted);
+  height: 104px; border-radius: 16px; display: grid; place-items: center; text-align: center; padding: 8px;
+  cursor: pointer; overflow: hidden; color: var(--soft); font-size: 14px; position: relative;
+  background: rgba(45, 91, 255, .045); border: 1.5px dashed rgba(45, 91, 255, .28);
+  transition: box-shadow .25s var(--ease), background .25s, border-color .25s, transform .25s var(--spring);
 }
-.drop:hover, .drop.over { border-color: var(--cyan); color: var(--text); }
-.drop img { width: 100%; height: 100%; object-fit: contain; }
-.row { display: flex; gap: 8px; align-items: center; }
-button {
-  font: inherit; font-stretch: 108%; font-weight: 600; border-radius: 4px; cursor: pointer; padding: 7px 12px;
-  border: 1px solid #2C5582; background: transparent; color: var(--cyan);
-}
-button:hover { border-color: var(--cyan); }
-button.run { background: var(--cyan); color: var(--bg); border-color: var(--cyan); height: 42px; font-size: 15px; }
-button:disabled { opacity: .45; cursor: not-allowed; }
+.drop:hover { background: rgba(45, 91, 255, .07); color: var(--ink); }
+.drop.over { border-color: var(--blue); background: rgba(45, 91, 255, .1); transform: scale(1.015);
+  box-shadow: 0 0 0 6px rgba(45, 91, 255, .12), 0 16px 44px -10px rgba(45, 91, 255, .55); }
+.drop img { width: 100%; height: 100%; object-fit: contain; border-radius: 10px; }
+.row { display: flex; gap: 10px; align-items: center; }
+.row .soft { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 textarea {
-  font: inherit; color: var(--text); background: var(--deep); border: 1px solid var(--grid); border-radius: 4px;
-  padding: 8px 10px; resize: none; height: 74px; width: 100%;
+  font: inherit; color: var(--ink); background: #fff; border: 0; border-radius: 14px; padding: 10px 12px;
+  resize: none; height: 54px; width: 100%; box-shadow: inset 0 0 0 1px var(--hair);
+  transition: box-shadow .2s var(--ease);
 }
-textarea:focus { border-color: var(--cyan); outline: none; }
-textarea:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-.help { font-size: 12.5px; color: var(--muted); margin: 0; }
-.help q { color: var(--text); }
-.error { color: var(--amber); font-size: 13px; margin: 0; }
-.error:empty { display: none; }
-label.check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
-label.check input { accent-color: var(--cyan); margin-top: 3px; }
+textarea::placeholder { color: #ADA9BC; }
+textarea:focus { outline: none; box-shadow: inset 0 0 0 2px var(--blue), 0 0 0 5px rgba(45, 91, 255, .12); }
+.help { font-size: 12.5px; color: var(--soft); margin: 0; line-height: 1.45; }
+.help q { color: var(--ink); }
+.error { color: #D2391B; font-size: 13px; margin: 0; } .error:empty { display: none; }
+label.check { display: flex; gap: 9px; align-items: flex-start; cursor: pointer; font-size: 14px; }
+label.check input { accent-color: var(--blue); width: 16px; height: 16px; margin-top: 2px; }
+#run { font-size: 16px; padding: 12px 18px; margin-top: 2px; }
 
-main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.headline { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.headline .note { color: var(--muted); font-size: 13px; }
-.stage {
-  flex: 1; min-height: 0; display: grid; place-items: center; background: var(--deep);
-  border: 1px solid var(--grid); border-radius: 4px; position: relative; overflow: hidden;
-}
+/* ---------- centre: the expected simulation and the tabs ---------- */
+main { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.tabs { display: flex; gap: 6px; align-items: center; }
+.tabs [role="tab"] { background: transparent; color: var(--soft); padding: 7px 14px; font-weight: 600; white-space: nowrap; }
+.tabs [role="tab"]:hover { background: rgba(20, 18, 31, .05); color: var(--ink); }
+.tabs [role="tab"][aria-selected="true"] { background: var(--ink); color: #fff; }
+.tabs .note { margin-left: auto; font-size: 12.5px; color: var(--soft); text-align: right; max-width: 330px; line-height: 1.35; }
+.stage { flex: 1; min-height: 0; position: relative; border-radius: 16px; overflow: hidden;
+  background: rgba(20, 18, 31, .04); display: grid; place-items: center; }
 .stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: none; }
 .stage.has-video video { display: block; }
 .stage.has-video .empty { display: none; }
-.empty { text-align: center; color: var(--muted); max-width: 440px; padding: 16px; }
-.empty svg { display: block; margin: 0 auto 10px; }
-.result { min-height: 20px; font-variant-numeric: tabular-nums; }
-[role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid var(--grid); }
-[role="tab"] {
-  border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted);
-  padding: 4px 10px 6px; font-stretch: 112%; font-weight: 600;
+.stage .label {
+  position: absolute; left: 12px; top: 12px; z-index: 2; display: flex; align-items: center; gap: 8px;
+  background: #fff; color: var(--ink); border-radius: 999px; padding: 6px 14px 6px 10px; font-weight: 600; font-size: 14px;
+  box-shadow: 0 8px 24px -10px rgba(20, 18, 31, .35);
 }
-[role="tab"]:first-child { font-stretch: 122%; }
-[role="tab"][aria-selected="true"] { color: var(--text); border-bottom-color: var(--cyan); }
-[role="tab"]:hover { color: var(--text); }
+.stage .label::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--coral);
+  box-shadow: 0 0 0 4px rgba(255, 90, 54, .18); }
+.empty { text-align: center; color: var(--soft); max-width: 420px; padding: 16px; }
+.empty .big { font-family: "Instrument Serif", serif; font-size: 34px; color: var(--ink); line-height: 1.1; display: block;
+  margin-bottom: 8px; }
+.empty .big em { color: var(--blue); }
 .view { flex: 1; min-height: 0; overflow: auto; }
 .view[hidden], .stage[hidden] { display: none; }
-.view .waiting { color: var(--muted); padding: 24px 4px; }
-.sam { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 14px; height: 100%; }
-.sam img { width: 100%; height: 100%; object-fit: contain; background: var(--deep); border: 1px solid var(--grid);
-  border-radius: 4px; }
-.facts h3, .view h3 { font-size: 13.5px; font-stretch: 112%; margin: 0 0 4px; font-weight: 620; }
-.facts ul, .view ul, .view ol { margin: 0 0 12px; padding-left: 18px; }
-.facts li, .view li { margin: 2px 0; }
+.view .waiting { color: var(--soft); padding: 24px 4px; }
+.result { min-height: 22px; font-variant-numeric: tabular-nums; font-size: 14.5px; }
+.result b { font-weight: 650; }
+.sam { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; height: 100%; }
+.photo { position: relative; justify-self: center; align-self: center; max-width: 100%; max-height: 100%;
+  border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px -14px rgba(20, 18, 31, .35); }
+.photo img { display: block; width: 100%; height: 100%; }
+.box { position: absolute; border: 3px solid var(--c); border-radius: 8px; transform: scale(.2); opacity: 0;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 22%, transparent);
+  animation: pop .55s var(--spring) forwards; }
+@keyframes pop { to { transform: none; opacity: 1; } }
+.facts h3, .view h3 { font-size: 14px; margin: 0 0 6px; font-weight: 650; }
+.facts ul, .view ul, .view ol { margin: 0 0 14px; padding-left: 0; list-style: none; }
+.facts li, .view li { margin: 5px 0; }
+.view ol { counter-reset: n; } .view ol li { counter-increment: n; }
+.view ol li::before { content: counter(n); display: inline-grid; place-items: center; width: 20px; height: 20px;
+  border-radius: 50%; background: rgba(20, 18, 31, .07); font-size: 12px; font-weight: 650; margin-right: 8px; }
 .num { font-variant-numeric: tabular-nums; }
-.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.carry { border-top: 1px solid var(--grid); padding: 8px 0; display: grid; grid-template-columns: minmax(0, 1fr) 230px;
-  gap: 14px; align-items: start; }
-.carry:first-child { border-top: 0; padding-top: 2px; }
-.carry p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-.carry b { color: var(--text); font-weight: 600; }
-.clock { font-size: 12.5px; color: var(--muted); }
-.clock .track { height: 8px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin: 3px 0; }
-.clock .track i { display: block; height: 100%; background: var(--mint); }
-.clock .track i.close { background: var(--amber); }
-.pass { color: var(--mint); } .miss { color: var(--amber); }
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; padding: 4px; }
+.carry { padding: 10px 2px; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 18px; align-items: start; }
+.carry + .carry { border-top: 1px solid var(--hair); }
+.carry p { margin: 4px 0 0; color: var(--soft); font-size: 13.5px; }
+.carry p b { color: var(--ink); font-weight: 650; }
+.clock { font-size: 12.5px; color: var(--soft); }
+.clock .track { height: 9px; border-radius: 9px; background: rgba(20, 18, 31, .07); overflow: hidden; margin: 5px 0; }
+.clock .track i { display: block; height: 100%; border-radius: 9px; background: var(--mint); }
+.clock .track i.close { background: var(--sun); }
 
-.log { display: flex; flex-direction: column; padding: 10px 14px 8px; }
-.log .headline { margin-bottom: 4px; }
-#log {
-  flex: 1; min-height: 0; overflow-y: auto; font: 12px/1.55 "JetBrains Mono", ui-monospace, monospace;
-  white-space: pre-wrap; overflow-wrap: anywhere;
-}
-#log .sim { color: var(--muted); }
-#log .chip { color: var(--cyan); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-right: 6px; }
-#log b { font-weight: 600; }
-.bottom { grid-column: 1 / -1; display: flex; gap: 12px; min-height: 0; }
-.bottom .log { flex: 1; min-width: 0; }
-.program { width: 410px; flex: none; padding: 10px 14px; display: flex; flex-direction: column; gap: 5px; }
+/* ---------- bottom: the live log and the arm program ---------- */
+.bottom { grid-column: 1 / -1; display: flex; gap: 14px; min-height: 0; }
+.log { flex: 1; min-width: 0; padding: 12px 18px 10px; display: flex; flex-direction: column; }
+.log .head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.log .head h2 { font-size: 22px; }
+.log .head span { font-size: 12.5px; color: var(--soft); }
+#log { flex: 1; min-height: 0; overflow-y: auto; font: 12px/1.6 "JetBrains Mono", ui-monospace, monospace;
+  white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+#log .sim { color: var(--soft); }
+#log .chip { color: var(--blue); background: rgba(45, 91, 255, .1); border-radius: 6px; padding: 0 6px; margin-right: 6px; }
+#log b { font-weight: 700; }
+.program { width: 410px; flex: none; padding: 12px 18px; display: flex; flex-direction: column; gap: 4px;
+  background: linear-gradient(135deg, rgba(255, 194, 26, .16), rgba(255, 90, 54, .1)), var(--card); }
 .program[hidden] { display: none; }
-.program p { margin: 0; font-size: 13px; color: var(--muted); }
-.program .files { font: 11.5px/1.5 "JetBrains Mono", ui-monospace, monospace; color: var(--text); }
-.program a.download {
-  display: block; text-align: center; text-decoration: none; background: var(--cyan); color: var(--bg);
-  font-stretch: 108%; font-weight: 640; border-radius: 4px; padding: 8px 12px; margin-top: 2px;
-}
-.program.arrive { animation: arrive 420ms cubic-bezier(.2, .8, .2, 1) both; }
-@keyframes arrive { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+.program h2 { font-size: 24px; }
+.program a.download { padding: 8px 18px; }
+.program p { margin: 0; font-size: 12.5px; color: var(--soft); }
+.program .files { font: 11.5px/1.5 "JetBrains Mono", ui-monospace, monospace; color: var(--ink); }
+.program a.download { text-align: center; text-decoration: none; display: block; }
+.program.arrive { animation: arrive .7s var(--spring) both; }
+@keyframes arrive { from { transform: translateY(40px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important;
+    transition: none !important; scroll-behavior: auto !important; }
+  .glow { display: none; }
+  .box, #intro h1 span { animation: none !important; opacity: 1; transform: none; filter: none; }
+  .blob { animation: none !important; }
+  .steps li.running .mark::after { transform: none; }
+  .die:hover { transform: none; }
 }
 </style>
 </head>
-<body>
+<body class="intro">
+<div class="bg" aria-hidden="true">
+  <div class="blob blue"></div><div class="blob coral"></div>
+  <div class="grid"></div><div class="glow" id="glow"></div><div class="grain"></div>
+</div>
+
+<section id="intro" aria-label="Introduction">
+  <div>
+    <p class="eyebrow">Meta Global AI Developer Hackathon, 2026</p>
+    <h1 class="serif" aria-label="Mimic"><span>M</span><span>i</span><span>m</span><span>i</span><span>c</span></h1>
+    <p class="line serif">Show a robot <em>once</em>.</p>
+    <p class="lede">It reads the goal from your photo or a few words, plans every move in plain code, checks it, and
+      shows you the expected simulation before a real arm moves.</p>
+    <div class="start"><button type="button" class="primary" id="begin">Start</button>
+      <span class="soft">or press Enter</span></div>
+    <div class="dice" aria-hidden="true"><span class="die red">red die</span><span class="die black">black die</span>
+      <span class="die blue">blue die</span></div>
+  </div>
+</section>
+
 <header>
-  <svg class="mark" viewBox="0 0 30 30" aria-hidden="true">
-    <circle cx="15" cy="15" r="11" fill="none" stroke="#4FD1FF" stroke-width="1.5"/>
-    <path d="M15 1v8M15 21v8M1 15h8M21 15h8" stroke="#4FD1FF" stroke-width="1.5"/>
-    <circle cx="15" cy="15" r="2.5" fill="#7CFFB2"/>
-  </svg>
-  <h1>Mimic</h1>
-  <span class="tag">Show a robot once: it plans the moves, checks them, and shows the expected result</span>
-  <span class="spacer"></span>
-  <span class="meter" aria-live="polite"><span>Cost <b id="cost">$0.0000</b> of the <span id="cap">$0.30</span> cap</span>
+  <div class="brand"><b class="serif">Mimic</b><i>show a robot once</i></div>
+  <ol class="steps" id="steps" aria-label="Progress">
+    <li data-step="dots"><span class="mark" aria-hidden="true"></span>Calibrated</li>
+    <li data-step="names"><span class="mark" aria-hidden="true"></span>Named</li>
+    <li data-step="plan"><span class="mark" aria-hidden="true"></span>Planned</li>
+    <li data-step="sim"><span class="mark" aria-hidden="true"></span>Simulated</li>
+    <li data-step="video"><span class="mark" aria-hidden="true"></span>Video</li>
+    <li data-step="program"><span class="mark" aria-hidden="true"></span>Arm program</li>
+  </ol>
+  <span class="cost" aria-live="polite"><span>Cost <b id="cost">$0.0000</b> / <span id="cap">$0.30</span> cap</span>
     <span class="bar" aria-hidden="true"><i id="costbar"></i></span></span>
   <span class="state" id="state">Ready</span>
 </header>
 
-<aside class="panel" aria-label="Scene and goal">
-  <h2>Your scene</h2>
+<aside class="card" aria-label="Scene and goal">
+  <div class="titled"><h2>Your scene</h2><button type="button" class="ghost" id="sample">Use the sample photo</button></div>
   <div class="drop" id="drop" role="button" tabindex="0" aria-describedby="drophelp">
     <span id="drophelp">Drop a photo of the sheet here, or click to choose one (JPEG or PNG)</span>
   </div>
   <input type="file" id="file" accept="image/jpeg,image/png" hidden>
-  <div class="row"><button type="button" id="sample">Use the sample photo</button>
-    <span class="muted" id="photoname">No photo yet</span></div>
+  <p class="help"><span id="photoname">No photo yet</span> · sent to SAM 3.1 and Muse Spark 1.3; keep faces out.</p>
   <p class="error" id="photoerror" role="alert"></p>
-  <p class="help">The photo is sent to Meta's SAM 3.1 and Muse Spark 1.3. Keep faces out of it.</p>
-
   <h2><label for="goal">Goal</label></h2>
-  <textarea id="goal" placeholder="put black on blue, then red on black"></textarea>
-  <p class="help">Works: <q>put black on blue, then red on black</q>, <q>row black, blue, red</q>, or leave it empty
-    for the photo's left-to-right order.</p>
+  <textarea id="goal" placeholder="e.g. put black on blue, then red on black"></textarea>
+  <p class="help">Or <q>row black, blue, red</q>; empty = the photo's order.</p>
   <p class="error" id="goalerror" role="alert"></p>
-
-  <label class="check"><input type="checkbox" id="cache"> <span>Use cache <span class="muted">(reuse replies
-    already paid for: $0, but not live)</span></span></label>
-  <button type="button" class="run" id="run">Run</button>
+  <label class="check"><input type="checkbox" id="cache"> <span>Use cache <span class="soft">($0, not live)</span></span></label>
+  <button type="button" class="primary" id="run">Run</button>
   <p class="error" id="runerror" role="alert"></p>
 </aside>
 
-<main class="panel" aria-label="Expected simulation">
-  <div role="tablist" aria-label="Views of the run">
+<main class="card" aria-label="Expected simulation">
+  <div class="tabs" role="tablist" aria-label="Views of the run">
     <button role="tab" id="tab-sim" aria-selected="true" aria-controls="stage">Expected simulation</button>
     <button role="tab" id="tab-sam" aria-selected="false" aria-controls="view-sam" tabindex="-1">What SAM sees</button>
     <button role="tab" id="tab-spark" aria-selected="false" aria-controls="view-spark" tabindex="-1">What Spark read</button>
     <button role="tab" id="tab-plan" aria-selected="false" aria-controls="view-plan" tabindex="-1">Plan</button>
+    <span class="note">Simulated arm on a made-up ring. No real arm moves.</span>
   </div>
-  <span class="note muted">A simulated arm on a made-up ring. Perception and planning run live on your photo; no real
-    arm moves.</span>
   <div class="stage" id="stage" role="tabpanel" aria-labelledby="tab-sim">
-    <div class="empty">
-      <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
-        <circle cx="32" cy="32" r="24" fill="none" stroke="#4FD1FF" stroke-width="1.2" stroke-dasharray="4 4"/>
-        <path d="M32 4v14M32 46v14M4 32h14M46 32h14" stroke="#1E3A5F" stroke-width="1.2"/>
-        <rect x="27" y="49" width="10" height="10" fill="none" stroke="#8FA8C2"/>
-      </svg>
-      Choose a photo and a goal, then Run. The expected simulation of the arm's moves plays here.
-    </div>
+    <span class="label">Expected simulation</span>
+    <div class="empty"><span class="big">Choose a photo and a goal, then <em>Run</em>.</span>
+      The expected simulation of the arm's moves plays here.</div>
     <video id="video" loop muted playsinline controls aria-label="Expected simulation video"></video>
   </div>
   <div class="view" id="view-sam" role="tabpanel" aria-labelledby="tab-sam" hidden>
@@ -218,39 +330,89 @@ main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-
 </main>
 
 <div class="bottom">
-<section class="panel log" aria-label="Live log">
-  <div class="headline"><h2>Live log</h2><span class="note">Every line the run prints, as it happens. Lines about the
-    arm are tagged simulated.</span></div>
-  <div id="log" role="log" aria-live="off"></div>
-</section>
-<section class="panel program" id="program" hidden aria-live="polite" aria-label="Arm program">
-  <h2>Arm program ready</h2>
-  <p class="files" id="programfiles"></p>
-  <a class="download" id="download" href="#" download>Download arm program</a>
-  <p id="programnote"></p>
-</section>
+  <section class="card log" aria-label="Live log">
+    <div class="head"><h2>Live log</h2><span>Every line the run prints, as it happens. Lines about the arm are tagged
+      simulated.</span></div>
+    <div id="log" role="log" aria-live="off"></div>
+  </section>
+  <section class="card program" id="program" hidden aria-live="polite" aria-label="Arm program">
+    <h2>Arm program ready</h2>
+    <p class="files" id="programfiles"></p>
+    <a class="button primary download" id="download" href="#" download>Download arm program</a>
+    <p id="programnote"></p>
+  </section>
 </div>
 
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 let photo = null;          // "sample", or a data URL
 let source = null;
+
+// ---------- the intro: letters ease in one by one; Start, Enter or a click collapses it ----------
+function begin() {
+  if (!document.body.classList.contains("intro")) return;
+  document.body.classList.remove("intro");
+  setTimeout(() => { $("intro").hidden = true; }, still ? 0 : 750);
+  $("drop").focus({preventScroll: true});
+}
+$("begin").addEventListener("click", begin);
+$("intro").addEventListener("click", (e) => { if (e.target.id === "intro") begin(); });
+addEventListener("keydown", (e) => { if (e.key === "Enter" && document.body.classList.contains("intro")) begin(); });
+
+// ---------- the grid brightens near the mouse (not with reduced motion) ----------
+if (!still) {
+  let tx = -500, ty = -500, x = -500, y = -500;
+  addEventListener("pointermove", (e) => { tx = e.clientX; ty = e.clientY; });
+  (function follow() {
+    x += (tx - x) * .14; y += (ty - y) * .14;
+    $("glow").style.setProperty("--mx", x + "px"); $("glow").style.setProperty("--my", y + "px");
+    requestAnimationFrame(follow);
+  })();
+}
 
 function setState(text, kind) { const s = $("state"); s.textContent = text; s.className = "state " + (kind || ""); }
 function setCost(cost, cap) {
   $("cost").textContent = "$" + Number(cost || 0).toFixed(4);
   if (cap) $("cap").textContent = "$" + Number(cap).toFixed(2);
-  const capValue = cap || 0.30;
-  $("costbar").style.width = Math.min(100, 100 * (cost || 0) / capValue) + "%";
+  $("costbar").style.width = Math.min(100, 100 * (cost || 0) / (cap || 0.30)) + "%";
 }
 function escape(text) {
-  return text.replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  return String(text).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 }
+const COLOURS = ["red", "black", "blue", "green", "yellow", "orange", "purple", "white"];
+function die(name) {
+  const colour = COLOURS.find((c) => name.split(" ").includes(c)) || "";
+  return `<span class="die ${colour}">${escape(name)}</span>`;
+}
+const DIE_HEX = {red: "#F0302A", black: "#1E1B29", blue: "#2D5BFF", green: "#12A86E", yellow: "#E8A900",
+  orange: "#FF7A1A", purple: "#8B3DFF", white: "#9C98AA"};
 function colour(html) {
   return html.replace(/\bPASS\b/g, '<b class="pass">PASS</b>')
              .replace(/\b(RETRY|FAIL|INJECTED TEST MISS|Stopped|STOPPED)\b/g, '<b class="miss">$1</b>');
 }
+
+// ---------- the progress line: a moving dot while a step runs, a tick when it is done ----------
+const STEPS = ["dots", "names", "plan", "sim", "video", "program"];
+let stepAt = -1;
+function stepTo(index, failed) {
+  document.querySelectorAll("#steps li").forEach((li, i) => {
+    li.className = i < index ? "done" : i === index ? (failed ? "failed" : "running") : "";
+  });
+  stepAt = index;
+}
+function stepFromLine(line) {
+  const t = line.text;
+  if (/^Perception on/.test(t)) stepTo(0);
+  else if (/SAM found the 6 dots/.test(t)) stepTo(1);
+  else if (/Spark named/.test(t)) stepTo(2);
+  else if (line.simulated && stepAt === 2) stepTo(3);
+  else if (/^The move list/.test(t)) stepTo(4);
+  else if (/simulation_video\.mp4/.test(t) && /^Saved/.test(t)) stepTo(5);
+  else if (/^Stopped/.test(t)) stepTo(Math.max(stepAt, 0), true);
+}
+
 function addLine(line) {
   const log = $("log"), div = document.createElement("div");
   let text = line.text;
@@ -259,6 +421,7 @@ function addLine(line) {
   const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.appendChild(div);
   if (atEnd) log.scrollTop = log.scrollHeight;
+  stepFromLine(line);
 }
 
 function showPreview(src, name) {
@@ -291,18 +454,6 @@ $("sample").addEventListener("click", () => {
 });
 fetch("/sample.jpg", {method: "HEAD"}).then((r) => { if (!r.ok) $("sample").hidden = true; });
 
-// /?run=<folder> shows a finished simulation again (its video and numbers), with no new calls
-const earlier = new URLSearchParams(location.search).get("run");
-if (earlier && /^\d{8}-\d{6}_simulation$/.test(earlier)) {
-  fetch(`/api/runs/${earlier}/simulation_summary.json`).then((r) => r.ok ? r.json() : null).then((s) => {
-    if (!s) return;
-    addLine({text: `Showing an earlier run: ${earlier} (no new calls)`, simulated: false});
-    finish({ok: true, folder: earlier, video: `/api/runs/${earlier}/simulation_video.mp4`, summary: s, cap_usd: 0.30});
-    const tab = $("tab-" + new URLSearchParams(location.search).get("tab"));
-    if (tab) selectTab(tab);
-  });
-}
-
 function summaryLine(r) {
   const s = r.summary, moves = s.moves || [];
   const placed = moves.filter((m) => m.result === "PASS").length;
@@ -311,16 +462,17 @@ function summaryLine(r) {
   const worst = s.max_error_cm == null ? "" : ` · worst miss <b class="${s.max_error_cm <= 1.5 ? "pass" : "miss"}">` +
     `${Number(s.max_error_cm).toFixed(1)} cm</b>`;
   return `Expected simulation: <b class="${all ? "pass" : "miss"}">${placed} of ${moves.length}</b> dice ${where}` +
-    `${worst} · ${s.attempts} simulated camera checks · ${s.sim_seconds.toFixed(0)} s of simulated arm time`;
+    `${worst} · ${s.attempts} simulated camera checks · ${Number(s.sim_seconds).toFixed(0)} s of simulated arm time`;
 }
 
 function finish(r) {
   $("run").disabled = false;
   if (!r.ok) {
-    setState("Stopped", "stopped"); setCost(r.cost_usd, r.cap_usd);
+    setState("Stopped", "stopped"); setCost(r.cost_usd, r.cap_usd); stepTo(Math.max(stepAt, 0), true);
     $("runerror").textContent = r.error; $("result").textContent = "";
     return;
   }
+  stepTo(STEPS.length);
   setState("Done", "done"); setCost(r.summary.cost_usd, r.cap_usd);
   const video = $("video");
   video.src = r.video + "?v=" + Date.now();
@@ -330,7 +482,6 @@ function finish(r) {
   showProgram(r);
   fetch(`/api/runs/${r.folder}/simulation_summary.json`).then((x) => x.ok ? x.json() : null)
     .then((s) => { if (s) fillTabs(s, r.folder); });
-  document.dispatchEvent(new CustomEvent("mimic:done", {detail: r}));
 }
 
 // ---------- tabs ----------
@@ -341,6 +492,7 @@ function selectTab(tab) {
     t.setAttribute("aria-selected", on); t.tabIndex = on ? 0 : -1;
     $(t.getAttribute("aria-controls")).hidden = !on;
   });
+  if (tab.id === "tab-sam") popBoxes();
 }
 tabs.forEach((t, i) => {
   t.addEventListener("click", () => selectTab(t));
@@ -353,50 +505,74 @@ tabs.forEach((t, i) => {
 
 const fmt = (v, digits = 1) => Number(v).toFixed(digits);
 const list = (items) => "<ul>" + items.map((x) => `<li>${x}</li>`).join("") + "</ul>";
+let samBoxes = {};
+
+// SAM's boxes pop in on the photo, one by one, each in its die's colour
+function popBoxes() {
+  const holder = document.querySelector("#view-sam .photo"), img = holder && holder.querySelector("img");
+  if (!img || !img.naturalWidth) return;
+  holder.querySelectorAll(".box").forEach((b) => b.remove());
+  Object.entries(samBoxes).forEach(([name, b], i) => {
+    const el = document.createElement("div"), c = COLOURS.find((k) => name.split(" ").includes(k));
+    el.className = "box"; el.title = name;
+    el.style.cssText = `--c:${DIE_HEX[c] || "#6B6880"}; left:${100 * b[0] / img.naturalWidth}%;` +
+      `top:${100 * b[1] / img.naturalHeight}%; width:${100 * (b[2] - b[0]) / img.naturalWidth}%;` +
+      `height:${100 * (b[3] - b[1]) / img.naturalHeight}%; animation-delay:${250 + i * 160}ms`;
+    holder.appendChild(el);
+  });
+}
 
 function fillTabs(s, folder) {
   const sam = s.sam || {}, checks = sam.check_cm || {}, seen = sam.seen_cm || s.seen_cm || {};
+  samBoxes = sam.boxes || {};
   $("view-sam").innerHTML = `<div class="sam">
-    <img src="/api/runs/${folder}/simulation_sam.jpg" alt="The photo with the 6 dots named and each die's box">
+    <div class="photo"><img src="/api/runs/${folder}/simulation_photo_dots.jpg"
+      alt="The photo with the 6 calibration dots named; each die's box is drawn over it"></div>
     <div class="facts">
-      <h3>The 6 dots</h3><p class="muted" style="margin:0 0 4px">The photo calibrates itself from them; the two check
-      dots show the error.</p>${list(Object.entries(checks).map(([role, cm]) =>
+      <h3>The 6 dots</h3><p class="soft" style="margin:0 0 4px;font-size:13px">The photo calibrates itself from them;
+      the two check dots show the error.</p>${list(Object.entries(checks).map(([role, cm]) =>
         `${escape(role.replace("_", " "))}: <b class="num ${cm <= 0.5 ? "pass" : "miss"}">${fmt(cm, 2)} cm</b>`))}
       <h3>The dice</h3>${list(Object.entries(seen).map(([name, p]) =>
-        `${escape(name)} at <span class="num">(${fmt(p[0])}, ${fmt(p[1])}) cm</span>`))}
-      <p class="muted" style="margin:0">For the simulation each die is then placed on the made-up ring.</p>
+        `${die(name)} <span class="num soft">(${fmt(p[0])}, ${fmt(p[1])}) cm</span>`))}
+      <p class="soft" style="margin:0;font-size:13px">For the simulation each die is then placed on the made-up ring.</p>
     </div></div>`;
+  const img = document.querySelector("#view-sam .photo img");
+  img.addEventListener("load", () => {
+    img.parentElement.style.aspectRatio = img.naturalWidth + " / " + img.naturalHeight;
+    if (!$("view-sam").hidden) popBoxes();
+  });
 
   const rounds = {};
   (s.naming || []).forEach((a) => { (rounds[a.round] = rounds[a.round] || []).push(a); });
   const naming = Object.entries(rounds).map(([round, tries]) => `<li>${round === "0" ? "First names" :
-    "Rename " + round}: ${tries.map((a) => `${escape(a.name)} (<span class="${a.boxes === 1 ? "pass" : "miss"}">` +
-    `${a.boxes} box${a.boxes === 1 ? "" : "es"}</span>)`).join(", ")}</li>`).join("");
+    "Rename " + round}: ${tries.map((a) => `${die(a.name)} <span class="${a.boxes === 1 ? "pass" : "miss"}">` +
+    `${a.boxes} box${a.boxes === 1 ? "" : "es"}</span>`).join(" ")}</li>`).join("");
   const read = s.goal_read || {mode: "photo"};
   const how = {photo: "No goal typed: the photo's left-to-right order, slot 1 first.",
     row: "A row, slot 1 first.", stack: "A stack on slot 1, bottom first.",
-    pairs: "Pairs read as one pile, bottom first, built " + (s.stack_in_place ? "where " + escape(s.target[0]) +
+    pairs: "Pairs read as one pile, bottom first, built " + (s.stack_in_place ? "where the " + escape(s.target[0]) +
       " lies (it stays put): " : "on slot 1: ") +
       (read.spec || []).map((p) => `${escape(p[0])} on ${escape(p[1])}`).join(", then ") + "."}[read.mode];
   const carries = (s.target || []).map((name, i) => s.stack
-    ? `${escape(name)} ${i === 0 ? (s.stack_in_place ? "stays where it lies (the bottom)" : "to slot 1 (the bottom)")
-                                 : "on top of " + escape(s.target[i - 1])}`
-    : `${escape(name)} to slot ${i + 1}`);
+    ? `${die(name)} ${i === 0 ? (s.stack_in_place ? "stays where it lies (the bottom)" : "to slot 1 (the bottom)")
+                              : "on top of the " + escape(s.target[i - 1])}`
+    : `${die(name)} to slot ${i + 1}`);
   $("view-spark").innerHTML = `<div class="columns"><div>
-      <h3>Muse Spark 1.3 named the dice</h3><p class="muted" style="margin:0 0 4px">SAM 3.1 checked each name: a good
-      name finds exactly 1 box.</p><ul>${naming || "<li>No naming record in this run.</li>"}</ul></div>
-    <div><h3>Your goal, read by code</h3><p style="margin:0 0 6px">${s.instruction ? "&ldquo;" +
-      escape(s.instruction) + "&rdquo;" : "<span class='muted'>(empty)</span>"}</p><p class="muted" style="margin:0 0 6px">
-      ${how}</p><h3>The carries</h3><ol>${carries.map((c) => `<li>${c}</li>`).join("")}</ol>
-      ${s.stack ? '<p class="miss" style="margin:0">Stacking is simulation only: the taped elbow cannot let go of a ' +
-        "die on top of another.</p>" : ""}</div></div>`;
+      <h3>Muse Spark 1.3 named the dice</h3><p class="soft" style="margin:0 0 6px;font-size:13px">SAM 3.1 checked each
+      name: a good name finds exactly 1 box.</p><ul>${naming || "<li>No naming record in this run.</li>"}</ul></div>
+    <div><h3>Your goal, read by code</h3><p class="serif" style="margin:0 0 6px;font-size:22px">${s.instruction
+      ? "&ldquo;" + escape(s.instruction) + "&rdquo;" : "<span class='soft'>(empty)</span>"}</p>
+      <p class="soft" style="margin:0 0 10px;font-size:13.5px">${how}</p><h3>The carries</h3>
+      <ol>${carries.map((c) => `<li>${c}</li>`).join("")}</ol>
+      ${s.stack ? '<p class="miss" style="margin:0;font-size:13.5px">Stacking is simulation only: the taped elbow ' +
+        "cannot let go of a die on top of another.</p>" : ""}</div></div>`;
 
-  $("view-plan").innerHTML = (s.plan || []).map((c, i) => {
+  $("view-plan").innerHTML = (s.plan || []).map((c) => {
     const share = c.claw_closed_s / c.claw_limit_s;
-    const outcome = c.result === "PASS" ? `<span class="pass">pass, ${fmt(c.miss_cm)} cm from the slot</span>`
+    const outcome = c.result === "PASS" ? `<span class="pass">pass, ${fmt(c.miss_cm)} cm off</span>`
       : `<span class="miss">${c.result.toLowerCase()}, ${fmt(c.miss_cm)} cm off</span>` +
         (c.next_correction_deg != null ? `, next aim ${c.next_correction_deg > 0 ? "+" : ""}${fmt(c.next_correction_deg)}°` : "");
-    return `<div class="carry"><div><b>${escape(c.name)} to ${s.stack ? "the stack" : "slot " + c.slot}` +
+    return `<div class="carry"><div>${die(c.name)} <b>to ${s.stack ? "the stack" : "slot " + c.slot}` +
       `${c.try > 1 ? ", try " + c.try : ""}</b>
       <p>Base to <b class="num">${c.pick_deg}°</b> with the claw open (${c.grip_open}), shoulder down from
       ${c.above}° to the table at <b class="num">${c.table}°</b> in 2° steps, close the claw to
@@ -414,9 +590,21 @@ function showProgram(r) {
   $("programfiles").textContent = `mimic_job_${stamp}.py · moves.json · README.md`;
   $("download").href = `/api/runs/${r.folder}/program.zip`;
   $("programnote").textContent = "Try --dry-run first. " + (r.summary.stack
-    ? "A real stack needs calib/stack.json, measured by hand; refused until then."
-    : "Real angles come from the calibrated ring; base outside 80-120 is refused.");
+    ? "A real stack needs calib/stack.json." : "Real runs need the calibrated ring.");
   card.hidden = false; card.classList.remove("arrive"); void card.offsetWidth; card.classList.add("arrive");
+}
+
+// /?run=<folder> shows a finished simulation again (its video and numbers), with no new calls
+const params = new URLSearchParams(location.search), earlier = params.get("run");
+if (earlier && /^\d{8}-\d{6}_simulation$/.test(earlier)) {
+  document.body.classList.remove("intro"); $("intro").hidden = true;
+  fetch(`/api/runs/${earlier}/simulation_summary.json`).then((r) => r.ok ? r.json() : null).then((s) => {
+    if (!s) return;
+    addLine({text: `Showing an earlier run: ${earlier} (no new calls)`, simulated: false});
+    finish({ok: true, folder: earlier, video: `/api/runs/${earlier}/simulation_video.mp4`, summary: s, cap_usd: 0.30});
+    const tab = $("tab-" + params.get("tab"));
+    if (tab) setTimeout(() => selectTab(tab), 300);
+  });
 }
 
 $("run").addEventListener("click", async () => {
@@ -440,8 +628,7 @@ $("run").addEventListener("click", async () => {
   $("log").innerHTML = ""; $("result").textContent = ""; $("program").hidden = true; setCost(0, reply.cap_usd);
   ["view-sam", "view-spark", "view-plan"].forEach((id) =>
     $(id).innerHTML = '<p class="waiting">Running: this fills in when the run finishes.</p>');
-  setState("Running", "running");
-  document.dispatchEvent(new CustomEvent("mimic:start"));
+  setState("Running", "running"); stepTo(0);
   if (source) source.close();
   source = new EventSource("/api/events/" + reply.job);
   source.onmessage = (e) => { const line = JSON.parse(e.data); addLine(line); setCost(line.cost); };
