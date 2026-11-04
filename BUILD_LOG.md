@@ -320,3 +320,9 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   `carry(already_stacked=...)` let that die sit at the drop spot; the real run never sets either. The arm program
   carries only the dice on top (a measured `stack.json` then needs no pick angle for the bottom die). Cached run of
   "put black on blue, then red on black": blue stays at base 106, black and red carried onto it, 2 of 2.
+- MIT LICENSE (2026 girik-chadha); README rewritten for the hardware as it is (elbow servo failed, forearm fixed, one
+  ring of reach, pick-and-carry proven in one scripted run and one manual stacking run, simulation always labelled),
+  with the AI-use line, the demo page, and a License section (the fonts keep their OFL). `docs/SUBMISSION.md`: the
+  submission checklist, every field to fill in. Key scan (4 Nov 23:05 GMT): the API key's value is in none of the 8,970
+  working-tree files (ignored ones included) and none of the 1,057 objects in git's store; no `.env` file was ever
+  committed; `.env` is ignored.

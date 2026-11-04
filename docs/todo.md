@@ -117,7 +117,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 
 ## Tue 3 to Wed 4 Nov: Phase 6
 
-- [ ] README, video, X posts; **submit by 21:00 UK Wed 4 Nov**
+- [x] MIT LICENSE, README honest about the hardware and the simulation, AI-use line, `docs/SUBMISSION.md` checklist; key scan clean (4 Nov)
+- [ ] Video, X posts; fill in `docs/SUBMISSION.md`; **submit by 02:00 GMT 5 Nov (21:00 ET 4 Nov)**
 
 ## Rules for every day
 
