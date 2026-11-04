@@ -88,13 +88,16 @@ def test_every_output_is_marked_simulation(tmp_path, monkeypatch):
     assert sorted(p.name for p in out.iterdir()) == [
         "simulation_attempts.jsonl", "simulation_check_1.jpg", "simulation_check_2.jpg", "simulation_check_3.jpg",
         "simulation_end.jpg", "simulation_moves.json", "simulation_photo.jpg", "simulation_photo_dots.jpg",
-        "simulation_start.jpg", "simulation_summary.json", "simulation_video.mp4"]
+        "simulation_sam.jpg", "simulation_start.jpg", "simulation_summary.json", "simulation_video.mp4"]
     assert json.loads((out / "simulation_summary.json").read_text())["simulation"] is True
     assert fakes.moves_json()["simulation"] is True and "SIMULATED EXECUTION" in fakes.moves_json()["what"]
     assert all(a["simulation"] is True for a in fakes.attempts()) and len(fakes.attempts()) == 3
     for picture in out.glob("*.jpg"):
         assert marks.jpeg_comment(picture).startswith("SIMULATION")
     assert [a["photo"] for a in fakes.attempts()] == [f"simulation_check_{i}.jpg" for i in (1, 2, 3)]
+    summary = json.loads((out / "simulation_summary.json").read_text())
+    assert [p["claw_closed_s"] <= p["claw_limit_s"] == 4.5 for p in summary["plan"]] == [True] * 3
+    assert set(summary["sam"]["check_cm"]) == {"centre_check", "right_check"} and len(summary["sam"]["boxes"]) == 3
 
 
 def test_the_move_list_is_exactly_what_the_real_planner_sends(tmp_path, monkeypatch):

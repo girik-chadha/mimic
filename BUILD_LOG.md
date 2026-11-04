@@ -304,3 +304,9 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   typed yes, each carry once, and the normal end; s or Ctrl+C sends S then D. `pickdrop.plan` gained an optional
   `shoulder_drop` (default: the table angle, unchanged). Tested: the downloaded script, unzipped outside the repo,
   dry-runs 3 carries and refuses the real arm ("calib/ring.json is still a placeholder").
+- Demo page, step 3: tabs beside the video (at 1280x720 there is no room below it, so "Expected simulation" is the
+  first tab and the default): What SAM sees (`simulation_sam.jpg`: the labelled dots plus each die's SAM box; the
+  check-dot errors in cm), What Spark read (each naming round with SAM's box count per name; the goal as read by
+  code; the carries), Plan (each try in plain words: base, shoulder from above the pick to the table, grip, lift,
+  swing, drop, with the claw-closed time drawn against 4.5 s). The simulation summary now keeps SAM's boxes, the
+  naming rounds, how the goal was read and the plan numbers; `scene.read_positions` can hand back the boxes it used.

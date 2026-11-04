@@ -37,6 +37,8 @@ import shutil
 import time
 from pathlib import Path
 
+import cv2
+
 from mimic import arm as arm_module
 from mimic import brain, config, marks, meta_api, pickdrop, plan, ring_loop, scene, session, sim_video
 from mimic import ring as ring_module
@@ -305,18 +307,27 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
                       zip(scene.ROLES[4:], calib.pixel_pts[4:], calib.table_pts_cm[4:])]
             say(f"  SAM found the 6 dots; the photo calibrated itself, check dots off by {', '.join(checks)}  "
                 f"(${meta_api.cost_so_far():.4f} so far)")
-            names = brain.name_objects(str(photo))
+            naming = []
+            names = brain.name_objects(str(photo), attempts=naming)
             say(f"  Spark named: {', '.join(names)}; SAM found exactly 1 box for each  "
                 f"(${meta_api.cost_so_far():.4f} so far)")
             dice = [n for n in names if n.endswith(DIE_SUFFIX)]
             if len(dice) < len(names):
                 say(f"  not dice, left out: {', '.join(n for n in names if n not in dice)}")
-            seen = scene.read_positions(str(photo), dice, calib, layout)
+            boxes = {}
+            seen = scene.read_positions(str(photo), dice, calib, layout, boxes=boxes)
+            summary["sam"] = {"check_cm": {role: round(calib.check(px, cm), 2) for role, px, cm in
+                                           zip(scene.ROLES[4:], calib.pixel_pts[4:], calib.table_pts_cm[4:])},
+                              "boxes": {n: [b.x1, b.y1, b.x2, b.y2] for n, b in boxes.items()},
+                              "seen_cm": {n: [round(v, 2) for v in seen[n]] for n in dice}}
+            summary["naming"] = naming
+            draw_sam(out_dir / "simulation_photo_dots.jpg", boxes, seen, out_dir / "simulation_sam.jpg")
         finally:
             config.BUDGET_USD = budget_before
             summary["cost_usd"] = round(meta_api.cost_so_far(), 4)
         target = resolve_goal(mode, spec, dice, seen)
         summary["target"] = target
+        summary["goal_read"] = {"mode": mode, "spec": spec}
         how = "photo order, left to right" if mode == "photo" else "read from the goal by code"
         if stack:
             say(f"Target ({how}): a stack on slot 1, bottom first: {', '.join(target)}. SIMULATION ONLY: {STACK_WHY}")
@@ -379,6 +390,7 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
         summary["max_error_cm"] = max(errors) if errors else None
         summary["injected_miss"] = world.injected
         summary["sim_seconds"] = round(world.clock, 2)
+        summary["plan"] = plan_in_words(attempts, the_ring, limits)
 
         save_moves(out_dir / "simulation_moves.json", world, photo, the_ring, say, stack_bottom=target[0] if stack
                    else None)
@@ -396,6 +408,30 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
         (out_dir / "simulation_summary.json").write_text(json.dumps(summary, indent=2))
         mark_images(out_dir)
         say(f"Simulation log: {out_dir}  (cost ${summary['cost_usd']:.4f}, cap ${ring_loop.RUN_BUDGET_USD:.2f})")
+
+
+def draw_sam(dots_image: Path, boxes: dict, seen: dict, out_path: Path) -> None:
+    """What SAM saw: the labelled dots photo, plus each die's box and its colour."""
+    image = cv2.imread(str(dots_image))
+    if image is None:
+        return
+    for name, box in boxes.items():
+        cv2.rectangle(image, (box.x1, box.y1), (box.x2, box.y2), (255, 209, 79), 2)
+        label = name.removesuffix(DIE_SUFFIX)   # short, so dice side by side do not overlap (positions: the page)
+        (width, _), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)
+        cv2.putText(image, label, ((box.x1 + box.x2 - width) // 2, box.y2 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
+                    (255, 209, 79), 2, cv2.LINE_AA)
+    cv2.imwrite(str(out_path), image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+
+
+def plan_in_words(attempts: list, ring, limits) -> list[dict]:
+    """Each try of each carry with the numbers the page's Plan tab shows."""
+    return [{"name": a["name"], "slot": a["move"], "try": a["attempt"], "pick_deg": a["pick_deg"],
+             "drop_deg": a["drop_deg"], "above": ring.shoulder_table - ring.approach, "table": ring.shoulder_table,
+             "lifted": ring.shoulder_table - ring.lift, "grip_hold": ring.grip_hold, "grip_open": limits.grip_open_deg,
+             "claw_closed_s": a["claw_closed_s"], "claw_limit_s": limits.max_grip_hold_s - pickdrop.HOLD_MARGIN_S,
+             "result": a["result"], "miss_cm": a["miss_cm"], "next_correction_deg": a["next_correction_deg"]}
+            for a in attempts]
 
 
 def mark_images(out_dir: Path) -> None:

@@ -92,6 +92,34 @@ main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-
 .empty { text-align: center; color: var(--muted); max-width: 440px; padding: 16px; }
 .empty svg { display: block; margin: 0 auto 10px; }
 .result { min-height: 20px; font-variant-numeric: tabular-nums; }
+[role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid var(--grid); }
+[role="tab"] {
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--muted);
+  padding: 4px 10px 6px; font-stretch: 112%; font-weight: 600;
+}
+[role="tab"]:first-child { font-stretch: 122%; }
+[role="tab"][aria-selected="true"] { color: var(--text); border-bottom-color: var(--cyan); }
+[role="tab"]:hover { color: var(--text); }
+.view { flex: 1; min-height: 0; overflow: auto; }
+.view[hidden], .stage[hidden] { display: none; }
+.view .waiting { color: var(--muted); padding: 24px 4px; }
+.sam { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 14px; height: 100%; }
+.sam img { width: 100%; height: 100%; object-fit: contain; background: var(--deep); border: 1px solid var(--grid);
+  border-radius: 4px; }
+.facts h3, .view h3 { font-size: 13.5px; font-stretch: 112%; margin: 0 0 4px; font-weight: 620; }
+.facts ul, .view ul, .view ol { margin: 0 0 12px; padding-left: 18px; }
+.facts li, .view li { margin: 2px 0; }
+.num { font-variant-numeric: tabular-nums; }
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.carry { border-top: 1px solid var(--grid); padding: 8px 0; display: grid; grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 14px; align-items: start; }
+.carry:first-child { border-top: 0; padding-top: 2px; }
+.carry p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.carry b { color: var(--text); font-weight: 600; }
+.clock { font-size: 12.5px; color: var(--muted); }
+.clock .track { height: 8px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin: 3px 0; }
+.clock .track i { display: block; height: 100%; background: var(--mint); }
+.clock .track i.close { background: var(--amber); }
 .pass { color: var(--mint); } .miss { color: var(--amber); }
 
 .log { display: flex; flex-direction: column; padding: 10px 14px 8px; }
@@ -159,12 +187,15 @@ main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-
 </aside>
 
 <main class="panel" aria-label="Expected simulation">
-  <div class="headline">
-    <h2>Expected simulation</h2>
-    <span class="note">A simulated arm on a made-up ring. Perception and planning run live on your photo; no real arm
-      moves.</span>
+  <div role="tablist" aria-label="Views of the run">
+    <button role="tab" id="tab-sim" aria-selected="true" aria-controls="stage">Expected simulation</button>
+    <button role="tab" id="tab-sam" aria-selected="false" aria-controls="view-sam" tabindex="-1">What SAM sees</button>
+    <button role="tab" id="tab-spark" aria-selected="false" aria-controls="view-spark" tabindex="-1">What Spark read</button>
+    <button role="tab" id="tab-plan" aria-selected="false" aria-controls="view-plan" tabindex="-1">Plan</button>
   </div>
-  <div class="stage" id="stage">
+  <span class="note muted">A simulated arm on a made-up ring. Perception and planning run live on your photo; no real
+    arm moves.</span>
+  <div class="stage" id="stage" role="tabpanel" aria-labelledby="tab-sim">
     <div class="empty">
       <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
         <circle cx="32" cy="32" r="24" fill="none" stroke="#4FD1FF" stroke-width="1.2" stroke-dasharray="4 4"/>
@@ -175,6 +206,14 @@ main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-
     </div>
     <video id="video" loop muted playsinline controls aria-label="Expected simulation video"></video>
   </div>
+  <div class="view" id="view-sam" role="tabpanel" aria-labelledby="tab-sam" hidden>
+    <p class="waiting">After a run: the photo as SAM 3.1 saw it, with the 6 dots, each die's box, and the calibration
+      error in cm.</p></div>
+  <div class="view" id="view-spark" role="tabpanel" aria-labelledby="tab-spark" hidden>
+    <p class="waiting">After a run: the names Muse Spark 1.3 gave the dice, and the carries read from your goal.</p></div>
+  <div class="view" id="view-plan" role="tabpanel" aria-labelledby="tab-plan" hidden>
+    <p class="waiting">After a run: each carry in plain words, with its angles and the claw-closed time against the
+      4.5 s limit.</p></div>
   <div class="result" id="result" aria-live="polite"></div>
 </main>
 
@@ -259,6 +298,8 @@ if (earlier && /^\d{8}-\d{6}_simulation$/.test(earlier)) {
     if (!s) return;
     addLine({text: `Showing an earlier run: ${earlier} (no new calls)`, simulated: false});
     finish({ok: true, folder: earlier, video: `/api/runs/${earlier}/simulation_video.mp4`, summary: s, cap_usd: 0.30});
+    const tab = $("tab-" + new URLSearchParams(location.search).get("tab"));
+    if (tab) selectTab(tab);
   });
 }
 
@@ -287,7 +328,83 @@ function finish(r) {
   video.play().catch(() => {});
   $("result").innerHTML = summaryLine(r);
   showProgram(r);
+  fetch(`/api/runs/${r.folder}/simulation_summary.json`).then((x) => x.ok ? x.json() : null)
+    .then((s) => { if (s) fillTabs(s, r.folder); });
   document.dispatchEvent(new CustomEvent("mimic:done", {detail: r}));
+}
+
+// ---------- tabs ----------
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+function selectTab(tab) {
+  tabs.forEach((t) => {
+    const on = t === tab;
+    t.setAttribute("aria-selected", on); t.tabIndex = on ? 0 : -1;
+    $(t.getAttribute("aria-controls")).hidden = !on;
+  });
+}
+tabs.forEach((t, i) => {
+  t.addEventListener("click", () => selectTab(t));
+  t.addEventListener("keydown", (e) => {
+    const step = {ArrowRight: 1, ArrowLeft: -1}[e.key];
+    if (!step) return;
+    const next = tabs[(i + step + tabs.length) % tabs.length]; selectTab(next); next.focus();
+  });
+});
+
+const fmt = (v, digits = 1) => Number(v).toFixed(digits);
+const list = (items) => "<ul>" + items.map((x) => `<li>${x}</li>`).join("") + "</ul>";
+
+function fillTabs(s, folder) {
+  const sam = s.sam || {}, checks = sam.check_cm || {}, seen = sam.seen_cm || s.seen_cm || {};
+  $("view-sam").innerHTML = `<div class="sam">
+    <img src="/api/runs/${folder}/simulation_sam.jpg" alt="The photo with the 6 dots named and each die's box">
+    <div class="facts">
+      <h3>The 6 dots</h3><p class="muted" style="margin:0 0 4px">The photo calibrates itself from them; the two check
+      dots show the error.</p>${list(Object.entries(checks).map(([role, cm]) =>
+        `${escape(role.replace("_", " "))}: <b class="num ${cm <= 0.5 ? "pass" : "miss"}">${fmt(cm, 2)} cm</b>`))}
+      <h3>The dice</h3>${list(Object.entries(seen).map(([name, p]) =>
+        `${escape(name)} at <span class="num">(${fmt(p[0])}, ${fmt(p[1])}) cm</span>`))}
+      <p class="muted" style="margin:0">For the simulation each die is then placed on the made-up ring.</p>
+    </div></div>`;
+
+  const rounds = {};
+  (s.naming || []).forEach((a) => { (rounds[a.round] = rounds[a.round] || []).push(a); });
+  const naming = Object.entries(rounds).map(([round, tries]) => `<li>${round === "0" ? "First names" :
+    "Rename " + round}: ${tries.map((a) => `${escape(a.name)} (<span class="${a.boxes === 1 ? "pass" : "miss"}">` +
+    `${a.boxes} box${a.boxes === 1 ? "" : "es"}</span>)`).join(", ")}</li>`).join("");
+  const read = s.goal_read || {mode: "photo"};
+  const how = {photo: "No goal typed: the photo's left-to-right order, slot 1 first.",
+    row: "A row, slot 1 first.", stack: "A stack on slot 1, bottom first.",
+    pairs: "Pairs read as one pile, bottom first, built on slot 1: " +
+      (read.spec || []).map((p) => `${escape(p[0])} on ${escape(p[1])}`).join(", then ") + "."}[read.mode];
+  const carries = (s.target || []).map((name, i) => s.stack
+    ? `${escape(name)} ${i === 0 ? "to slot 1 (the bottom)" : "on top of " + escape(s.target[i - 1])}`
+    : `${escape(name)} to slot ${i + 1}`);
+  $("view-spark").innerHTML = `<div class="columns"><div>
+      <h3>Muse Spark 1.3 named the dice</h3><p class="muted" style="margin:0 0 4px">SAM 3.1 checked each name: a good
+      name finds exactly 1 box.</p><ul>${naming || "<li>No naming record in this run.</li>"}</ul></div>
+    <div><h3>Your goal, read by code</h3><p style="margin:0 0 6px">${s.instruction ? "&ldquo;" +
+      escape(s.instruction) + "&rdquo;" : "<span class='muted'>(empty)</span>"}</p><p class="muted" style="margin:0 0 6px">
+      ${how}</p><h3>The carries</h3><ol>${carries.map((c) => `<li>${c}</li>`).join("")}</ol>
+      ${s.stack ? '<p class="miss" style="margin:0">Stacking is simulation only: the taped elbow cannot let go of a ' +
+        "die on top of another.</p>" : ""}</div></div>`;
+
+  $("view-plan").innerHTML = (s.plan || []).map((c, i) => {
+    const share = c.claw_closed_s / c.claw_limit_s;
+    const outcome = c.result === "PASS" ? `<span class="pass">pass, ${fmt(c.miss_cm)} cm from the slot</span>`
+      : `<span class="miss">${c.result.toLowerCase()}, ${fmt(c.miss_cm)} cm off</span>` +
+        (c.next_correction_deg != null ? `, next aim ${c.next_correction_deg > 0 ? "+" : ""}${fmt(c.next_correction_deg)}°` : "");
+    return `<div class="carry"><div><b>${escape(c.name)} to ${s.stack ? "the stack" : "slot " + c.slot}` +
+      `${c.try > 1 ? ", try " + c.try : ""}</b>
+      <p>Base to <b class="num">${c.pick_deg}°</b> with the claw open (${c.grip_open}), shoulder down from
+      ${c.above}° to the table at <b class="num">${c.table}°</b> in 2° steps, close the claw to
+      <b class="num">${c.grip_hold}</b>, lift to ${c.lifted}°, swing to base <b class="num">${c.drop_deg}°</b>, down to
+      ${c.table}°, open, lift back to ${c.lifted}°.</p><p>Simulated camera check: ${outcome}</p></div>
+      <div class="clock">Claw closed <b class="num">${fmt(c.claw_closed_s, 2)} s</b> of ${fmt(c.claw_limit_s)} s
+        <div class="track" role="img" aria-label="${fmt(c.claw_closed_s, 2)} of ${fmt(c.claw_limit_s)} seconds">` +
+        `<i class="${share > 0.9 ? "close" : ""}" style="width:${Math.min(100, 100 * share)}%"></i></div>
+        The firmware opens a claw held 5 s.</div></div>`;
+  }).join("") || '<p class="waiting">No carries in this run.</p>';
 }
 
 function showProgram(r) {
@@ -319,6 +436,8 @@ $("run").addEventListener("click", async () => {
     $(target).textContent = reply.error; return;
   }
   $("log").innerHTML = ""; $("result").textContent = ""; $("program").hidden = true; setCost(0, reply.cap_usd);
+  ["view-sam", "view-spark", "view-plan"].forEach((id) =>
+    $(id).innerHTML = '<p class="waiting">Running: this fills in when the run finishes.</p>');
   setState("Running", "running");
   document.dispatchEvent(new CustomEvent("mimic:start"));
   if (source) source.close();

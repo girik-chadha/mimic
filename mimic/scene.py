@@ -323,11 +323,15 @@ def correct_for_height(pt_cm, height: HeightCorrection | None) -> tuple[float, f
 
 # ---------- reading a photo ----------
 
-def read_positions(image_path: str, names: list[str], calib: Calib, layout: Layout) -> dict[str, tuple[float, float]]:
-    """Where each named object is on the table, in cm."""
+def read_positions(image_path: str, names: list[str], calib: Calib, layout: Layout,
+                   boxes: dict | None = None) -> dict[str, tuple[float, float]]:
+    """Where each named object is on the table, in cm. If `boxes` is given, each object's SAM box is put in it."""
     positions = {}
     for name in names:
-        pt = correct_for_height(calib.px_to_cm(_one_box(image_path, name).centre), layout.height)
+        box = _one_box(image_path, name)
+        if boxes is not None:
+            boxes[name] = box
+        pt = correct_for_height(calib.px_to_cm(box.centre), layout.height)
         (x0, y0), (x1, y1) = layout.sheet_min_cm, layout.sheet_max_cm
         if not (x0 <= pt[0] <= x1 and y0 <= pt[1] <= y1):
             raise SceneError(f"{name!r} is at ({pt[0]:.1f}, {pt[1]:.1f}) cm, which is off the sheet: "

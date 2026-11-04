@@ -710,3 +710,13 @@ tags every line about the arm as simulated."
 Two sentences: "The page turns the plan into a script for the real arm, but the script recomputes every angle from
 the real calibration and refuses until that calibration exists. It uses the same safety code as every other script:
 the limits, the start pose, a typed yes, and stop-then-disable on Ctrl+C."
+
+### 4 Nov: the demo page's tabs
+
+- Next to the video, three tabs explain each stage with the run's real numbers: what SAM saw (the dots, the dice
+  boxes, how far off the check dots were), what Spark named the dice and how the goal was read, and the plan for each
+  carry in plain words, with the time the claw stays closed drawn against the 4.5 s limit.
+
+Two sentences: "The tabs show the judges each stage of the pipeline with its own numbers: SAM's boxes and calibration
+error, Spark's names, and every carry's angles. The claw-time bars show the plan stays inside the safety limit that
+the firmware enforces."
