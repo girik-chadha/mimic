@@ -334,3 +334,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   action, glossy die chips in the dice's real colours, a progress line (a moving dot while a step runs, a tick when it
   is done), SAM's boxes popping onto the photo in each die's colour, and a springy "Arm program ready" card. Reduced
   motion turns every animation off. The "Expected simulation" label sits on the video.
+- Demo page: no dice on the intro (Mimic is for any objects SAM can find); its text now reads "Give it a photo of how
+  things should be, or say it in a few words. It finds the objects, plans every move, and writes the program for your
+  arm." Chips appear only once Spark has named the objects in the user's photo (read from the live log, or from the
+  run's naming record on a replay): one per name, in the colour the name says, otherwise ink; nothing hard-coded.
+  Every fixed "die"/"dice" on the page now says "object". A replay shows that run's photo under the chips.
