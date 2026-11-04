@@ -728,3 +728,15 @@ the firmware enforces."
 
 Two sentences: "For "X on Y" goals the bottom die stays put and the others are carried onto it, if the arm can reach
 it. The same safety checks run as for any other move, and if they fail the pile is built on slot 1 instead."
+
+### 4 Nov: the bright redesign of the demo page
+
+- The page moved from a dark dashboard to a bright one: a warm off-white canvas with soft blue and coral colour
+  drifting behind a fine grid, large serif type for the name, rounded white cards, and small responses everywhere (a
+  pressed button sinks, a die chip tilts, the drop zone glows, SAM's boxes pop onto the photo, a dot runs along the
+  progress line and turns into a tick). Every animation is switched off for people who ask their system for reduced
+  motion, and the video is always labelled "Expected simulation".
+
+Two sentences: "The demo page is now bright and lively, but every effect is pure CSS or a few lines of script, with
+no libraries and nothing loaded from the internet. The fun never hides the facts: the simulation label, the cost and
+the real numbers stay on screen."
