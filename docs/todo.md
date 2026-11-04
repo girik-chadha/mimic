@@ -79,7 +79,7 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] After calibrating and setting `slots_deg`: a first `run_mimic.py --ring` with 2 or 3 dice (needs.md C7 step 12c)
 - [ ] Decide the layout for the ring: slots and the mess area must lie on it (needs.md A10d)
 - [x] Simulation mode, part 1: `run_mimic.py --ring --sim --photo ...`: real SAM and Spark on one photo, ring mode's own planner and checks (`ring_loop.carry`, shared with the real run), a simulated arm on a MADE-UP ring; `simulation_video.mp4` (title card, SIMULATED EXECUTION banner, INJECTED TEST MISS with `--sim-miss-deg`), `simulation_moves.json`, "simulation" in every name and in the metadata; photo order or `--instruction "row ..."`; one real run on dice_sheet.jpg, $0.0156 (4 Nov)
-- [ ] Simulation mode, part 2: `--instruction "stack ..."` (simulation only), and `report.py` for a simulation run (`simulation_report.html`, `simulation_summary.png`, with the banner)
+- [x] Simulation mode, part 2: `--instruction "stack ..."` (simulation only: refused without `--sim`, its carries marked `sim_only` in simulation_moves.json), and `report.py` for a simulation run (`simulation_report.html`, `simulation_summary.png` with the banner and a PNG text chunk; run by `run_mimic.py --ring --sim`); report.py now also reads real ring-mode runs (4 Nov)
 - [ ] First powered session (needs.md C7) from step 3's upload: ranges with `first_moves.py`, copy into both files, upload; `grip_test.py`
 - [ ] Precision test B6: `repeatability.py`
 - [x] Kinematics: taught-pose grid (`kinematics.py`, `calib/pose_grid.json`, `scripts/teach.py`), tested with fakes (2 Nov)

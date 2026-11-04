@@ -127,7 +127,7 @@ def check_mess(positions: dict, moves: list, ring, limits) -> None:
 
 
 def carry(arm, moves: list, positions: dict, ring, limits, look, log, say, sleep, finished: list,
-          on_try=None) -> list:
+          on_try=None, stack: bool = False) -> list:
     """Every move with its camera check, slot 1 first (the steps in this module's docstring).
 
     look(shot) parks the arm out of the photo and returns (photo name, every target die's position); log(attempt)
@@ -135,13 +135,16 @@ def carry(arm, moves: list, positions: dict, ring, limits, look, log, say, sleep
     a run stopped later still keeps it. on_try(move, attempt), if given, hears about each try before it runs (the
     simulation, mimic/sim.py, labels its video with it). The simulation runs this same function with a look() that
     reads its made-up world instead of a photo.
+
+    stack=True is for the simulation only (run_mimic.py refuses a stack on the real arm): every move goes to the same
+    slot, and the dice already placed on the stack may be at that slot (every other die must still be clear of it).
     """
-    shots = 0
+    shots, stacked = 0, []
     for move in moves:
         slot_deg = ring.slots_deg[move.slot - 1]
         from_cm, correction, result, error_cm = positions[move.name], 0.0, "FAIL", None
         for attempt in range(1, MAX_TRIES + 1):
-            check_clear(move.name, slot_deg, positions, ring)
+            check_clear(move.name, slot_deg, {n: p for n, p in positions.items() if n not in stacked}, ring)
             try:
                 pick_deg = ring.base_angle_for(*from_cm)
             except RingError as error:
@@ -182,6 +185,8 @@ def carry(arm, moves: list, positions: dict, ring, limits, look, log, say, sleep
                 correction, from_cm = next_correction, measured
         finished.append({"name": move.name, "slot": move.slot, "result": "PASS" if result == "PASS" else "FAIL",
                          "final_error_cm": round(error_cm, 2) if error_cm is not None else None})
+        if stack and result == "PASS":
+            stacked.append(move.name)
     return finished
 
 

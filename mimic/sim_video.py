@@ -6,7 +6,12 @@ Every frame has the "SIMULATED EXECUTION" banner. The view shows the sheet outli
 ring and its numbered slots, every die as a square in its colour (with a hollow grey square where SAM saw it in the
 real photo), and the claw: a filled dot when it is down at table height, a hollow ring that grows as it lifts, and
 the held die under it. The side panel shows the move list, the step being run and the exact line sent, the last
-camera check, and the real photo. "INJECTED TEST MISS" is shown while a deliberate miss is being corrected.
+camera check, and the real photo. "INJECTED TEST MISS" is shown while a deliberate miss is being corrected. A stack
+(simulation only) is drawn with each die a little up and to the right of the one below, and a note on every frame
+says the real arm cannot stack.
+
+save_stills() also saves single frames as JPEGs for the report: before the first carry, at every camera check, and
+at the end.
 
 Frames are written as PNGs into the run folder, joined by Windows ffmpeg at 20 frames a second (H.264, with
 "SIMULATION" in the video's title and comment), then deleted.
@@ -33,6 +38,8 @@ PANEL_X = 836
 VIEW_CM = ((-4.0, -4.0), (41.0, 31.0))      # the part of the table shown: x, y from - to
 SCALE = min(VIEW_W / (VIEW_CM[1][0] - VIEW_CM[0][0]), VIEW_H / (VIEW_CM[1][1] - VIEW_CM[0][1]))
 DIE_CM, SLOT_CM, DOT_CM = 1.9, 2.6, 0.5
+STACK_PX = 6                                 # how far a die on a stack is drawn from the one below, per level
+STACK_NOTE = "STACKING IS SIMULATION ONLY: the taped elbow cannot let go of a die on top of another"
 TITLE_TEXT = ("SIMULATED EXECUTION: the same move list the arm would receive. "
               "Perception and planning ran live on a real photo.")
 BANNER_TEXT = "SIMULATED EXECUTION"
@@ -67,6 +74,7 @@ class Story:
     attempts: list       # every camera check, with sim_time_s
     injected: dict | None
     summary: dict
+    stack: bool = False  # every die onto slot 1 (simulation only)
 
 
 # ---------- what is happening at time t ----------
@@ -81,14 +89,14 @@ def state_at(log: list, t: float) -> dict:
     if last is None:
         first = log[0]
         return {"angles": first["before"], "dice": first["dice"], "held": None, "line": "", "step": "",
-                "carrying": ""}
+                "carrying": "", "level": first.get("level", {})}
     angles = last["after"]
     if last["send"].startswith("J"):
         ms = int(last["send"].split()[5])
         part = 1.0 if ms == 0 else min(1.0, (t - last["t_s"]) / (ms / 1000))
         angles = [b + (a - b) * part for b, a in zip(last["before"], last["after"])]
     return {"angles": angles, "dice": last["dice"], "held": last["held"], "line": last["send"],
-            "step": last["step"], "carrying": last["carrying"]}
+            "step": last["step"], "carrying": last["carrying"], "level": last.get("level", {})}
 
 
 def checks_by(attempts: list, t: float) -> list:
@@ -107,7 +115,8 @@ def overlay_texts(story: Story, t: float) -> list[str]:
     if t > story.end_s:
         moves = story.summary["moves"]
         placed = sum(1 for m in moves if m["result"] == "PASS")
-        texts.append(f"Finished (simulated): {placed} of {len(moves)} dice within 1.5 cm of their slots")
+        texts.append(f"Finished (simulated): {placed} of {len(moves)} dice stacked on slot 1" if story.stack else
+                     f"Finished (simulated): {placed} of {len(moves)} dice within 1.5 cm of their slots")
     return texts
 
 
@@ -136,9 +145,25 @@ def _square(img, centre_cm, size_cm, colour, thick):
     cv2.rectangle(img, (x - half, y - half), (x + half, y + half), colour, thick, cv2.LINE_AA)
 
 
-def _die(img, name, centre_cm):
-    _square(img, centre_cm, DIE_CM, die_colour(name), -1)
-    _square(img, centre_cm, DIE_CM, (90, 90, 90), 1)
+def _die(img, name, centre_cm, level: int = 0):
+    """A die as a square in its colour; one on a stack is drawn STACK_PX up and right per level."""
+    x, y = to_px(centre_cm)
+    x, y, half = x + STACK_PX * level, y - STACK_PX * level, int(round(DIE_CM * SCALE / 2))
+    cv2.rectangle(img, (x - half, y - half), (x + half, y + half), die_colour(name), -1, cv2.LINE_AA)
+    cv2.rectangle(img, (x - half, y - half), (x + half, y + half), (90, 90, 90), 1, cv2.LINE_AA)
+
+
+def _labels(dice: dict, level: dict) -> list:
+    """(where, text) for each die on the table: its name, or for a stack every name from the bottom up."""
+    labels = []
+    for name, where in dice.items():
+        if where is None or level.get(name, 0) != 0:
+            continue
+        pile = sorted((n for n, p in dice.items() if p is not None and math.dist(p, where) <= 1.0),
+                      key=lambda n: level.get(n, 0))
+        text = name if len(pile) == 1 else "stack: " + ", ".join(n.removesuffix(" die") for n in pile)
+        labels.append((where, text))
+    return labels
 
 
 def banner(img) -> None:
@@ -175,10 +200,13 @@ def draw_world(img, story: Story, state: dict) -> None:
     for name, seen in story.seen.items():                      # where SAM saw it -> where it was placed
         cv2.line(img, to_px(seen), to_px(story.placed[name]), (190, 190, 190), 1, cv2.LINE_AA)
         _square(img, seen, DIE_CM, (175, 175, 175), 1)
-    for name, where in state["dice"].items():
+    level = state["level"]
+    for name, where in sorted(state["dice"].items(), key=lambda item: level.get(item[0], 0)):
         if where is not None:
-            _die(img, name, where)
-            _text(img, name, (to_px(where)[0] + 22, to_px(where)[1] + 5), 0.42, MUTED)
+            _die(img, name, where, level.get(name, 0))
+    for where, text in _labels(state["dice"], level):
+        _text(img, text, (to_px(where)[0] + 22 + (STACK_PX * 3 if text.startswith("stack") else 0),
+                          to_px(where)[1] + 5), 0.42, MUTED)
     base, shoulder = state["angles"][0], state["angles"][1]
     tip = to_px(ring.point_at(base))
     cv2.line(img, centre, tip, (150, 150, 150), 5, cv2.LINE_AA)
@@ -193,6 +221,8 @@ def draw_world(img, story: Story, state: dict) -> None:
         cv2.circle(img, tip, int(10 + 0.3 * height), INK, 2, cv2.LINE_AA)
     _text(img, "Hollow grey: where SAM saw each die in the real photo.  Coloured: " + "placed on the made-up ring.",
           (12, H - 12), 0.45, MUTED)
+    if story.stack:
+        _text(img, STACK_NOTE, (12, H - 58), 0.5, RED, 2)
 
 
 def draw_panel(img, story: Story, state: dict, t: float, thumb) -> None:
@@ -209,7 +239,8 @@ def draw_panel(img, story: Story, state: dict, t: float, thumb) -> None:
         if now and (not mine or mine[-1]["result"] == "RETRY"):
             status = "now" + (f" (last try: {status})" if mine else "")
         colour = RED if now else INK
-        _text(img, f"{move.slot}. {move.name}: base {pick:.0f} -> slot {move.slot} (base {slot_deg:g})", (x, y),
+        goes = f"stack at base {slot_deg:g}" if story.stack else f"slot {move.slot} (base {slot_deg:g})"
+        _text(img, f"{story.moves.index(move) + 1}. {move.name}: base {pick:.0f} -> {goes}", (x, y),
               0.5, colour, 2 if now else 1)
         _text(img, "   " + status, (x, y + 20), 0.45, colour)
         y += 48
@@ -266,6 +297,19 @@ def title_card():
         y += 56
     banner(img)
     return img
+
+
+# ---------- stills for the report ----------
+
+def save_stills(story: Story, out_dir, start_s: float) -> list:
+    """simulation_start.jpg (before the first carry), simulation_check_N.jpg (each camera check, named as in the
+    attempts), simulation_end.jpg."""
+    out_dir, thumb = Path(out_dir), _thumbnail(story.photo)
+    stills = [("simulation_start.jpg", start_s)] + [(a["photo"], a["sim_time_s"]) for a in story.attempts]
+    stills.append(("simulation_end.jpg", story.end_s))
+    for name, t in stills:
+        cv2.imwrite(str(out_dir / name), frame_at(story, t, thumb), [cv2.IMWRITE_JPEG_QUALITY, 90])
+    return [out_dir / name for name, _ in stills]
 
 
 # ---------- the video file ----------

@@ -15,14 +15,19 @@
 
 Simulation mode (mimic/sim.py): real SAM and Spark calls on one real photo and the real ring-mode planner, but the
 moves go to a simulated arm on a MADE-UP ring. Nothing is uploaded and no serial port or camera is opened. Outputs go
-to runs/<time>_simulation/ (simulation_video.mp4, simulation_moves.json, ...), every name marked "simulation".
+to runs/<time>_simulation/ (simulation_video.mp4, simulation_moves.json, ...), every name marked "simulation"; then
+scripts/report.py writes simulation_report.html and simulation_summary.png there.
+    --instruction "stack black, blue, red" piles the dice on slot 1 (black at the bottom): SIMULATION ONLY, and refused
+                                           without --sim, because the real arm cannot stack with the elbow taped.
 
 Needs: the sheet measured (calib/layout.json), the pose grid taught (scripts/teach.py), the arm unlocked
 (needs.md C5), the phone webcam app (iVCam or Camo) running on Windows. Everything is checked before the serial port is even opened.
 Logs go to runs/<time>/ (photos, attempts.jsonl, summary.json).
 """
 import argparse
+import importlib.util
 import sys
+from pathlib import Path
 
 from mimic import arm as arm_module
 from mimic import brain, camera, kinematics, loop, meta_api, ring, ring_loop, scene, session, sim, sim_video
@@ -99,11 +104,25 @@ def _main_sim(photo, instruction, miss_deg) -> int:
             ArmError, brain.NamingFailed, meta_api.BudgetExceeded, ValueError) as error:
         print(f"STOPPED (simulation): {error}")
         return 1
+    try:
+        _write_report(summary["out_dir"])
+    except Exception as error:
+        print(f"The report could not be written: {type(error).__name__}: {error}")
+        return 1
     placed = sum(1 for m in summary["moves"] if m["result"] == "PASS")
     print(f"SIMULATION {'SUCCESS' if summary['success'] else 'FINISHED WITH FAILURES'}: {placed} of "
-          f"{len(summary['moves'])} dice placed, {summary['attempts']} attempts, worst error "
-          f"{summary['max_error_cm']} cm, ${summary['cost_usd']}. Outputs: {summary['out_dir']}")
+          f"{len(summary['moves'])} dice {'stacked' if summary.get('stack') else 'placed'}, {summary['attempts']} "
+          f"attempts, worst error {summary['max_error_cm']} cm, ${summary['cost_usd']}. Outputs: {summary['out_dir']}")
     return 0 if summary["success"] else 2
+
+
+def _write_report(out_dir) -> None:
+    """scripts/report.py on the simulation's folder (simulation_report.html, simulation_summary.png)."""
+    spec = importlib.util.spec_from_file_location("report", Path(__file__).resolve().parent / "report.py")
+    report = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(report)
+    if report.main([str(out_dir)]) != 0:
+        raise RuntimeError(f"report.py found no simulation_summary.json in {out_dir}")
 
 
 def _main_ring(read, camera_frames=None, camera_name=None) -> int:

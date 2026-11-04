@@ -13,7 +13,9 @@ check after each carry reads where the simulation put the dice, not a photo. --s
 down N degrees off, once, so the retry shows (an INJECTED TEST MISS, written on the video).
 
 The target: --instruction "row black, blue, red" (each colour must match exactly one of Spark's names), or the
-photo order: the dice left to right on the sheet go to slots 1, 2, 3.
+photo order: the dice left to right on the sheet go to slots 1, 2, 3. --instruction "stack black, blue, red" piles
+them on slot 1, black at the bottom: SIMULATION ONLY (STACK_WHY), so those moves are marked "sim_only" and
+run_mimic.py refuses a stack without --sim.
 
 Outputs, in runs/<time>_simulation/, every name starting with "simulation_":
   simulation_moves.json      every line sent to the simulated arm, in order: what the real arm would receive if
@@ -22,7 +24,10 @@ Outputs, in runs/<time>_simulation/, every name starting with "simulation_":
                              claw picked up or put down a die (or an INJECTED TEST MISS).
   simulation_summary.json, simulation_attempts.jsonl   like a real run's, with "simulation": true
   simulation_photo.jpg, simulation_photo_dots.jpg      the real photo and its labelled dots
+  simulation_start.jpg, simulation_check_N.jpg, simulation_end.jpg   the simulated world before the first carry, at
+                             each camera check, and at the end (frames of the video, for the report)
   simulation_video.mp4       the top-down video (mimic/sim_video.py)
+  simulation_report.html, simulation_summary.png         scripts/report.py, run by run_mimic.py afterwards
 """
 import dataclasses
 import json
@@ -46,6 +51,10 @@ INSTRUCTION_MODES = ("row", "stack")
 DIE_SUFFIX = " die"           # the naming prompt asks for "colour die"; anything else is not a die
 LABEL = "placed on the made-up ring"
 MARK = "SIMULATION: an output of Mimic's simulation mode (run_mimic.py --ring --sim); the arm was simulated."
+STACK_WHY = ("The real arm cannot stack: with the elbow taped, the claw reaches the table only at one shoulder "
+             "angle, and lifting it (a smaller shoulder angle) also moves it along the radius, so it cannot let go "
+             "of a die right on top of another. These moves lower to the table angle as usual; only the simulation "
+             "puts the die on top.")
 
 
 class SimError(ValueError):
@@ -82,6 +91,7 @@ class SimArm(FakeTransport):
         super().__init__(limits)
         self.ring, self.limits, self.out = ring, limits, say
         self.dice = dict(dice)        # name -> (x, y) cm; None while held
+        self.level = {n: 0 for n in dice}   # 0 on the table, 1 on top of one die, ...
         self.held = None
         self.clock = 0.0              # simulated seconds
         self.step = ""                # the step being run, from the last line printed
@@ -112,7 +122,7 @@ class SimArm(FakeTransport):
         self.log.append({"t_s": round(self.clock, 3), "send": line, "reply": reply,
                          "step": self.step if line.startswith("J") else "", "carrying": self.carrying,
                          "before": before, "after": list(self.angles), "dice": dict(self.dice), "held": self.held,
-                         "event": event})
+                         "level": dict(self.level), "event": event})
         return reply
 
     def _claw(self, before: list) -> str | None:
@@ -126,7 +136,7 @@ class SimArm(FakeTransport):
             under = [n for n, p in self.dice.items() if p is not None and math.dist(p, tip) <= PICK_RADIUS_CM]
             if not under:
                 return "closed on nothing"
-            self.held = min(under, key=lambda n: math.dist(self.dice[n], tip))
+            self.held = max(under, key=lambda n: self.level[n])   # the top one of a stack
             self.dice[self.held] = None
             return f"picked up {self.held}"
         if before[3] == hold and grip == open_deg and self.held is not None:
@@ -137,7 +147,12 @@ class SimArm(FakeTransport):
                 self.injected = {"name": name, "degrees": offset, "t_s": round(self.clock, 3), "attempt": attempt}
                 event = f"INJECTED TEST MISS: {name} put down {offset:+g} degrees from the claw"
                 self.out(f"  {event} (simulation only)")
-            self.dice[name], self.held = self.ring.point_at(base + offset), None
+            spot = self.ring.point_at(base + offset)
+            below = [n for n, p in self.dice.items() if p is not None and math.dist(p, spot) <= PICK_RADIUS_CM]
+            self.level[name] = max((self.level[n] + 1 for n in below), default=0)
+            if below and not event.startswith("INJECTED"):
+                event += f" on top of {max(below, key=lambda n: self.level[n])} (stack level {self.level[name] + 1})"
+            self.dice[name], self.held = spot, None
             return event
         return None
 
@@ -176,6 +191,14 @@ def photo_order(positions: dict) -> list[str]:
     return sorted(positions, key=lambda n: positions[n][0])
 
 
+def stack_moves(placed: dict, order: list[str], ring) -> list:
+    """Every die to slot 1, the first at the bottom (simulation only: STACK_WHY)."""
+    if not order:
+        raise SimError("A stack needs at least one die.")
+    slot = ring.point_at(ring.slots_deg[0])
+    return [plan.Move(name, tuple(placed[name]), tuple(slot), slot=1) for name in order]
+
+
 # ---------- the run ----------
 
 def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=config.RUNS_DIR, say=print,
@@ -191,19 +214,20 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
     the_ring = made_up_ring(ring_module.load_ring())
     ring_loop.preflight(layout, the_ring, limits)
     mode, colours = parse_instruction(instruction) if instruction else ("row", None)
-    if mode == "stack":
-        raise SimError("Stacking is not built yet (it comes in the next commit).")
+    stack = mode == "stack"
 
     out_dir = Path(out_root) / f"{time.strftime('%Y%m%d-%H%M%S')}_simulation"
     out_dir.mkdir(parents=True, exist_ok=True)
     started = time.monotonic()
     ring_note = {k: list(v) if isinstance(v, tuple) else v for k, v in MADE_UP_RING.items()}
-    summary = {"simulation": True, "mode": "ring, simulated", "photo": str(photo), "instruction": instruction,
+    summary = {"simulation": True, "mode": "ring, simulated" + (", stack" if stack else ""), "stack": stack,
+               "sim_only": STACK_WHY if stack else None, "photo": str(photo), "instruction": instruction,
                "target": None, "made_up_ring": ring_note, "injected_miss": None, "success": False, "moves": [],
                "attempts": 0, "max_error_cm": None, "cost_usd": 0.0, "seconds": 0.0, "sim_seconds": 0.0,
                "error": None, "out_dir": str(out_dir)}
     photo_copy = out_dir / f"simulation_photo{photo.suffix.lower()}"
     shutil.copyfile(photo, photo_copy)
+    summary["photo_copy"] = photo_copy.name
     try:
         # Perception: real calls on the real photo, under the run's cost cap.
         meta_api.reset()
@@ -222,7 +246,11 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
             summary["cost_usd"] = round(meta_api.cost_so_far(), 4)
         target = match_colours(colours, dice) if colours else photo_order(seen)
         summary["target"] = target
-        say(f"Target ({'typed' if colours else 'photo order, left to right'}), slot 1 first: {', '.join(target)}")
+        how = "typed" if colours else "photo order, left to right"
+        if stack:
+            say(f"Target ({how}): a stack on slot 1, bottom first: {', '.join(target)}. SIMULATION ONLY: {STACK_WHY}")
+        else:
+            say(f"Target ({how}), slot 1 first: {', '.join(target)}")
 
         # Planning: the dice placed on the made-up ring, then ring mode's own checks, before any move.
         placed = place_on_ring(seen, the_ring)
@@ -231,7 +259,7 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
                 f"{the_ring.angle_for(*placed[name]):.0f}, ({placed[name][0]:.1f}, {placed[name][1]:.1f}) cm, "
                 f"moved {math.dist(seen[name], placed[name]):.1f} cm")
         slots_cm = [the_ring.point_at(a) for a in the_ring.slots_deg]
-        moves = plan.plan_moves(placed, target, slots_cm)
+        moves = stack_moves(placed, target, the_ring) if stack else plan.plan_moves(placed, target, slots_cm)
         ring_loop.check_mess(placed, moves, the_ring, limits)
 
         # Execution on the simulated arm, exactly as run_mimic.py --ring drives the real one.
@@ -247,7 +275,7 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
 
         def look(shot: int):
             park()
-            return f"simulation_check_{shot}", world.positions(target)
+            return f"simulation_check_{shot}.jpg", world.positions(target)
 
         def log(attempt: dict) -> None:
             attempt.update(simulation=True, sim_time_s=round(world.clock, 2),
@@ -257,12 +285,15 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
             with open(attempts_path, "a") as f:
                 f.write(json.dumps(attempt) + "\n")
 
+        first_carry_s = []
+
         def body():
             try:
                 arm.enable(start, sleep=world.sleep)   # E at the start pose, like confirm_and_enable
                 park()                                  # the real run parks at camera_clear for its photos
+                first_carry_s.append(world.clock)
                 ring_loop.carry(arm, moves, placed, the_ring, limits, look, log, world.say, world.sleep,
-                                finished=summary["moves"], on_try=world.on_try)
+                                finished=summary["moves"], on_try=world.on_try, stack=stack)
                 world.carrying, world.step = "", "back to the start pose"
             except Exception as error:
                 summary["error"] = f"{type(error).__name__}: {error}"
@@ -275,10 +306,12 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
         summary["injected_miss"] = world.injected
         summary["sim_seconds"] = round(world.clock, 2)
 
-        save_moves(out_dir / "simulation_moves.json", world, photo, the_ring, say)
+        save_moves(out_dir / "simulation_moves.json", world, photo, the_ring, say, stack_bottom=target[0] if stack
+                   else None)
         story = sim_video.Story(log=world.log, end_s=world.clock, ring=the_ring, layout=layout,
                                 photo=str(photo_copy), seen=seen, placed=placed, moves=moves,
-                                attempts=attempts, injected=world.injected, summary=summary)
+                                attempts=attempts, injected=world.injected, summary=summary, stack=stack)
+        sim_video.save_stills(story, out_dir, first_carry_s[0] if first_carry_s else 0.0)
         make_video(out_dir / "simulation_video.mp4", story, say=say)
         return summary
     except Exception as error:
@@ -300,10 +333,15 @@ def mark_images(out_dir: Path) -> None:
             marks.mark_png(path, "Comment", MARK)
 
 
-def save_moves(path: Path, world: SimArm, photo: Path, the_ring, say=print) -> None:
-    """Every line the simulated arm was sent, in order, saved and printed as JSON."""
+def save_moves(path: Path, world: SimArm, photo: Path, the_ring, say=print, stack_bottom: str | None = None) -> None:
+    """Every line the simulated arm was sent, in order, saved and printed as JSON. For a stack, every line of a carry
+    onto the stack (every die but the bottom one) is marked "sim_only": true."""
+    def onto_stack(e) -> bool:
+        return stack_bottom is not None and bool(e["carrying"]) and not e["carrying"].startswith(stack_bottom + " ->")
+
     commands = [{"t_s": e["t_s"], "send": e["send"], "reply": e["reply"], "step": e["step"],
-                 "carrying": e["carrying"], **({"simulated_claw": e["event"]} if e["event"] else {})}
+                 "carrying": e["carrying"], **({"simulated_claw": e["event"]} if e["event"] else {}),
+                 **({"sim_only": True} if onto_stack(e) else {})}
                 for e in world.log]
     bases = sorted({int(c["send"].split()[1]) for c in commands if c["send"].startswith("J")})
     outside = [b for b in bases if not pickdrop.BASE_APPROVED[0] <= b <= pickdrop.BASE_APPROVED[1]]
@@ -314,11 +352,14 @@ def save_moves(path: Path, world: SimArm, photo: Path, the_ring, say=print) -> N
             "photo": str(photo), "made_up_ring": the_ring.note, "pick_numbers": "calib/ring.json",
             "limits": "calib/arm_limits.json (every angle checked against them)",
             "base_angles_outside_approved": {"approved": list(pickdrop.BASE_APPROVED), "angles": outside},
+            "sim_only": STACK_WHY if stack_bottom else None,
             "commands": commands}
     path.write_text(json.dumps(data, indent=2))
     say(f"The move list ({len(commands)} lines, SIMULATED EXECUTION):")
     for c in commands:
         say("  " + json.dumps(c))
+    if stack_bottom:
+        say(f"  note: the lines marked sim_only (stacking) can never go to the real arm: {STACK_WHY}")
     if outside:
         say(f"  note: base {', '.join(map(str, outside))} is outside the {pickdrop.BASE_APPROVED[0]}-"
             f"{pickdrop.BASE_APPROVED[1]} you approved (the made-up slots); arm_limits.json allows 0-180.")

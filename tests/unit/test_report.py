@@ -5,7 +5,7 @@ import json
 import cv2
 from test_loop import Rig, diagnosis
 
-from mimic import config
+from mimic import config, marks
 
 spec = importlib.util.spec_from_file_location("report", config.ROOT / "scripts/report.py")
 report = importlib.util.module_from_spec(spec)
@@ -68,3 +68,50 @@ def test_not_a_run_folder(tmp_path):
     said = []
     assert report.main([str(tmp_path)], say=said.append) == 1
     assert "is that a run folder" in said[0]
+
+
+# ---------- ring mode, and the simulation (run_mimic.py --ring --sim) ----------
+
+def test_a_ring_run_is_reported_with_its_miss_along_the_ring(tmp_path, monkeypatch):
+    from test_ring_loop import Rig as RingRig
+    rig = RingRig(tmp_path, monkeypatch)
+    rig.world.miss_deg = {"blue die": 8}
+    rig.run()
+    run_dir = next(rig.out_root.iterdir())
+    assert report.main([str(run_dir)], say=lambda s: None) == 0
+    page = (run_dir / "report.html").read_text()
+    assert "3 of 3 dice placed within 1.5 cm" in page and page.count('<section class="card">') == 4
+    assert "degrees along the ring" in page and "-2.0 degrees from the slot (numeric correction)" in page
+    assert "SIMULATED" not in page and (run_dir / "summary.png").exists()
+
+
+def a_simulation(tmp_path, monkeypatch, instruction=None, miss_deg=0.0):
+    from test_sim import Fakes
+    fakes = Fakes(tmp_path, monkeypatch)
+    fakes.run(instruction, miss_deg)
+    return fakes.out_dir()
+
+
+def test_a_simulation_gets_its_own_report_with_the_banner(tmp_path, monkeypatch):
+    run_dir = a_simulation(tmp_path, monkeypatch, miss_deg=6)
+    said = []
+    assert report.main([str(run_dir)], say=said.append) == 0
+    assert not (run_dir / "report.html").exists() and not (run_dir / "summary.png").exists()
+    page = (run_dir / "simulation_report.html").read_text()
+    assert '<div class="sim-banner">SIMULATED EXECUTION</div>' in page
+    assert f"<title>Mimic SIMULATION {run_dir.name}</title>" in page and 'name="description" content="SIMULATION' in page
+    assert "3 of 3 dice placed within 1.5 cm" in page and page.count('<section class="card">') == 4
+    assert page.count("data:image/jpeg;base64,") == 2 + 4    # the real photo, the simulated start, every check
+    assert "The real photo: SAM and Spark ran on it" in page and "RETRY" in page
+    assert "into the simulated run" in page and "src=\"http" not in page and "<script" not in page
+    picture = run_dir / "simulation_summary.png"
+    assert marks.png_texts(picture)["Comment"].startswith("SIMULATION")
+    assert (cv2.imread(str(picture))[10, 10] == (40, 40, 200)).all()          # the red banner strip
+    assert said == [f"Report: {run_dir / 'simulation_report.html'}", f"Summary picture: {picture}"]
+
+
+def test_a_stack_report_says_stacking_is_simulation_only(tmp_path, monkeypatch):
+    run_dir = a_simulation(tmp_path, monkeypatch, "stack black, blue, red")
+    report.main([str(run_dir)], say=lambda s: None)
+    page = (run_dir / "simulation_report.html").read_text()
+    assert "3 of 3 dice stacked on slot 1" in page and "Stacking is simulation only. The real arm cannot stack" in page

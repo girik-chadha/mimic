@@ -86,13 +86,15 @@ def test_every_output_is_marked_simulation(tmp_path, monkeypatch):
     out = fakes.out_dir()
     assert out.name.endswith("_simulation")
     assert sorted(p.name for p in out.iterdir()) == [
-        "simulation_attempts.jsonl", "simulation_moves.json", "simulation_photo.jpg", "simulation_photo_dots.jpg",
-        "simulation_summary.json", "simulation_video.mp4"]
+        "simulation_attempts.jsonl", "simulation_check_1.jpg", "simulation_check_2.jpg", "simulation_check_3.jpg",
+        "simulation_end.jpg", "simulation_moves.json", "simulation_photo.jpg", "simulation_photo_dots.jpg",
+        "simulation_start.jpg", "simulation_summary.json", "simulation_video.mp4"]
     assert json.loads((out / "simulation_summary.json").read_text())["simulation"] is True
     assert fakes.moves_json()["simulation"] is True and "SIMULATED EXECUTION" in fakes.moves_json()["what"]
     assert all(a["simulation"] is True for a in fakes.attempts()) and len(fakes.attempts()) == 3
-    for picture in ("simulation_photo.jpg", "simulation_photo_dots.jpg"):
-        assert marks.jpeg_comment(out / picture).startswith("SIMULATION")
+    for picture in out.glob("*.jpg"):
+        assert marks.jpeg_comment(picture).startswith("SIMULATION")
+    assert [a["photo"] for a in fakes.attempts()] == [f"simulation_check_{i}.jpg" for i in (1, 2, 3)]
 
 
 def test_the_move_list_is_exactly_what_the_real_planner_sends(tmp_path, monkeypatch):
@@ -208,10 +210,40 @@ def test_dice_too_close_on_the_made_up_ring_are_refused_before_any_move(tmp_path
     assert "RingLayoutError" in json.loads((out / "simulation_summary.json").read_text())["error"]
 
 
-def test_stacking_is_refused_in_this_build(tmp_path, monkeypatch):
+# ---------- stacking (simulation only) ----------
+
+def test_a_stack_piles_every_die_on_slot_1_bottom_first(tmp_path, monkeypatch):
     fakes = Fakes(tmp_path, monkeypatch)
-    with pytest.raises(sim.SimError, match="Stacking is not built yet"):
-        fakes.run("stack black, blue, red")
+    summary = fakes.run("stack black, blue, red")
+    assert summary["stack"] is True and summary["success"] is True and "cannot stack" in summary["sim_only"]
+    assert [(m["name"], m["slot"]) for m in summary["moves"]] == [("black die", 1), ("blue die", 1), ("red die", 1)]
+    final = fakes.stories[0].log[-1]
+    slot = the_ring().point_at(the_ring().slots_deg[0])
+    assert all(math.dist(final["dice"][n], slot) < 0.2 for n in summary["target"])
+    assert final["level"] == {"black die": 0, "blue die": 1, "red die": 2}
+    assert sim_video._labels(final["dice"], final["level"]) == [(final["dice"]["black die"], "stack: black, blue, red")]
+    claw = [c["simulated_claw"] for c in fakes.moves_json()["commands"] if "simulated_claw" in c]
+    assert claw[-1] == "put down red die on top of blue die (stack level 3)"
+    assert any("SIMULATION ONLY" in line for line in fakes.said)
+
+
+def test_only_the_carries_onto_the_stack_are_marked_sim_only(tmp_path, monkeypatch):
+    fakes = Fakes(tmp_path, monkeypatch)
+    fakes.run("stack black, blue, red")
+    moves = fakes.moves_json()
+    assert "cannot stack" in moves["sim_only"]
+    marked = {c["carrying"].split(" ->")[0] for c in moves["commands"] if c.get("sim_only")}
+    assert marked == {"blue die", "red die"}                      # black, at the bottom, is an ordinary drop
+    assert not any(c.get("sim_only") for c in moves["commands"] if not c["carrying"])   # enable, park, end
+    # a carry onto the stack is the planner's ordinary pick and drop: it lowers to the table angle as usual
+    lowered = [c["send"] for c in moves["commands"] if c["carrying"].startswith("red die") and c["step"] == "open"]
+    assert lowered and all(int(line.split()[2]) == the_ring().shoulder_table for line in lowered)
+
+
+def test_a_row_run_marks_nothing_sim_only(tmp_path, monkeypatch):
+    fakes = Fakes(tmp_path, monkeypatch)
+    fakes.run()
+    assert fakes.moves_json()["sim_only"] is None and not any(c.get("sim_only") for c in fakes.moves_json()["commands"])
 
 
 # ---------- the video ----------

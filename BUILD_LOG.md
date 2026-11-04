@@ -275,3 +275,13 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   `--sim-miss-deg` miss is corrected, "SIMULATION" in the mp4's title and comment). Real run on dice_sheet.jpg:
   $0.0156, Spark named red, black and blue die with 1 SAM box each (B14 settled), 3 of 3 placed; the injected-miss
   rerun came from the cache ($0) and showed RETRY then PASS at 0.7 cm.
+- Simulation mode, part 2: `--instruction "stack black, blue, red"` piles the dice on slot 1, black at the bottom
+  (simulation only: `run_mimic.py` refuses a stack without `--sim`; in simulation_moves.json every line of a carry onto
+  the stack is marked `"sim_only": true`, with the reason). `ring_loop.carry(stack=True)` lets the dice already on the
+  stack sit at the slot; the real run never sets it. The simulated arm keeps stack levels and picks the top die. The
+  video draws a stack with each die offset by its level, with a red "stacking is simulation only" note on every
+  frame. `scripts/report.py` now reads ring-mode attempts (miss along the ring and the radius) and, in a simulation
+  folder, writes `simulation_report.html` (sticky SIMULATED EXECUTION banner, the real photo next to the simulated
+  start, every simulated camera check) and `simulation_summary.png` (banner strip, PNG text "SIMULATION");
+  `run_mimic.py --ring --sim` runs it at the end. Cached runs on dice_sheet.jpg ($0): row 3/3, injected miss RETRY
+  then PASS at 0.7 cm, stack 3/3.

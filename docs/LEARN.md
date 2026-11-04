@@ -672,3 +672,16 @@ same maths and checks. The saved file records whether its numbers came from the 
 Two sentences: "Simulation mode runs Mimic's real eyes and real planner on a real photo, but sends the moves to a
 simulated arm on a made-up ring, because the real ring is not calibrated yet. The move list it saves is exactly what
 the real arm would be sent, and every file and every video frame says it is a simulation."
+
+### 4 Nov: simulation mode, part 2 (stacking and the report)
+
+- A typed "stack black, blue, red" piles the dice on slot 1 in the simulation only. The real arm cannot do it: with
+  the elbow taped, the claw reaches the table at one shoulder angle, and lifting it also moves it along the radius,
+  so it cannot let go of a die right on top of another. The run refuses a stack without `--sim`, and the saved move
+  list marks every line of a carry onto the stack as simulation-only.
+- The report script now understands ring-mode runs, and in a simulation folder it writes `simulation_report.html`
+  and `simulation_summary.png` under a SIMULATED EXECUTION banner, showing the real photo next to the simulated world.
+
+Two sentences: "Stacking is shown only in the simulation, and every move of it is marked simulation-only, because the
+taped elbow cannot release a die higher up at the same spot. The same report script that summarises real runs now
+summarises a simulation too, with the banner on the page and on the picture."

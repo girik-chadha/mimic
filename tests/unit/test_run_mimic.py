@@ -134,13 +134,14 @@ def test_simulation_options_are_checked_before_anything_runs(monkeypatch, capsys
 def test_ring_sim_runs_the_simulation_and_opens_no_serial_port(monkeypatch, capsys):
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("serial bridge opened"))
     monkeypatch.setattr(camera, "capture", lambda *a, **k: pytest.fail("camera used"))
-    calls = []
+    calls, reports = [], []
+    monkeypatch.setattr(run_mimic, "_write_report", reports.append)
     monkeypatch.setattr(run_mimic.sim, "run", lambda *a: calls.append(a) or {
         "success": True, "moves": [{"result": "PASS"}] * 3, "attempts": 3, "max_error_cm": 0.0, "cost_usd": 0.013,
         "out_dir": "runs/x_simulation"})
     assert run_mimic.main(["--ring", "--sim", "--photo", "p.jpg", "--instruction", "row red, blue",
                            "--sim-miss-deg", "6"]) == 0
-    assert calls == [("p.jpg", "row red, blue", 6.0)]
+    assert calls == [("p.jpg", "row red, blue", 6.0)] and reports == ["runs/x_simulation"]
     assert "SIMULATION SUCCESS: 3 of 3 dice placed" in capsys.readouterr().out
 
 
