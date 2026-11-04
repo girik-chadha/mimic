@@ -332,6 +332,9 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
         slots_cm = [the_ring.point_at(a) for a in the_ring.slots_deg]
         moves = stack_moves(placed, target, the_ring) if stack else plan.plan_moves(placed, target, slots_cm)
         ring_loop.check_mess(placed, moves, the_ring, limits)
+        summary["seen_cm"] = {n: [round(v, 2) for v in seen[n]] for n in dice}       # SAM, in the real photo
+        summary["placed_cm"] = {n: [round(v, 2) for v in placed[n]] for n in dice}   # on the made-up ring
+        summary["carries"] = [{"name": m.name, "slot": m.slot} for m in moves]
 
         # Execution on the simulated arm, exactly as run_mimic.py --ring drives the real one.
         miss = (moves[0].name, miss_deg) if miss_deg else None

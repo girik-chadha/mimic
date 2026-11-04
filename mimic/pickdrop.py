@@ -46,8 +46,11 @@ def lowering(pose: dict, start: int, end: int) -> list[dict]:
 
 
 def plan(limits, start: dict, base_pick: int, base_drop: int, shoulder_pick: int, grip_hold: int, lift: int,
-         approach: int, stop_at: int, pick_only: bool = False, command_s: float = COMMAND_S):
-    """Returns (steps, hold_s, warnings). Raises PickError, before anything moves, if anything is wrong."""
+         approach: int, stop_at: int, pick_only: bool = False, command_s: float = COMMAND_S,
+         shoulder_drop: int | None = None):
+    """Returns (steps, hold_s, warnings). Raises PickError, before anything moves, if anything is wrong.
+    shoulder_drop: let go at this shoulder angle instead of the table angle (a measured stack level, calib/stack.json);
+    it must be lower down than the lifted angle and never past stop_at."""
     if lift <= 0 or approach <= 0:
         raise PickError("--lift and --approach must be above 0 (a smaller shoulder angle lifts the claw).")
     if shoulder_pick > stop_at:
@@ -59,6 +62,10 @@ def plan(limits, start: dict, base_pick: int, base_drop: int, shoulder_pick: int
                         f"stay short of the closed limit ({limit}).")
     elbow = limits.home_deg["elbow"]       # the dead elbow: always this number (an empty socket on IO2)
     above, lifted = shoulder_pick - approach, shoulder_pick - lift
+    drop = shoulder_pick if shoulder_drop is None else shoulder_drop
+    if not lifted < drop <= stop_at:
+        raise PickError(f"The drop shoulder {drop} must be lower down than the lifted angle {lifted} and not past "
+                        f"--stop-at {stop_at}.")
     p = {"base": base_pick, "shoulder": shoulder_pick, "elbow": elbow, "grip": open_deg}
 
     wanted = [("open, base to pick", dict(start, base=base_pick, grip=open_deg, elbow=elbow), False),
@@ -69,9 +76,9 @@ def plan(limits, start: dict, base_pick: int, base_drop: int, shoulder_pick: int
     if pick_only:
         wanted += [("open in the air", dict(p, shoulder=lifted), False)]
     else:
-        held = dict(p, base=base_drop, grip=grip_hold)
+        held = dict(p, base=base_drop, grip=grip_hold, shoulder=drop)
         wanted += [("swing to drop", dict(held, shoulder=lifted), True)]
-        wanted += [(f"lower to {s['shoulder']}", s, True) for s in lowering(held, lifted, shoulder_pick)]
+        wanted += [(f"lower to {s['shoulder']}", s, True) for s in lowering(held, lifted, drop)]
         wanted += [("open", dict(held, grip=open_deg), False),
                    ("lift away", dict(held, grip=open_deg, shoulder=lifted), False)]
 

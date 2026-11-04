@@ -108,7 +108,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 ## Mon 2 Nov: Phase 5, demo quality (freeze 18:00)
 
 - [x] Demo page, step 1 (4 Nov): `python web/app.py` -> http://127.0.0.1:8000. Upload (JPEG/PNG only, checked by bytes) or the sample photo, a goal read by code (`put black on blue, then red on black`, `row ...`, `stack ...`, empty = photo order; anything else refused with examples), use cache (off by default), Run; the "Expected simulation" video looping; the live log streamed from the server (lines about the arm tagged simulated); cost against the $0.30 cap. `/?run=<folder>` replays a finished run with no calls. Video now 15 fps.
-- [ ] Demo page, step 2: the "Arm program ready" card and the zip (job script, moves.json, README, `calib/stack.json`)
+- [x] Demo page, step 2 (4 Nov): the "Arm program ready" card (slides in at the end) and the zip: `mimic_job_<time>.py` (runs `mimic/job.py`: `--dry-run` replays the expected simulation on the fake arm; the real arm gets angles from the calibrated `ring.json` and SAM's measured positions, or for a stack from `calib/stack.json`; base outside 80-120 refused; typed-yes enable, S then D), `moves.json`, README. `calib/stack.json` committed as a placeholder: a real stack is refused until it is measured.
+- [ ] Girik: measure `calib/stack.json` (pick angles, stack base angle, let-go shoulder per level) before a real stack
 - [ ] Demo page, step 3: tabs (What SAM sees, What Spark read, Plan)
 
 - [ ] Web page; Spark Open on Baseten (B7); benchmark 10 runs

@@ -94,7 +94,7 @@ main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-
 .result { min-height: 20px; font-variant-numeric: tabular-nums; }
 .pass { color: var(--mint); } .miss { color: var(--amber); }
 
-.log { grid-column: 1 / -1; display: flex; flex-direction: column; padding: 10px 14px 8px; }
+.log { display: flex; flex-direction: column; padding: 10px 14px 8px; }
 .log .headline { margin-bottom: 4px; }
 #log {
   flex: 1; min-height: 0; overflow-y: auto; font: 12px/1.55 "JetBrains Mono", ui-monospace, monospace;
@@ -103,6 +103,18 @@ main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-
 #log .sim { color: var(--muted); }
 #log .chip { color: var(--cyan); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-right: 6px; }
 #log b { font-weight: 600; }
+.bottom { grid-column: 1 / -1; display: flex; gap: 12px; min-height: 0; }
+.bottom .log { flex: 1; min-width: 0; }
+.program { width: 410px; flex: none; padding: 10px 14px; display: flex; flex-direction: column; gap: 5px; }
+.program[hidden] { display: none; }
+.program p { margin: 0; font-size: 13px; color: var(--muted); }
+.program .files { font: 11.5px/1.5 "JetBrains Mono", ui-monospace, monospace; color: var(--text); }
+.program a.download {
+  display: block; text-align: center; text-decoration: none; background: var(--cyan); color: var(--bg);
+  font-stretch: 108%; font-weight: 640; border-radius: 4px; padding: 8px 12px; margin-top: 2px;
+}
+.program.arrive { animation: arrive 420ms cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes arrive { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
@@ -166,11 +178,19 @@ main { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-
   <div class="result" id="result" aria-live="polite"></div>
 </main>
 
+<div class="bottom">
 <section class="panel log" aria-label="Live log">
   <div class="headline"><h2>Live log</h2><span class="note">Every line the run prints, as it happens. Lines about the
     arm are tagged simulated.</span></div>
   <div id="log" role="log" aria-live="off"></div>
 </section>
+<section class="panel program" id="program" hidden aria-live="polite" aria-label="Arm program">
+  <h2>Arm program ready</h2>
+  <p class="files" id="programfiles"></p>
+  <a class="download" id="download" href="#" download>Download arm program</a>
+  <p id="programnote"></p>
+</section>
+</div>
 
 <script>
 "use strict";
@@ -266,7 +286,18 @@ function finish(r) {
   $("stage").classList.add("has-video");
   video.play().catch(() => {});
   $("result").innerHTML = summaryLine(r);
+  showProgram(r);
   document.dispatchEvent(new CustomEvent("mimic:done", {detail: r}));
+}
+
+function showProgram(r) {
+  const stamp = r.folder.replace(/_simulation$/, ""), card = $("program");
+  $("programfiles").textContent = `mimic_job_${stamp}.py · moves.json · README.md`;
+  $("download").href = `/api/runs/${r.folder}/program.zip`;
+  $("programnote").textContent = "Try --dry-run first. " + (r.summary.stack
+    ? "A real stack needs calib/stack.json, measured by hand; refused until then."
+    : "Real angles come from the calibrated ring; base outside 80-120 is refused.");
+  card.hidden = false; card.classList.remove("arrive"); void card.offsetWidth; card.classList.add("arrive");
 }
 
 $("run").addEventListener("click", async () => {
@@ -287,7 +318,7 @@ $("run").addEventListener("click", async () => {
     const target = {photo: "photoerror", goal: "goalerror"}[reply.field] || "runerror";
     $(target).textContent = reply.error; return;
   }
-  $("log").innerHTML = ""; $("result").textContent = ""; setCost(0, reply.cap_usd);
+  $("log").innerHTML = ""; $("result").textContent = ""; $("program").hidden = true; setCost(0, reply.cap_usd);
   setState("Running", "running");
   document.dispatchEvent(new CustomEvent("mimic:start"));
   if (source) source.close();

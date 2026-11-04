@@ -1,0 +1,7 @@
+{
+  "placeholder": true,
+  "note": "PLACEHOLDER. For a real stack (mimic/job.py, the demo page's arm program). Measure by hand on the arm, elbow taped, with scripts/arm_jog.py: pick_base_deg, the base angle where each die sits on the ring, by name; drop_base_deg, the base angle to build the stack at; drop_shoulder_by_level, the shoulder angle to let go at for level 1 (on the table), level 2 (on one die), level 3 (on two dice): each smaller than the one before, because a smaller angle lifts the claw. Lifting also moves the claw along the radius, so check each level lands on the die below. Then set placeholder to false. Until then a real stack is refused.",
+  "pick_base_deg": {},
+  "drop_base_deg": null,
+  "drop_shoulder_by_level": []
+}

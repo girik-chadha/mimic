@@ -699,3 +699,14 @@ summarises a simulation too, with the banner on the page and on the picture."
 Two sentences: "The demo page is a small local web server that runs the real perception and planner on your photo
 and streams every step to the browser as it happens. It labels everything as an expected simulation, and the log
 tags every line about the arm as simulated."
+
+### 4 Nov: the arm program download
+
+- After a run the page offers a zip with a small Python script for the arm. Its dry run replays the expected
+  simulation on the fake arm. On the real arm it never reuses the simulation's angles (they belong to a made-up ring):
+  it works them out from the real ring calibration and where SAM measured each die, or, for a stack, from
+  `calib/stack.json`, which has to be measured by hand. Anything outside the approved base range 80-120 is refused.
+
+Two sentences: "The page turns the plan into a script for the real arm, but the script recomputes every angle from
+the real calibration and refuses until that calibration exists. It uses the same safety code as every other script:
+the limits, the start pose, a typed yes, and stop-then-disable on Ctrl+C."

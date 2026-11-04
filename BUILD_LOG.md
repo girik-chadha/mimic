@@ -294,3 +294,13 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   call. Photos must really be JPEG or PNG (first bytes and a decode). The run now prints the check-dot errors and
   Spark's names, and the video draws at 15 fps with frame-progress lines. A cached run of "put black on blue, then
   red on black" through the server: 3 of 3 stacked, $0.
+- Demo page, step 2: the "Arm program ready" card (the page's one animation; none with reduced motion) and its zip,
+  built by `mimic/job.py`: `mimic_job_<time>.py` (the job's data plus `main()` from `mimic/job.py`), the expected
+  simulation's `moves.json`, and a README. `--dry-run` replays the simulation's angles on the fake arm. On the real
+  arm no angle comes from the simulation: a row is picked where SAM measured each die on the real calibrated ring and
+  dropped in the real slots; a stack takes its pick angles, base angle and let-go shoulder per level from
+  `calib/stack.json` (committed as a placeholder, so a real stack is refused, saying what to measure). Every base
+  angle outside 80-120 is refused, every carry is planned and checked before the bridge opens, then the start pose,
+  typed yes, each carry once, and the normal end; s or Ctrl+C sends S then D. `pickdrop.plan` gained an optional
+  `shoulder_drop` (default: the table angle, unchanged). Tested: the downloaded script, unzipped outside the repo,
+  dry-runs 3 carries and refuses the real arm ("calib/ring.json is still a placeholder").

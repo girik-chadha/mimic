@@ -22,6 +22,8 @@ mimic/                     the Python package
                            the real ring-mode planner, a simulated arm on a made-up ring
   sim_video.py             (4 Nov) the simulation's top-down video (OpenCV frames, Windows ffmpeg)
   marks.py                 (4 Nov) "simulation" written into a JPEG's comment or a PNG's text chunk
+  job.py                   (4 Nov) the arm program from the demo page: --dry-run, or the real arm with angles
+                           from the real calibration (ring.json, stack.json); base outside 80-120 refused
   video.py                 (3 Nov) demo video: shrink to 10 fps / 720p, settled frame, arrival order
   brain.py                 Spark calls: name_objects(photo), diagnose(before, after, move)
   scene.py                 read_target(photo) -> ordered names; read_positions(photo) -> px

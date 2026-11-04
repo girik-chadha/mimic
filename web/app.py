@@ -11,6 +11,7 @@ streams every line the run prints to the page as it happens (Server-Sent Events)
     POST /api/run                    {"photo": "sample" or a data URL, "goal": "...", "use_cache": false}
     GET  /api/events/<job>           the run's lines as they happen, then its result
     GET  /api/runs/<folder>/<file>   a file from a simulation folder (the video is served in byte ranges)
+    GET  /api/runs/<folder>/program.zip   the arm program (mimic/job.py): mimic_job_<time>.py, moves.json, README
 
 One run at a time. A photo must be a JPEG or PNG (checked by its first bytes and by decoding it), at most 15 MB.
 The goal is read by code (sim.parse_goal) and refused, with examples, before any API call. Only the Python
@@ -30,7 +31,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from mimic import config, meta_api, ring_loop, sim
+from mimic import config, job, meta_api, ring_loop, sim
 
 WEB = Path(__file__).resolve().parent
 PAGE = WEB / "index.html"
@@ -208,6 +209,14 @@ class Handler(BaseHTTPRequestHandler):
         if (len(parts) == 4 and parts[:2] == ["api", "runs"] and RUN_FOLDER.match(parts[2])
                 and RUN_FILE.match(parts[3]) and (config.RUNS_DIR / parts[2] / parts[3]).exists()):
             return self._file(config.RUNS_DIR / parts[2] / parts[3])
+        if (len(parts) == 4 and parts[:2] == ["api", "runs"] and RUN_FOLDER.match(parts[2])
+                and parts[3] == "program.zip" and (config.RUNS_DIR / parts[2]).is_dir()):
+            try:
+                name, data = job.program_zip(config.RUNS_DIR / parts[2])
+            except (job.JobError, OSError, KeyError) as error:
+                return self._json(404, {"error": f"No arm program for this run: {error}"})
+            return self._send(200, data, "application/zip",
+                              {"Content-Disposition": f'attachment; filename="{name}"'})
         self._json(404, {"error": "Not found."})
 
     def do_POST(self):
