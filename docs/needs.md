@@ -268,7 +268,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 
 | # | Question | Test that settles it | When |
 |---|---|---|---|
-| B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). **3 Nov: the kit's own ranges, from its sample code and untested on this arm, are in `calib/arm_limits.json` and `arm_logic.h` for the first powered session: base 0-180, shoulder 80-180, elbow 30-120, grip open 90 / closed limit 140, home 90 for every joint.** The grip closed limit was raised from 120 to 140 the same day (the kit's own limit is 150): a 19 mm die needs the jaws closer than 120 would allow. How far the jaws move per degree is not measured yet, so `grip_test.py`'s 2-degree steps find the angle that holds. **4 Nov: a lower angle closes this claw (A10c): open 90, closed limit 20 (provisional), range 10-140; the 140 above no longer applies.** | `scripts/first_moves.py` (needs.md C7) measures the real ranges; link lengths and gripper opening with a ruler. | First powered session |
+| B4 | Arm joint ranges, link lengths, gripper opening width; confirm the pins (A7b has the kit's pins, untested). **3 Nov: the kit's own ranges, from its sample code and untested on this arm, are in `calib/arm_limits.json` and `arm_logic.h` for the first powered session: base 0-180, shoulder 80-180, elbow 30-120, grip open 90 / closed limit 140, home 90 for every joint.** The grip closed limit was raised from 120 to 140 the same day (the kit's own limit is 150): a 19 mm die needs the jaws closer than 120 would allow. How far the jaws move per degree is not measured yet, so `grip_test.py`'s 2-degree steps find the angle that holds. **4 Nov, base measured (first_moves, Girik): minus stopped at 20 (approved 15), plus stopped at 40 (approved 35), so the proposed base range is 80-120.** Shoulder and elbow still to do. **4 Nov: a lower angle closes this claw (A10c): open 90, closed limit 20 (provisional), range 10-140; the 140 above no longer applies.** | `scripts/first_moves.py` (needs.md C7) measures the real ranges; link lengths and gripper opening with a ruler. | First powered session |
 | B6 | How precise is the arm at our table distances? | `scripts/repeatability.py --pose B S E G`: the same pose 10 times from alternating sides, the camera measures the claw-tip marker; spread (mean, standard deviation, max), backlash, verdict against the 1.5 cm tolerance. | First powered session |
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
@@ -387,13 +387,23 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
 10. `python scripts/first_moves.py`: it asks before enabling (type yes once the arm is posed at 90). Then base,
     then shoulder, then elbow; +5, -5, +10, -10 ... from home, slowly, never past the range in arm_limits.json and
     never more than 45 degrees from home (`--max-delta` to widen; so the base stays within 45-135). Answer y/n
-    after each move; each direction stops at its first n. The shoulder has only 10 degrees below home (80-180).
+    **after each move has finished**: anything typed while the arm moves is thrown away (since 4 Nov; before
+    that, an early answer was read by the next question). Each direction stops at its first n. The shoulder has
+    only 10 degrees below home (80-180).
     **Write down which joint and direction lifts the claw** (for example "shoulder -" or "elbow +"): `grip_test.py`
     needs it as `--lift`, and teaching needs to know which way is up.
+    **Resuming (4 Nov):** it saves after every finished joint, and always merges into the proposal already there
+    (a joint it runs replaces its entry; the others are kept and listed at the start). `--joints shoulder elbow`
+    runs only those. `--base-minus 15 --base-plus 35` records a base result you already watched, without moving
+    the base (leave base out of `--joints`). The 4 Nov session was stopped after the base, before saving was added,
+    so resume with:
+    `python scripts/first_moves.py --joints shoulder elbow --base-minus 15 --base-plus 35`
 11. It writes `calib/arm_limits_proposed.json`: each direction's largest approved step minus 5 degrees. It never
-    edits `calib/arm_limits.json`. **A completed first_moves session is the "checked by hand" step:** the proposal
-    has `limits_checked_by_hand: true`. Review it, copy the ranges into **both** files, run the tests, `quit`
-    (hold the arm), switch the batteries off, upload (step 3), then power on again (steps 6-8).
+    edits `calib/arm_limits.json`. Until all three joints are in, the file says INCOMPLETE and has
+    `limits_checked_by_hand: false` (the joints not done keep the kit ranges, only so the file loads; nothing real
+    can move with it, and `grip_test.py` refuses it). **A complete set of joints is the "checked by hand" step:**
+    then the proposal has `limits_checked_by_hand: true`. Review it, copy the ranges into **both** files, run the
+    tests, `quit` (hold the arm), switch the batteries off, upload (step 3), then power on again (steps 6-8).
 
 **Grip and repeatability**
 12. `python scripts/grip_test.py --lift "<the lift you wrote down, e.g. shoulder -4>"` (one or more joints, 10

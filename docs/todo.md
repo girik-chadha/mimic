@@ -65,6 +65,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] Claw direction (4 Nov, Girik): a lower angle closes it. Closed limit 20 (provisional) is the one setting for the direction; range 10-140; `grip_hold_deg` via `grip_test.py --start 50` (+3 degrees closed); everything that assumed a larger angle closes it flipped (needs.md A10c). Compiled, copied to Windows, not uploaded
 - [x] Closed limit 3 (provisional; not 0, the servo's end stop), grip range 0-140; grip_test tests the limit step with a warning and stops with "no hold found down to the limit"; grip_hold may not equal the limit (4 Nov, not uploaded)
 - [ ] Girik: pad-to-pad gap at 90 and 20, to predict whether 3 is enough; after the upload, step the empty claw down to 3 and raise the limit if the pads touch or the servo strains (needs.md C7 step 9)
+- [x] Base range measured (4 Nov, Girik): approved -15 / +35, proposed 80-120. `first_moves.py` now saves after every joint, merges, `--joints`, `--base-minus/--base-plus`; typed-ahead answers are thrown away (4 Nov)
+- [ ] Resume: `python scripts/first_moves.py --joints shoulder elbow --base-minus 15 --base-plus 35`
 - [ ] First powered session (needs.md C7) from step 3's upload: ranges with `first_moves.py`, copy into both files, upload; `grip_test.py`
 - [ ] Precision test B6: `repeatability.py`
 - [x] Kinematics: taught-pose grid (`kinematics.py`, `calib/pose_grid.json`, `scripts/teach.py`), tested with fakes (2 Nov)

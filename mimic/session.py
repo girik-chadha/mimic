@@ -2,12 +2,19 @@
 
 - connect(): the fake arm for a dry run, or the real arm through the serial bridge. A real arm is refused
   while calib/arm_limits.json is locked, BEFORE the bridge opens the serial port.
-- ask(): every prompt accepts "s", which stops the arm and ends the script.
+- ask(): every prompt accepts "s", which stops the arm and ends the script. Anything typed before the question
+  appears (for example while the arm was moving) is thrown away first, so it can never answer the question.
 - confirm_and_enable(): asks for a typed yes, then switches the servos on (E). The board starts disarmed.
 - guarded(): runs a script's body so that "s", Ctrl+C or any error sends S (stop) and then D (servos off, limp),
   and a normal end says "hold the arm" and disables it. Then it closes the bridge (which sends S as it exits).
 """
+import sys
 import time
+
+try:
+    import termios  # WSL / Linux; the scripts that ask questions never run on Windows Python
+except ImportError:
+    termios = None
 
 from mimic import arm as arm_module
 from mimic.arm import ENABLE_DEFAULT_DEG, JOINTS, Arm, FakeTransport
@@ -30,8 +37,20 @@ def connect(dry_run: bool, limits, echo=print) -> Arm:
     return Arm(arm_module.SerialBridgeTransport(), limits)
 
 
-def ask(prompt: str, read=input) -> str:
-    """Ask a question. "s" at any prompt means stop now."""
+def discard_typed_ahead(stream=None) -> None:
+    """Throw away whatever was typed but not yet read: the terminal keeps every line typed while the arm was
+    moving, and the next question would otherwise read it at once, before you have seen the move."""
+    stream = stream or sys.stdin
+    try:
+        if termios is not None and stream.isatty():
+            termios.tcflush(stream, termios.TCIFLUSH)
+    except (OSError, ValueError, AttributeError):
+        pass  # not a real terminal (a pipe, a test): there is nothing typed ahead to throw away
+
+
+def ask(prompt: str, read=input, flush=discard_typed_ahead) -> str:
+    """Ask a question. "s" at any prompt means stop now. Only an answer typed after the question counts."""
+    flush()
     answer = read(prompt).strip().lower()
     if answer == "s":
         raise StopRequested()

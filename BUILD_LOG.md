@@ -185,3 +185,11 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   stops with "no hold found down to the limit" (no hold or lift at the limit). `arm_limits.json` refuses a
   `grip_hold_deg` equal to the limit. `arm_jog` and `teach.py` warn on a grip move onto the limit. Relaxation still
   returns to 90. g++ tests pass in all four builds. Compiled (301,681 bytes), Windows copy refreshed, not uploaded.
+- First real first_moves session (Girik): stopped after the base, which wrote nothing. Base: minus stopped at 20
+  (approved 15), plus stopped at 40 (approved 35); proposed base range 80-120 (needs.md B4). `first_moves.py` now
+  saves the proposal after every finished joint, always merges into the one already there (a joint it runs
+  replaces its entry, the rest are kept and listed), has `--joints` and `--base-minus/--base-plus` (the base
+  result typed in, saved before anything moves). Until all three joints are in, the proposal is INCOMPLETE with
+  limits_checked_by_hand false; `grip_test.py` refuses it with what is missing. `session.ask` now throws away
+  anything typed before a question appears (termios flush on a real terminal), so an early answer typed while the
+  arm moves can no longer answer the next question.

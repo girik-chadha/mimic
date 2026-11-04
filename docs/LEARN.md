@@ -534,3 +534,18 @@ itself or a die hard enough to stall and overheat."
 Two sentences: "The claw may now close almost to the end of its travel, because the padded jaws needed it, but it
 stops 3 degrees short of the servo's own end stop. The grip test warns at the limit and refuses to hold a die there,
 so a die that only holds at full squeeze is reported rather than gripped."
+
+### 4 Nov: first_moves can be stopped and resumed
+
+- The first real session was stopped after the base, and because the results were only written at the very end,
+  nothing was saved. Now each joint is saved as soon as it is finished, new runs merge into the saved file, and a
+  result you already watched can be typed in (`--base-minus 15 --base-plus 35`) instead of being moved again.
+- A half-finished file is clearly marked INCOMPLETE and does not count as "checked by hand", so it can never be
+  used to move the real arm by mistake.
+- A terminal remembers every line you type, even while a program is busy. An answer typed while the arm was still
+  moving was read by the next question straight away. Now each question first throws away anything typed early,
+  so only an answer given after you have seen the move counts.
+
+Two sentences: "The range-finding script now saves after every joint and can pick up where it stopped, so a stop
+never loses finished work. It also ignores anything typed while the arm is moving, so every yes or no is an answer
+to a move you have actually watched."

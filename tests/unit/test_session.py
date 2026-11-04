@@ -112,6 +112,31 @@ def test_a_declined_enable_ends_the_script_without_moving():
     assert said[-1] == "Not enabled: nothing was moved." and t.sent == ["?"] and t.closed
 
 
+class FakeTerminal:
+    def __init__(self, tty):
+        self.tty = tty
+
+    def isatty(self):
+        return self.tty
+
+
+def test_typed_ahead_input_is_thrown_away_only_on_a_real_terminal(monkeypatch):
+    flushed = []
+    monkeypatch.setattr(session.termios, "tcflush", lambda stream, how: flushed.append((stream, how)))
+    terminal = FakeTerminal(tty=True)
+    session.discard_typed_ahead(terminal)
+    assert flushed == [(terminal, session.termios.TCIFLUSH)]
+    session.discard_typed_ahead(FakeTerminal(tty=False))   # a pipe or a test: nothing to throw away
+    assert len(flushed) == 1
+
+
+def test_ask_throws_away_typed_ahead_input_before_reading_the_answer():
+    events = []
+    answer = session.ask("smooth? ", read=lambda q: (events.append("read"), "n")[1],
+                         flush=lambda: events.append("flush"))
+    assert answer == "n" and events == ["flush", "read"]   # an early "n" is gone before the question is read
+
+
 def test_command_loop_quit_and_s():
     handled = []
     session.command_loop(handled.append, ["base +5\n", "quit\n", "never\n"], say=lambda s: None)

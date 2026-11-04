@@ -174,6 +174,20 @@ def test_a_bad_start_is_refused_before_anything_moves(tmp_path):
     assert said[0].startswith("STOPPED: --start 100 must be between open (90) and the closed limit (3)")
 
 
+def test_an_incomplete_proposal_is_refused_with_what_is_missing(tmp_path):
+    spec2 = importlib.util.spec_from_file_location("first_moves", config.ROOT / "scripts/first_moves.py")
+    fm = importlib.util.module_from_spec(spec2)
+    spec2.loader.exec_module(fm)
+    proposed = tmp_path / "arm_limits_proposed.json"
+    proposed.write_text(json.dumps(fm.proposal(config.ARM_LIMITS_PATH, arm.load_limits(config.ARM_LIMITS_PATH),
+                                               {"base": {"plus": 35, "minus": 15}})))
+    said = []
+    assert gt.main(["--lift", "shoulder -4", "--dry-run"], read=answers(), say=said.append,
+                   proposed_path=proposed) == 1
+    assert said[0] == ("STOPPED: the proposal is incomplete (missing: shoulder, elbow): finish first_moves.py first "
+                       "(python scripts/first_moves.py --joints shoulder elbow).")
+
+
 def test_main_needs_the_proposal_first(tmp_path):
     said = []
     assert gt.main(["--lift", "shoulder -4", "--dry-run"], read=answers(), say=said.append,

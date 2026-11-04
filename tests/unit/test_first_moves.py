@@ -133,3 +133,101 @@ def test_real_arm_refused_while_locked(monkeypatch, tmp_path):
     said = []
     assert fm.main([], read=answers(), sleep=lambda s: None, say=said.append, proposed_path=tmp_path / "p.json") == 1
     assert "placeholder" in said[0]
+
+
+# ---------- saved after every joint, merged, resumable (4 Nov) ----------
+
+BASE_ANSWERS = ["y"] * 18          # base: +5 -5 ... +45 -45, all fine (max_delta 45)
+SMALL_JOINT = ["y", "y"]           # shoulder or elbow at 85-95: +5, -5
+
+
+def saved(out):
+    return json.loads(out.read_text())
+
+
+def test_a_stop_during_the_shoulder_keeps_the_finished_base(monkeypatch, tmp_path):
+    code, out, said = run_main(monkeypatch, tmp_path, ["yes"] + BASE_ANSWERS + ["s"])
+    assert code == 130
+    data = saved(out)
+    assert data["joints_done"] == ["base"] and data["approved_deg"] == {"base": {"plus": 45, "minus": 45}}
+    assert data["limits_checked_by_hand"] is False and "INCOMPLETE: missing shoulder, elbow" in data["note"]
+    assert any("shoulder not finished: approved +0 / -0 so far (NOT saved)" in line for line in said)
+
+
+def test_joints_runs_only_those_and_merges_keeping_the_rest(monkeypatch, tmp_path):
+    out = tmp_path / "proposed.json"
+    out.write_text(json.dumps(fm.proposal(config.ARM_LIMITS_PATH, limits_for_test((85, 95), (85, 95)),
+                                          {"base": {"plus": 35, "minus": 15}}, {"base": "run 2026-11-04 09:30"})))
+    code, out, said = run_main(monkeypatch, tmp_path, ["yes"] + SMALL_JOINT * 2,
+                               argv=("--dry-run", "--joints", "shoulder", "elbow"))
+    assert code == 0
+    data = saved(out)
+    assert data["joints_done"] == ["base", "shoulder", "elbow"] and data["limits_checked_by_hand"] is True
+    assert data["approved_deg"]["base"] == {"plus": 35, "minus": 15}                  # kept
+    assert data["approved_from"]["base"] == "run 2026-11-04 09:30"
+    assert data["ranges_deg"]["base"] == [80, 120] and "COMPLETE" in data["note"]
+    assert any(line.startswith("Keeping base from") and "+35 / -15" in line for line in said)
+
+
+def test_base_seed_is_saved_before_anything_moves_and_the_base_never_moves(monkeypatch, tmp_path):
+    out = tmp_path / "proposed.json"
+    seen_at_connect = []
+    real_connect = session.connect
+
+    def connect(dry_run, limits, echo=print):
+        seen_at_connect.append(saved(out)["approved_deg"])
+        a = real_connect(dry_run, limits, echo=None)
+        sent.append(a.transport)
+        return a
+
+    sent = []
+    monkeypatch.setattr(session, "connect", connect)
+    code, out, said = run_main(monkeypatch, tmp_path, ["yes"] + SMALL_JOINT * 2,
+                               argv=("--dry-run", "--joints", "shoulder", "elbow", "--base-minus", "15",
+                                     "--base-plus", "35"))
+    assert code == 0
+    assert seen_at_connect == [{"base": {"plus": 35, "minus": 15}}]          # on disk before the arm opened
+    assert all(m[0] == 90 for m in j_lines(sent[0]))                          # the base never moved
+    data = saved(out)
+    assert data["ranges_deg"]["base"] == [80, 120] and data["limits_checked_by_hand"] is True
+    assert data["approved_from"]["base"].startswith("typed in (--base-minus/--base-plus)")
+
+
+@pytest.mark.parametrize("argv, problem", [
+    (("--base-minus", "15"), "Give both --base-minus and --base-plus"),
+    (("--base-minus", "15", "--base-plus", "35"), "leave base out of --joints"),
+    (("--joints", "shoulder", "--base-minus", "15", "--base-plus", "50"), "--base-plus 50 must be between 0 and 45"),
+    (("--joints", "shoulder", "--base-minus", "-5", "--base-plus", "35"), "--base-minus -5 must be between 0 and 45"),
+    (("--joints", "shoulder", "shoulder"), "--joints lists a joint twice"),
+])
+def test_bad_options_are_refused_before_anything_is_written_or_moved(monkeypatch, tmp_path, argv, problem):
+    monkeypatch.setattr(session, "connect", lambda *a, **k: pytest.fail("arm connected"))
+    code, out, said = run_main(monkeypatch, tmp_path, [], argv=("--dry-run",) + argv)
+    assert code == 1 and problem in said[0] and not out.exists()
+
+
+def test_a_full_run_replaces_an_older_entry_for_the_same_joint(monkeypatch, tmp_path):
+    out = tmp_path / "proposed.json"
+    out.write_text(json.dumps(fm.proposal(config.ARM_LIMITS_PATH, limits_for_test((85, 95), (85, 95)),
+                                          {"base": {"plus": 10, "minus": 10}}, {"base": "run 2026-11-03 18:00"})))
+    code, out, said = run_main(monkeypatch, tmp_path, ["yes"] + BASE_ANSWERS + SMALL_JOINT * 2)
+    assert code == 0 and saved(out)["approved_deg"]["base"] == {"plus": 45, "minus": 45}
+    assert saved(out)["approved_from"]["base"].startswith("run ")
+    assert not any(line.startswith("Keeping base") for line in said)
+
+
+def test_an_unreadable_proposal_stops_before_anything_moves(monkeypatch, tmp_path):
+    (tmp_path / "proposed.json").write_text("{not json")
+    monkeypatch.setattr(session, "connect", lambda *a, **k: pytest.fail("arm connected"))
+    code, out, said = run_main(monkeypatch, tmp_path, [])
+    assert code == 1 and "cannot be read" in said[0] and "fix or delete it" in said[0]
+
+
+def test_an_incomplete_proposal_loads_but_is_not_checked_by_hand(tmp_path):
+    data = fm.proposal(config.ARM_LIMITS_PATH, limits_for_test(), {"base": {"plus": 35, "minus": 15}})
+    assert data["ranges_deg"]["shoulder"] == list(limits_for_test().ranges_deg["shoulder"])   # active range kept
+    path = tmp_path / "p.json"
+    path.write_text(json.dumps(data))
+    limits = arm.load_limits(path)
+    with pytest.raises(arm.ArmError, match="not been checked by hand"):
+        arm.refuse_unchecked_limits(limits)   # so no real move can use it

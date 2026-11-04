@@ -30,6 +30,7 @@ import time
 from mimic import arm as arm_module
 from mimic import config, session
 from mimic.arm import ArmError
+from mimic.kinematics import ARM_JOINTS
 
 GRIP_STEP_DEG = 2
 HOLD_EXTRA_DEG = 3           # grip_hold = the first angle that held, plus this much further closed
@@ -108,6 +109,7 @@ def run_test(arm, lift: dict, ask, say=print, sleep=time.sleep, start: int = DEF
     allowed = limits.max_grip_hold_s - HOLD_MARGIN_S
     home = dict(limits.home_deg, grip=limits.grip_open_deg)
     _move(arm, home, _ms(arm, home, STEP_MS_PER_DEGREE), sleep)
+    say("Answer each question only after the claw has stopped: anything typed while it moves is ignored.")
     ask("Place the die between the open jaws (nothing is being sent), then press Enter: ")
 
     angle = None
@@ -189,6 +191,16 @@ def main(argv=None, read=input, sleep=time.sleep, say=print, proposed_path=PROPO
         return 1
     if not proposed_path.exists():
         say(f"STOPPED: {proposed_path} not found. Run scripts/first_moves.py first.")
+        return 1
+    try:
+        done = json.loads(proposed_path.read_text()).get("joints_done", list(ARM_JOINTS))
+    except ValueError as error:
+        say(f"STOPPED: {proposed_path} cannot be read: {error}")
+        return 1
+    missing = [j for j in ARM_JOINTS if j not in done]
+    if missing:
+        say(f"STOPPED: the proposal is incomplete (missing: {', '.join(missing)}): finish first_moves.py first "
+            f"(python scripts/first_moves.py --joints {' '.join(missing)}).")
         return 1
     try:
         active = arm_module.load_limits()
