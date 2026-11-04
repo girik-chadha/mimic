@@ -603,3 +603,15 @@ and a layout that cannot work is refused with the numbers that show why."
 
 Two sentences: "Ring mode's numbers live in one file, and both the calibration and the full run read them from
 there. Measuring the real command time (under 5 ms) gave back half a second of grip time on every carry."
+
+### 4 Nov: one start pose for everything
+
+- The arm now has one start pose, saved in `calib/start_pose.json`: upper arm vertical, forearm horizontal, claw
+  open. Every script switches the servos on at that pose, `home` moves slowly back to it, and every script ends by
+  moving slowly back to it before it switches the servos off.
+- That means you always know where to put the arm by hand before switching on, and the arm always finishes in the
+  same place, so the next start is a small jump.
+
+Two sentences: "Every script now starts the arm in one known pose and returns it there before switching off, so the
+person at the arm always knows how to pose it. If the start-pose file goes missing, everything falls back to 90
+degrees and says so."

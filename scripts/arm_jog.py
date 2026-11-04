@@ -3,14 +3,16 @@
     python scripts/arm_jog.py --dry-run
 
 Type one command per line:
-    enable         switch the servos on (one at a time, each jumps to 90); enable B S E G starts at those angles
+    enable         switch the servos on (one at a time, each jumps to the start pose, calib/start_pose.json);
+                   enable B S E G starts at those angles
     disable        switch every servo off: the arm goes limp (hold it)
     base +5        shoulder -3        elbow +10        (degrees, one joint at a time)
     grip open      grip close
     home           status             stop             quit
     boot           why the board last started (power-on, brownout, ...) and how long ago
     s (or Ctrl+C)  stop the arm, switch the servos off, and exit
-The board starts disarmed: type enable before anything can move. quit disables the arm (hold it).
+The board starts disarmed: type enable before anything can move. home is a slow move to the start pose (not the
+firmware's H). quit ramps back to the start pose, then disables the arm (hold it).
 
 --dry-run prints every line that would be sent, without an arm. Without --dry-run it talks to the
 real arm through the Windows serial bridge, but only once calib/arm_limits.json is no longer a
@@ -51,8 +53,8 @@ def handle(arm: Arm, line: str) -> str:
             arm.disable()
             return "disabled: the servos are off (limp)"
         if words == ["home"]:
-            arm.home()
-            return "home"
+            pose, ms = session.ramp_to_start_pose(arm, wait=False)
+            return f"home: to the start pose ({', '.join(f'{j} {pose[j]}' for j in JOINTS)}) over {ms} ms"
         if words == ["status"]:
             return str(arm.status())
         if words == ["boot"]:

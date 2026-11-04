@@ -57,7 +57,7 @@ def test_run_mimic_enables_after_a_yes_and_disables_at_the_end(monkeypatch, caps
     transport, runs, read = ready(monkeypatch, "yes")
     assert run_mimic.main([], read=read) == 0
     assert runs == [True]                                  # the run started with the servos on
-    assert transport.sent[:2] == ["?", "E"] and transport.sent[-1] == "D"
+    assert transport.sent[:2] == ["?", "E 90 90 90 90"] and transport.sent[-1] == "D"
     assert "Hold the arm" in capsys.readouterr().out
 
 
@@ -100,5 +100,5 @@ def test_ring_mode_asks_before_enabling_runs_the_ring_loop_and_disables(monkeypa
     monkeypatch.setattr(ring_loop, "run", fake_run)
     assert run_mimic.main(["--ring"], read=lambda q: (prompts.append(q), "yes")[1]) == 0
     assert runs == [("layout", "ring", True)]
-    assert prompts[0].startswith("Pose the shoulder near 90 by hand first")
+    assert "pose the arm like the start pose: upper arm vertical, forearm horizontal, claw open" in prompts[0]
     assert transport.sent[-1] == "D" and "Hold the arm" in capsys.readouterr().out

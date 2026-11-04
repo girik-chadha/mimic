@@ -14,7 +14,6 @@ import sys
 from mimic import arm as arm_module
 from mimic import camera, kinematics, loop, ring, ring_loop, scene, session
 from mimic.arm import Arm, ArmError
-from mimic.pickdrop import ENABLE_NOTE
 
 
 def main(argv=None, read=input) -> int:
@@ -56,7 +55,7 @@ def _main_ring(read) -> int:
     arm = Arm(arm_module.SerialBridgeTransport(), limits)
 
     def body():
-        session.confirm_and_enable(arm, read, note=ENABLE_NOTE)  # the board starts disarmed
+        session.confirm_and_enable(arm, read)  # the board starts disarmed; enable starts at the start pose
         summary = ring_loop.run(arm, camera.capture, layout, the_ring, limits)
         print(f"{'SUCCESS' if summary['success'] else 'FINISHED WITH FAILURES'}: "
               f"{summary['attempts']} attempts, worst error {summary['max_error_cm']} cm, ${summary['cost_usd']}")

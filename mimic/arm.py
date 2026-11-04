@@ -25,13 +25,15 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from mimic import config
 
 JOINTS = ("base", "shoulder", "elbow", "grip")
 MAX_LINE_CHARS = 64  # the firmware rejects longer lines
 BOOT_REASONS = ("power-on", "brownout", "software reset", "watchdog", "other")  # the firmware's B reply words
-ENABLE_DEFAULT_DEG = 90   # E with no angles: the firmware starts every joint at 90
+ENABLE_DEFAULT_DEG = 90   # E with no angles: the firmware starts every joint at 90 (and the start pose's fallback)
+START_POSE_PATH = config.ROOT / "calib" / "start_pose.json"
 ENABLE_WAIT_S = 1.3       # the firmware switches on one servo every 0.4 s: all four are on after 1.2 s
 
 
@@ -110,6 +112,21 @@ def load_limits(path=config.ARM_LIMITS_PATH) -> ArmLimits:
     if limits.min_ms_per_degree <= 0 or limits.max_grip_hold_s <= 0:
         raise ArmError("arm_limits.json: min_ms_per_degree and max_grip_hold_s must be above 0.")
     return limits
+
+
+def load_start_pose(path=None, say=print) -> dict:
+    """The pose every enable starts at (calib/start_pose.json). If the file is missing: 90 for every joint, with a
+    warning. A file that is there but wrong is refused rather than guessed."""
+    path = Path(path or START_POSE_PATH)  # looked up when called, so a test can point it at its own file
+    if not path.exists():
+        if say:
+            say(f"WARNING: {path} not found: the start pose falls back to {ENABLE_DEFAULT_DEG} for every joint.")
+        return {j: ENABLE_DEFAULT_DEG for j in JOINTS}
+    data = json.loads(path.read_text())
+    bad = [j for j in JOINTS if not isinstance(data.get(j), int)]
+    if bad:
+        raise ArmError(f"{path} needs a whole-number angle for {', '.join(bad)}.")
+    return {j: data[j] for j in JOINTS}
 
 
 def grip_limit_warning(limits: ArmLimits, grip: int) -> str | None:
@@ -356,14 +373,16 @@ class Arm:
 
     def enable(self, angles: dict | None = None, sleep=None) -> dict:
         """Switch the servos on (E), one at a time, 0.4 s apart. Each jumps straight to its angle in `angles`
-        (default 90 for every joint), unramped, so pose the arm there by hand first. Returns the pose."""
+        (default: the start pose, calib/start_pose.json), unramped, so pose the arm there by hand first."""
         self._refuse_real_move_with_unchecked_limits()
-        pose = {j: ENABLE_DEFAULT_DEG for j in JOINTS} if angles is None else {j: int(round(angles[j])) for j in JOINTS}
+        if angles is None:
+            angles = load_start_pose()
+        pose = {j: int(round(angles[j])) for j in JOINTS}
         for joint, angle in pose.items():
             lo, hi = self.limits.range_of(joint)
             if not lo <= angle <= hi:
                 raise ArmError(f"enable: {joint} {angle} degrees is outside its range {lo}-{hi}.")
-        line = "E" if angles is None else "E " + " ".join(str(pose[j]) for j in JOINTS)
+        line = "E " + " ".join(str(pose[j]) for j in JOINTS)
         reply = self._send(line)
         if reply == "ERR bad command":
             raise ArmError("The arm's firmware has no E command (it is older than 3 Nov): upload the new build.")

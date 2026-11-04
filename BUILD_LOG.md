@@ -227,3 +227,11 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   (`Ring.shoulder_stop`). shoulder_table stays 173: the new angle was not given ("[MY NEW ANGLE]" came through);
   `ring_calibrate.py --table-shoulder N` uses N and saves it with the fit. Tests check that ring_calibrate.py and
   ring mode take the table angle, grip, bridge time and stop from the ring, not from defaults.
+- Start pose: `calib/start_pose.json` (base 90, shoulder S0, elbow 90, grip 90; S0 was not given, so the shoulder
+  is PROVISIONAL at 90). `arm.load_start_pose()` (missing file: 90 everywhere with a warning; a wrong file is
+  refused). Every enable sends `E` with it (`Arm.enable` with no angles, `confirm_and_enable`, whose question now
+  says "pose the arm like the start pose: upper arm vertical, forearm horizontal, claw open"), so pick_once,
+  ring_calibrate, run_mimic --ring, first_moves and grip_test all start there; pick_once plans its first move from
+  it. `arm_jog` and `teach` `home` are a slow J to it (no firmware change). Every script's normal end ramps back to
+  it (30 ms per degree, at least 1 s) before "Hold the arm", 2 s and D; stops never ramp. ring.json shoulder_table
+  180 (approach 10, so from 170).

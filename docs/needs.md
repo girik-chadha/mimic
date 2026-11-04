@@ -222,7 +222,14 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 - **Bridge time per command, measured** (`pick_once.py --measure-latency`, 4 Nov): 3.5 ms mean, 4.7 ms slowest over
   20 status calls, so `command_s` is 0.01 s in `calib/ring.json` instead of the 0.05 s guess. That gives back about
   0.56 s of claw-closed time per carry: a 60-degree carry is about 3.7 s instead of 4.3 s.
-- **Table angle:** `shoulder_table` in `calib/ring.json` (173 until Girik's new angle is in);
+- **The start pose (4 Nov):** `calib/start_pose.json`, base 90, shoulder S0, elbow 90, grip 90: upper arm
+  vertical, forearm horizontal, claw open. **S0 is not in yet, so the shoulder is PROVISIONAL at 90** (what
+  enabling did before). Every enable starts there (`confirm_and_enable`, `arm_jog`/`teach.py` `enable`), and every
+  script ramps back there before disabling. If the file is missing, every joint falls back to 90 with a warning; a
+  file with a non-number is refused. The firmware's H (HOME, 90 everywhere) is unchanged; `loop.run` (pick and
+  place) and `repeatability.py` still use H.
+- **Table angle:** `shoulder_table` in `calib/ring.json`, **180** (4 Nov; the pick approach starts 10 above it, at
+  170, and the shoulder is never sent past 183, beyond the 180 range limit anyway);
   `ring_calibrate.py --table-shoulder N` uses N for a calibration and saves it with the fit. `stop_at` is left null,
   so the shoulder is never sent more than 3 degrees past the table angle, whatever it is. ring_calibrate.py and
   run_mimic.py --ring read the table angle, grip_hold, lift, approach, command_s and the stop from ring.json.
@@ -393,14 +400,15 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
 
 **Power on**
 5. Clear the area: nothing within the arm's reach, cables free, sheet and blocks out of the way.
-6. **Pose the arm by hand:** with everything switched off, gently move each joint to about 90 degrees and leave
-   the claw empty. When it is enabled, each servo jumps straight to 90 (it cannot report where it was), so the
-   closer it already is, the smaller the jump.
+6. **Pose the arm by hand, like the start pose** (`calib/start_pose.json`, 4 Nov): with everything switched off,
+   upper arm vertical, forearm horizontal, claw open and empty. When it is enabled, each servo jumps straight to the
+   start pose (it cannot report where it was), so the closer it already is, the smaller the jump.
 7. Connect the batteries **with a hand on the switch**. Nothing should move: the board is disarmed. (No need to
    unplug USB first any more: the one-at-a-time start now happens at `enable`, not at power-on.)
 8. `python scripts/arm_jog.py`: `status` (armed False), then **`enable`** with a hand on the switch: base,
-   shoulder, elbow, claw switch on 0.4 s apart and each jumps to 90. `status` should now say armed True.
+   shoulder, elbow, claw switch on 0.4 s apart and each jumps to the start pose. `status` should now say armed True.
    If you posed it elsewhere, `enable B S E G` with your best guess instead (each joint jumps by your error).
+   `home` in `arm_jog` (and `teach.py`) is a slow move back to the start pose, not the firmware's H.
    **Then test `disable` once:** hold the arm, type `disable`; every joint should go limp. If a servo still holds
    its position with no signal (some digital servos do), write down which one. `enable` again.
    **Whenever the arm twitches, drops or stops answering, type `boot` straight away:** `brownout` (or a small
@@ -416,7 +424,8 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
    angle plus 2 in both files, and you upload again. Finish with `grip open`.
 
 **Ranges**
-10. `python scripts/first_moves.py`: it asks before enabling (type yes once the arm is posed at 90). Then base,
+10. `python scripts/first_moves.py`: it asks before enabling (type yes once the arm is posed like the start pose).
+    It first moves slowly to home (90 for every joint), then base,
     then shoulder, then elbow; +5, -5, +10, -10 ... from home, slowly, never past the range in arm_limits.json and
     never more than 45 degrees from home (`--max-delta` to widen; so the base stays within 45-135). Answer y/n
     **after each move has finished**: anything typed while the arm moves is thrown away (since 4 Nov; before
@@ -456,7 +465,8 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     closed limit itself: a stalled claw overheats. Until it is set, push mode refuses to run.
 12a. **Calibrate the ring (4 Nov, elbow dead, A10d): `python scripts/ring_calibrate.py`.** Put the gripper
     marker on the claw tip, facing the camera. Needs the measured dots and the arm unlocked. It asks before
-    enabling (**pose the shoulder near 90 by hand first: enable jumps every joint to 90**). Then type 5 base angles,
+    enabling (**pose the arm like the start pose: upper arm vertical, forearm horizontal, claw open**; enable jumps
+    every joint to it). Then type 5 base angles,
     spread across the range you will use (for example 80, 90, 100, 110, 120). For each one the arm lifts if it is
     low, turns the base, and lowers the claw onto the table in 2-degree steps (to `shoulder_table` from ring.json, or
     `--table-shoulder N`, which is then saved with the fit); a photo with the arm in
@@ -473,8 +483,10 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     - `python scripts/pick_once.py --measure-latency`: times 20 harmless status calls (nothing moves) and prints a
       `--command-s` to use instead of the 0.05 s guess for the bridge.
     - `python scripts/pick_once.py --base-pick 100 --base-drop 120 --dry-run`: practise, and read the printed plan.
-    - **Pose the shoulder near 90 by hand first: enable jumps every joint to 90.** If the arm is resting with the
-      claw on the table (shoulder near 173), the shoulder would jump about 80 degrees, unramped.
+    - **Pose the arm like the start pose first: enable jumps every joint to it.** If the arm is resting with the
+      claw on the table, the shoulder would jump the whole way, unramped. The first move goes from the start pose.
+      pick_once.py does not read calib/ring.json: for the new table angle pass `--shoulder-pick 180 --stop-at 183`
+      (and `--grip-hold 20 --command-s 0.01`).
     - `python scripts/pick_once.py --base-pick 100 --pick-only --command-s <measured>`: pick, lift 20, hold 2 s,
       open in the air (the die drops from the lift height).
     - `python scripts/pick_once.py --base-pick 100 --base-drop 120 --command-s <measured>`: the whole pick and drop.
@@ -506,7 +518,9 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     dot; `--target X Y` from a ruler is optional). It asks before enabling. Cost cap $0.10. Verdict: 2 x standard
     deviation under 0.5 cm, full corrections are fine; over 1 cm, apply only part of each miss.
 
-**Switch off:** `arm_jog`: `home`, then `quit` (it says "Hold the arm", waits 2 s and disables), then the batteries.
+**Switch off:** `arm_jog`: `quit` (it ramps back to the start pose, says "Hold the arm", waits 2 s and disables),
+then the batteries. **Every script ends that way** (4 Nov): a slow move back to the start pose (30 ms per degree, at
+least 1 s), then "Hold the arm", 2 s, D. A stop (s, Ctrl+C or an error) never ramps: S then D at once.
 
 **How the arm moves (checked 3 Nov):** every J is ramped in the firmware. Python never sends a J faster than
 10 ms per degree (`Arm.move` refuses it), and the firmware slows any J to at least 10 ms per degree of the biggest

@@ -127,9 +127,42 @@ def test_enable_sends_E_waits_for_all_four_servos_and_knows_the_pose():
     a, t = disarmed_arm()
     waits = []
     assert a.enable(sleep=waits.append) == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
-    assert t.sent == ["E", "?"] and waits == [arm.ENABLE_WAIT_S] and arm.ENABLE_WAIT_S > 1.2
+    assert t.sent == ["E 90 90 90 90", "?"] and waits == [arm.ENABLE_WAIT_S] and arm.ENABLE_WAIT_S > 1.2
     a.move({"base": 95, "shoulder": 90, "elbow": 90, "grip": 90}, ms=800)
     assert t.sent[-1] == "J 95 90 90 90 800"
+
+
+def start_pose_file(tmp_path, monkeypatch, **angles):
+    pose = dict({"base": 90, "shoulder": 120, "elbow": 90, "grip": 90}, **angles)
+    path = tmp_path / "start_pose.json"
+    path.write_text(json.dumps(dict(pose, note="test")))
+    monkeypatch.setattr(arm, "START_POSE_PATH", path)
+    return pose
+
+
+def test_enable_with_no_angles_starts_at_the_start_pose(tmp_path, monkeypatch):
+    pose = start_pose_file(tmp_path, monkeypatch)
+    a, t = disarmed_arm()
+    assert a.enable(sleep=lambda s: None) == pose and t.sent[0] == "E 90 120 90 90"
+
+
+def test_a_missing_start_pose_falls_back_to_90_with_a_warning(tmp_path, monkeypatch):
+    monkeypatch.setattr(arm, "START_POSE_PATH", tmp_path / "missing.json")
+    said = []
+    assert arm.load_start_pose(say=said.append) == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
+    assert said[0].startswith("WARNING:") and "falls back to 90 for every joint" in said[0]
+
+
+def test_a_wrong_start_pose_file_is_refused_not_guessed(tmp_path, monkeypatch):
+    path = tmp_path / "start_pose.json"
+    path.write_text(json.dumps({"base": 90, "shoulder": "S0", "elbow": 90, "grip": 90}))
+    with pytest.raises(ArmError, match="needs a whole-number angle for shoulder"):
+        arm.load_start_pose(path)
+
+
+def test_the_committed_start_pose_is_90_everywhere_until_s0_is_in():
+    assert arm.load_start_pose(say=None) == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
+    assert "PROVISIONAL shoulder" in json.loads(arm.START_POSE_PATH.read_text())["note"]
 
 
 def test_enable_with_angles_sends_them_and_refuses_out_of_range_ones():

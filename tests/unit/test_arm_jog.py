@@ -1,6 +1,7 @@
 """arm_jog.py tests: typed commands -> exact lines sent to a fake arm."""
 import dataclasses
 import importlib.util
+import json
 
 import pytest
 
@@ -34,15 +35,24 @@ def test_step_time_respects_the_speed_limit(fake):
     assert t.sent[-1] == "J 90 110 50 90 400"  # 40 degrees * 10 ms = 400 ms
 
 
+def test_home_is_a_slow_move_to_the_start_pose_not_H(fake, tmp_path, monkeypatch):
+    path = tmp_path / "start_pose.json"
+    path.write_text(json.dumps({"base": 90, "shoulder": 120, "elbow": 90, "grip": 90}))
+    monkeypatch.setattr(arm, "START_POSE_PATH", path)
+    a, t = fake
+    assert jog.handle(a, "home") == "home: to the start pose (base 90, shoulder 120, elbow 90, grip 90) over 1000 ms"
+    assert t.sent == ["?", "J 90 120 90 90 1000"] and "H" not in t.sent     # 30 degrees x 30 ms, at least 1 s
+
+
 def test_grip_home_status_stop(fake):
     a, t = fake
-    assert jog.handle(a, "home") == "home"
+    assert jog.handle(a, "home").startswith("home: to the start pose")
     assert jog.handle(a, "grip close").startswith("refused: grip_hold_deg is not known yet")  # never the limit
     assert jog.handle(a, "grip open") == "grip open"
     assert jog.handle(a, "status") == ("{'base': 90, 'shoulder': 90, 'elbow': 90, 'grip': 90, 'locked': False, "
                                        "'armed': True}")
     assert jog.handle(a, "stop") == "stopped"
-    assert t.sent == ["H", "J 90 90 90 90 500", "?", "S"]
+    assert t.sent == ["?", "J 90 90 90 90 1000", "J 90 90 90 90 500", "?", "S"]
 
 
 def test_grip_close_goes_to_grip_hold_once_it_is_known():
@@ -66,7 +76,7 @@ def test_step_past_a_limit_is_refused_and_not_sent(fake):
     jog.handle(a, "home")
     reply = jog.handle(a, "shoulder -15")
     assert reply == "refused: shoulder 75 degrees is outside its range 80-180."
-    assert t.sent == ["H"]
+    assert t.sent == ["?", "J 90 90 90 90 1000"]
 
 
 @pytest.mark.parametrize("typed", ["", "wrist +5", "base 5", "base +five", "fly"])
@@ -104,7 +114,8 @@ def test_enable_and_disable(monkeypatch):
     assert jog.handle(a, "disable") == "disabled: the servos are off (limp)"
     assert jog.handle(a, "enable 100 85 70 90") == "enabled, servos on at base 100, shoulder 85, elbow 70, grip 90"
     assert jog.handle(a, "enable 100 85") == jog.HELP
-    assert [line for line in t.sent if line[0] in "EDJ"] == ["E", "J 90 90 90 85 400", "D", "E 100 85 70 90"]
+    assert [line for line in t.sent if line[0] in "EDJ"] == ["E 90 90 90 90", "J 90 90 90 85 400", "D",
+                                                             "E 100 85 70 90"]
 
 
 def test_boot_says_why_the_board_last_started(fake):

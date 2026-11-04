@@ -1,5 +1,6 @@
 """session.py: "s", Ctrl+C and errors send S then D; a normal end disables with a warning; enabling asks first."""
 import dataclasses
+import json
 
 import pytest
 
@@ -58,12 +59,37 @@ def test_an_error_is_printed_before_S_and_D_are_sent():
     assert first_said < events.index(("sent", "S")) < events.index(("sent", "D"))
 
 
-def test_normal_end_says_hold_the_arm_waits_then_disables():
+def test_normal_end_ramps_to_the_start_pose_then_says_hold_the_arm_waits_and_disables(tmp_path, monkeypatch):
+    path = tmp_path / "start_pose.json"
+    path.write_text(json.dumps({"base": 90, "shoulder": 120, "elbow": 90, "grip": 90}))
+    monkeypatch.setattr(arm, "START_POSE_PATH", path)
     a, t = fake_arm()
     said, waits = [], []
     assert session.guarded(a, lambda: None, said.append, sleep=waits.append) == 0
-    assert said[0] == "Hold the arm: it goes limp in 2 s (disabling)." and waits == [2.0]
-    assert t.sent == ["?", "D"] and not t.enabled and t.closed      # no S: nothing was moving
+    assert t.sent == ["?", "J 90 120 90 90 1000", "D"] and not t.enabled and t.closed   # no H, no S
+    assert said[0] == "Back at the start pose (base 90, shoulder 120, elbow 90, grip 90)."
+    assert said[1] == "Hold the arm: it goes limp in 2 s (disabling)." and waits == [1.1, 2.0]
+
+
+def test_a_stop_never_ramps_it_stops_and_disables_at_once(tmp_path, monkeypatch):
+    a, t = fake_arm()
+
+    def body():
+        raise session.StopRequested()
+
+    session.guarded(a, body, lambda s: None, sleep=lambda s: pytest.fail("waited"))
+    assert t.sent == ["S", "D"]
+
+
+def test_if_the_ramp_fails_the_arm_is_still_disabled(tmp_path, monkeypatch):
+    path = tmp_path / "start_pose.json"
+    path.write_text(json.dumps({"base": 90, "shoulder": 70, "elbow": 90, "grip": 90}))   # outside 80-180
+    monkeypatch.setattr(arm, "START_POSE_PATH", path)
+    a, t = fake_arm()
+    said = []
+    session.guarded(a, lambda: None, said.append, sleep=lambda s: None)
+    assert any(line.startswith("Could not ramp back to the start pose") for line in said)
+    assert t.sent[-1] == "D"
 
 
 def test_normal_end_with_the_servos_already_off_sends_nothing_more():
@@ -78,7 +104,7 @@ def test_enable_asks_first_and_only_yes_switches_the_servos_on():
     said = []
     pose = session.confirm_and_enable(a, read=lambda q: "yes", say=said.append, sleep=lambda s: None)
     assert pose == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
-    assert t.sent == ["?", "E", "?"] and t.enabled
+    assert t.sent == ["?", "E 90 90 90 90", "?"] and t.enabled
     assert "one at a time, 0.4 s apart" in said[0] and "base 90, shoulder 90, elbow 90, grip 90" in said[0]
 
     b, u = fake_arm(enabled=False)

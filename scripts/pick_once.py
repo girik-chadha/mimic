@@ -14,8 +14,10 @@ The elbow is sent as 90 every time: the firmware puts that on IO2, an empty sock
     3. close to --grip-hold, then lift the shoulder by --lift
     4. swing the base to --base-drop
     5. shoulder back down to the pick angle in 2-degree steps, then open the claw
-    6. lift the shoulder away by --lift, and stop there (no H)
-    7. "Hold the arm", 2 s, then disable (session.guarded); s or Ctrl+C sends S then D at any time
+    6. lift the shoulder away by --lift (no H)
+    7. ramp back to the start pose, "Hold the arm", 2 s, then disable (session.guarded); s or Ctrl+C sends S then D
+
+Enable starts every joint at the start pose (calib/start_pose.json), and the first move goes from there.
 
 Everything is planned and checked before you are asked to enable: every angle against calib/arm_limits.json (no
 proposal file), the shoulder never past --stop-at, and the time from the start of closing until the open command
@@ -31,7 +33,7 @@ import time
 from mimic import arm as arm_module
 from mimic import session
 from mimic.arm import JOINTS, ArmError
-from mimic.pickdrop import COMMAND_S, ENABLE_NOTE, HOLD_MARGIN_S, PickError, plan, run_steps
+from mimic.pickdrop import COMMAND_S, HOLD_MARGIN_S, PickError, plan, run_steps
 
 LATENCY_CALLS = 20
 
@@ -83,9 +85,9 @@ def main(argv=None, read=input, sleep=time.sleep, say=print, clock=time.perf_cou
     options = dict(base_pick=args.base_pick, base_drop=base_drop, shoulder_pick=args.shoulder_pick,
                    grip_hold=args.grip_hold, lift=args.lift, approach=args.approach, stop_at=args.stop_at,
                    pick_only=args.pick_only, command_s=args.command_s)
-    enable_pose = {j: arm_module.ENABLE_DEFAULT_DEG for j in JOINTS}
+    start = arm_module.load_start_pose(say=say)   # enable starts here, so the first move goes from here
     try:
-        steps, hold_s, warnings = plan(limits, enable_pose, **options)
+        steps, hold_s, warnings = plan(limits, start, **options)
     except PickError as error:
         say(f"STOPPED: {error}")
         return 1
@@ -100,7 +102,7 @@ def main(argv=None, read=input, sleep=time.sleep, say=print, clock=time.perf_cou
         return 1
 
     def body():
-        pose = session.confirm_and_enable(arm, read, say, sleep, note=ENABLE_NOTE)
+        pose = session.confirm_and_enable(arm, read, say, sleep, angles=start)  # at the start pose
         live_steps, live_hold, _ = plan(limits, pose, **options)  # from where the arm really is
         say(f"Claw closed for {live_hold:.2f} s (limit {limits.max_grip_hold_s - HOLD_MARGIN_S:.1f} s).")
         run_steps(arm, live_steps, say, sleep)

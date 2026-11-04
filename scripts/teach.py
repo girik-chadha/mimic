@@ -75,7 +75,7 @@ class Teacher:
                 return "disabled: the servos are off (limp)"
             if words in (["home"], ["status"], ["stop"]):
                 if words == ["home"]:
-                    self.arm.home()
+                    session.ramp_to_start_pose(self.arm, wait=False)  # the start pose, not the firmware's H
                 elif words == ["stop"]:
                     self.arm.stop()
                 return str(self.arm.status()) if words == ["status"] else words[0]

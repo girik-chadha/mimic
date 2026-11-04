@@ -58,7 +58,8 @@ def test_the_default_pick_and_drop_sends_exactly_the_planned_moves_and_never_H(m
     assert moves[9][:4] == [120, 153, 90, 23]                                          # swing to the drop
     assert [m[1] for m in moves[10:20]] == list(range(155, 174, 2))                    # down in 2-degree steps
     assert moves[20][:4] == [120, 173, 90, 90] and moves[21][:4] == [120, 153, 90, 90]  # open, lift away
-    assert len(moves) == 22
+    assert moves[22] == [90, 90, 90, 90, 63 * 30]                # then a slow ramp back to the start pose
+    assert len(moves) == 23
     assert all(m[2] == 90 for m in moves)                       # the dead elbow: always 90 (an empty socket)
     assert max(m[1] for m in moves) == 173                      # never past the pick angle, so never past 175
     assert "H" not in sent and sent[-1] == "D"                   # no H; disabled at the end
@@ -145,11 +146,23 @@ def test_a_base_outside_the_approved_range_warns_but_still_runs(monkeypatch):
 
 # ---------- enabling, stopping ----------
 
-def test_the_enable_question_says_to_pose_the_shoulder_near_90_and_a_no_moves_nothing(monkeypatch):
+def test_the_enable_question_says_how_to_pose_the_arm_and_a_no_moves_nothing(monkeypatch):
     code, sent, prompts, said = run(monkeypatch, ["--base-pick", "100", "--base-drop", "120"], typed="no")
     assert code == 1 and sent == ["?"]
-    assert prompts[0].startswith("Pose the shoulder near 90 by hand first: enable jumps every joint to 90.")
+    assert "pose the arm like the start pose: upper arm vertical, forearm horizontal, claw open" in prompts[0]
     assert "Not enabled: nothing was moved." in said
+
+
+def test_enable_and_the_first_move_start_from_the_start_pose(monkeypatch, tmp_path):
+    path = tmp_path / "start_pose.json"
+    path.write_text('{"base": 90, "shoulder": 120, "elbow": 90, "grip": 90}')
+    monkeypatch.setattr(arm, "START_POSE_PATH", path)
+    code, sent, prompts, said = run(monkeypatch, ["--base-pick", "100", "--base-drop", "120"])
+    assert code == 0 and "E 90 120 90 90" in sent
+    moves = j_lines(sent)
+    assert moves[0] == [100, 120, 90, 90, 10 * 10]              # the base turns; the shoulder stays at 120
+    assert moves[1] == [100, 163, 90, 90, 43 * 25]              # 120 -> 163, at 25 ms per degree
+    assert moves[-1][:4] == [90, 120, 90, 90]                    # and it ends back at the start pose
 
 
 @pytest.mark.parametrize("stop", [KeyboardInterrupt(), session.StopRequested()])
@@ -171,9 +184,10 @@ def test_pick_only_lifts_holds_2_s_and_opens_in_the_air(monkeypatch):
     code, sent, prompts, said = run(monkeypatch, ["--base-pick", "100", "--pick-only"], sleep=waits.append)
     assert code == 0
     moves = j_lines(sent)
-    assert moves[-3][:4] == [100, 173, 90, 23] and moves[-2][:4] == [100, 153, 90, 23]   # close, lift
-    assert moves[-1][:4] == [100, 153, 90, 90]                                           # open, still lifted
-    assert all(m[0] == 100 for m in moves[1:])                                           # no swing
+    assert moves[-4][:4] == [100, 173, 90, 23] and moves[-3][:4] == [100, 153, 90, 23]   # close, lift
+    assert moves[-2][:4] == [100, 153, 90, 90]                                           # open, still lifted
+    assert moves[-1][:4] == [90, 90, 90, 90]                                             # back to the start pose
+    assert all(m[0] == 100 for m in moves[1:-1])                                         # no swing
     assert 2.0 in waits and sent[-1] == "D"
     steps, hold_s, _ = po.plan(LIMITS, START, base_pick=100, base_drop=100, pick_only=True, **DEFAULTS)
     assert hold_s == pytest.approx(0.82 + 0.65 + 2.0 + 0.05)

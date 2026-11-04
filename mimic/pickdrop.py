@@ -17,7 +17,6 @@ COMMAND_S = 0.05              # per command for the serial bridge: a guess until
 HOLD_MARGIN_S = 0.5
 PICK_ONLY_HOLD_S = 2.0
 BASE_APPROVED = (80, 120)     # the base range proposed from Girik's first_moves (4 Nov, needs.md B4); warn outside
-ENABLE_NOTE = "Pose the shoulder near 90 by hand first: enable jumps every joint to 90."
 
 
 class PickError(RuntimeError):

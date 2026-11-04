@@ -4,7 +4,8 @@
     python scripts/ring_calibrate.py --table-shoulder 171      a new table-height shoulder angle (saved with the fit)
 
 Put the gripper marker on the claw tip, facing the camera. Needs the measured dots (layout.json dots_measured) and
-the arm unlocked. After a typed yes to enable (pose the shoulder near 90 by hand first), for each point:
+the arm unlocked. After a typed yes to enable (at the start pose, calib/start_pose.json: pose the arm like it by
+hand first), for each point:
 1. you type a base angle (spread them out: for example 80, 90, 100, 110, 120);
 2. the arm lifts if it is low, turns the base, and lowers the claw onto the table in 2-degree steps, to shoulder_table
    from calib/ring.json (or --table-shoulder), never past the shoulder stop (stop_at, or 3 degrees past the table);
@@ -25,7 +26,7 @@ from pathlib import Path
 from mimic import arm as arm_module
 from mimic import camera, config, meta_api, ring, sam, scene, session
 from mimic.arm import ArmError
-from mimic.pickdrop import ENABLE_NOTE, PickError, plan_lift, plan_touch, run_steps
+from mimic.pickdrop import PickError, plan_lift, plan_touch, run_steps
 
 POINTS_NEEDED = 5
 MARKER_PROMPT = "gripper marker"
@@ -100,7 +101,7 @@ def main(argv=None, read=input, capture=camera.capture, sleep=time.sleep, say=pr
     say(f"Table height: shoulder {the_ring.shoulder_table}; the shoulder is never sent past {the_ring.shoulder_stop}.")
 
     def body():
-        session.confirm_and_enable(arm, read, say, sleep, note=ENABLE_NOTE)
+        session.confirm_and_enable(arm, read, say, sleep)  # at the start pose
         meta_api.reset()
         budget_before = config.BUDGET_USD
         config.BUDGET_USD = min(config.BUDGET_USD, RUN_BUDGET_USD)

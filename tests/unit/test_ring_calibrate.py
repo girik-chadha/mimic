@@ -38,7 +38,7 @@ def box_at(cm, size):
 class FakeWorld:
     """The true ring: base theta puts the tip at phi = theta / scale + 180 degrees around CENTRE."""
 
-    def __init__(self, monkeypatch, tmp_path, scale=1.0, table=173):
+    def __init__(self, monkeypatch, tmp_path, scale=1.0, table=180):
         self.scale, self.table = scale, table
         self.layout = scene.load_layout(config.LAYOUT_PATH)       # dots measured
         self.transport = FakeTransport(LIMITS)                     # disarmed, like the firmware
@@ -102,9 +102,9 @@ def test_five_points_fit_the_true_ring_and_save_it(monkeypatch, tmp_path):
 def test_the_table_angle_comes_from_ring_json_and_the_stop_is_3_past_it(monkeypatch, tmp_path):
     world = FakeWorld(monkeypatch, tmp_path)
     code, said = world.run(["yes"] + ANGLES + ["done", "yes"])
-    assert "Table height: shoulder 173; the shoulder is never sent past 176." in said
+    assert "Table height: shoulder 180; the shoulder is never sent past 183." in said
     moves = [[int(v) for v in line.split()[1:5]] for line in world.transport.sent if line.startswith("J")]
-    assert max(m[1] for m in moves) == 173
+    assert max(m[1] for m in moves) == 180 and moves[0][1] == 170     # the approach starts 10 above the table
 
 
 def test_table_shoulder_overrides_ring_json_and_is_saved_with_the_fit(monkeypatch, tmp_path):
@@ -124,14 +124,14 @@ def test_a_servo_that_turns_short_has_its_scale_fitted(monkeypatch, tmp_path):
     assert code == 0 and ring.load_ring(world.ring_path).scale == pytest.approx(0.9, abs=0.01)   # pixel rounding
 
 
-def test_the_base_only_turns_with_the_claw_lifted_and_the_shoulder_never_passes_175(monkeypatch, tmp_path):
+def test_the_base_only_turns_with_the_claw_lifted_and_the_shoulder_never_passes_the_table(monkeypatch, tmp_path):
     world = FakeWorld(monkeypatch, tmp_path)
     world.run(["yes"] + ANGLES + ["done", "yes"])
     moves = [[int(v) for v in line.split()[1:5]] for line in world.transport.sent if line.startswith("J")]
-    assert max(m[1] for m in moves) == 173
+    assert max(m[1] for m in moves) == 180
     for before, after in zip(moves, moves[1:]):
         if before[0] != after[0]:
-            assert before[1] <= 163 and after[1] <= 163      # turned only above the table
+            assert before[1] <= 170 and after[1] <= 170      # turned only above the table (180 - approach 10)
     assert all(m[2] == 90 and m[3] == 90 for m in moves)      # elbow 90 (empty socket), claw open
 
 

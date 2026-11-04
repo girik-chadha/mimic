@@ -1,6 +1,6 @@
 {
   "placeholder": true,
-  "note": "PLACEHOLDER: the ring the claw tip reaches with the elbow taped (needs.md A10d). scripts/ring_calibrate.py fits centre_cm, radius_cm, scale and offset_deg from 5 points (base angle, tip position in sheet cm) and sets placeholder false. slots_deg (base angles on the ring) are set by hand once the base range is re-measured. camera_clear is set by hand (base 90, shoulder 90, Girik 4 Nov). shoulder_table: the shoulder angle at table height (173 until Girik's new angle is in; ring_calibrate.py --table-shoulder saves a new one with the fit). grip_hold 20 (found by hand, 4 Nov). command_s 0.01 (pick_once.py --measure-latency, 4 Nov: 3.5 ms mean, 4.7 ms slowest). stop_at null: the shoulder is never sent more than 3 degrees past shoulder_table. A point more than max_off_ring_cm from the ring is refused.",
+  "note": "PLACEHOLDER: the ring the claw tip reaches with the elbow taped (needs.md A10d). scripts/ring_calibrate.py fits centre_cm, radius_cm, scale and offset_deg from 5 points (base angle, tip position in sheet cm) and sets placeholder false. slots_deg (base angles on the ring) are set by hand once the base range is re-measured. camera_clear is set by hand (base 90, shoulder 90, Girik 4 Nov). shoulder_table: the shoulder angle at table height, 180 (Girik, 4 Nov); the pick starts approach (10) degrees above it, at 170. ring_calibrate.py --table-shoulder saves a different one with the fit. grip_hold 20 (found by hand, 4 Nov). command_s 0.01 (pick_once.py --measure-latency, 4 Nov: 3.5 ms mean, 4.7 ms slowest). stop_at null: the shoulder is never sent more than 3 degrees past shoulder_table. A point more than max_off_ring_cm from the ring is refused.",
   "centre_cm": null,
   "radius_cm": null,
   "scale": null,
@@ -11,7 +11,7 @@
     "base": 90,
     "shoulder": 90
   },
-  "shoulder_table": 173,
+  "shoulder_table": 180,
   "grip_hold": 20,
   "lift": 20,
   "approach": 10,

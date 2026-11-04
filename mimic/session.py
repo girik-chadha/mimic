@@ -4,9 +4,12 @@
   while calib/arm_limits.json is locked, BEFORE the bridge opens the serial port.
 - ask(): every prompt accepts "s", which stops the arm and ends the script. Anything typed before the question
   appears (for example while the arm was moving) is thrown away first, so it can never answer the question.
-- confirm_and_enable(): asks for a typed yes, then switches the servos on (E). The board starts disarmed.
+- confirm_and_enable(): asks for a typed yes, then switches the servos on (E) at the start pose
+  (calib/start_pose.json). The board starts disarmed.
+- ramp_to_start_pose(): a slow J back to the start pose (arm_jog's home, and the end of every script).
 - guarded(): runs a script's body so that "s", Ctrl+C or any error sends S (stop) and then D (servos off, limp),
-  and a normal end says "hold the arm" and disables it. Then it closes the bridge (which sends S as it exits).
+  and a normal end ramps back to the start pose, says "hold the arm" and disables it. Then it closes the bridge
+  (which sends S as it exits).
 """
 import sys
 import time
@@ -17,9 +20,12 @@ except ImportError:
     termios = None
 
 from mimic import arm as arm_module
-from mimic.arm import ENABLE_DEFAULT_DEG, JOINTS, Arm, FakeTransport
+from mimic.arm import JOINTS, Arm, FakeTransport
 
 DISABLE_WARNING_S = 2.0  # at a normal end: time to take hold of the arm before it goes limp
+START_RAMP_MS_PER_DEGREE = 30  # back to the start pose: slow (a third of the speed limit)
+START_RAMP_MIN_MS = 1000
+START_POSE_HOW = "pose the arm like the start pose: upper arm vertical, forearm horizontal, claw open"
 
 
 class StopRequested(Exception):
@@ -65,14 +71,26 @@ def confirm_and_enable(arm: Arm, read=input, say=print, sleep=None, angles: dict
     if status["armed"]:
         say("The arm is already enabled: its servos are on.")
         return {j: status[j] for j in JOINTS}
-    pose = angles or {j: ENABLE_DEFAULT_DEG for j in JOINTS}
+    pose = angles or arm_module.load_start_pose(say=say)
     say("Enabling switches the servos on one at a time, 0.4 s apart (base, shoulder, elbow, claw), and each jumps "
         "straight to " + ", ".join(f"{j} {pose[j]}" for j in JOINTS) + " from wherever it is now.")
-    question = "Is the arm posed there by hand, the area clear, and a hand on the switch? Type yes to enable: "
+    question = (f"First, {START_POSE_HOW}. Is it posed so by hand, the area clear, and a hand on the switch? "
+                "Type yes to enable: ")
     answer = ask(f"{note} {question}" if note else question, read)
     if answer != "yes":
         raise Declined("Not enabled: nothing was moved.")
-    return arm.enable(angles, sleep=sleep)
+    return arm.enable(pose, sleep=sleep)
+
+
+def ramp_to_start_pose(arm: Arm, say=print, sleep=None, wait: bool = True) -> tuple[dict, int]:
+    """A slow J to the start pose (never the firmware's H). wait=False returns as soon as it is sent."""
+    pose = arm_module.load_start_pose(say=say)
+    current = arm.known_pose()
+    ms = max(START_RAMP_MIN_MS, max(abs(pose[j] - current[j]) for j in JOINTS) * START_RAMP_MS_PER_DEGREE)
+    arm.move(pose, ms)
+    if wait:
+        (sleep or time.sleep)(ms / 1000 + 0.1)
+    return pose, ms
 
 
 def guarded(arm: Arm, body, say=print, sleep=None) -> int:
@@ -108,10 +126,15 @@ def _stop_and_disable(arm: Arm) -> None:
 
 
 def _finish(arm: Arm, say, sleep) -> None:
-    """A normal end: if the servos are on, warn, wait, then switch them off."""
+    """A normal end: if the servos are on, ramp back to the start pose, warn, wait, then switch them off."""
     try:
         if not arm.status()["armed"]:
             return  # nothing is on (disarmed, or the firmware is locked)
+        try:
+            pose, ms = ramp_to_start_pose(arm, say, sleep)
+            say(f"Back at the start pose ({', '.join(f'{j} {pose[j]}' for j in JOINTS)}).")
+        except Exception as error:
+            say(f"Could not ramp back to the start pose: {error}")
         say(f"Hold the arm: it goes limp in {DISABLE_WARNING_S:g} s (disabling).")
         (sleep or time.sleep)(DISABLE_WARNING_S)
         arm.disable()

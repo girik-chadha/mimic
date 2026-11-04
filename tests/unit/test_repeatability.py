@@ -133,7 +133,7 @@ def test_main_asks_before_enabling_and_a_no_moves_nothing(monkeypatch, tmp_path)
     said.clear()
     assert rp.main(["--pose", "100", "80", "95", "90", "--shots", "2"], capture=fake.capture,
                    sleep=lambda s: None, say=said.append, out_root=tmp_path, read=lambda q: "yes") == 0
-    assert "E" in fake.transport.sent and fake.transport.sent[-1] == "D"   # enabled first, disabled at the end
+    assert "E 90 90 90 90" in fake.transport.sent and fake.transport.sent[-1] == "D"   # enabled first, disabled last
     assert any(line.startswith("Hold the arm") for line in said)
 
 
