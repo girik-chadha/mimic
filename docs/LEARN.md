@@ -579,3 +579,18 @@ the claw would be closed long enough for the firmware's 5-second safety release 
 Two sentences: "The ring calibration lowers the claw at five base angles, finds its tip in a photo each time, and
 fits the circle the claw can reach, in sheet centimetres. From then on, the base angle for any die on that circle
 is a calculation, and a die more than a centimetre off it is refused because the claw cannot reach it."
+
+### 4 Nov: the whole task on the ring
+
+- `run_mimic.py --ring` does the full job with the taped elbow: it watches the demo, then picks each die off the
+  ring and drops it at its slot's base angle, photographs the result, and if a die landed off its slot, aims the
+  next drop the other way by up to 2 degrees and tries again.
+- Before the arm moves at all, it checks every carry: each die must be on the ring, spaced out from the others and
+  from the slots, and every carry must fit inside the grip's 5-second safety window. If the layout does not fit,
+  it says so with the numbers, for example how many centimetres of ring are needed.
+- A miss along the ring can be corrected by turning the base; a miss along the radius cannot, because with the
+  elbow taped the claw can only reach one radius. That is logged instead.
+
+Two sentences: "Ring mode runs the whole Mimic task with the taped elbow, carrying each die round the ring to its
+slot and correcting misses along the ring by adjusting the base angle. Everything is checked before the first move,
+and a layout that cannot work is refused with the numbers that show why."

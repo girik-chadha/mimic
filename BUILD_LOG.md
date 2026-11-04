@@ -213,3 +213,12 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   camera_clear 90/90, pick_once's numbers). `scripts/ring_calibrate.py`: 5 base angles; at each the claw goes down
   onto the table, a self-calibrated photo, SAM finds the "gripper marker"; fit, show the errors, save on a yes.
   pick_once's planning moved to `mimic/pickdrop.py` (with plan_touch / plan_lift); pick_once unchanged.
+- Ring mode, part 2: `mimic/ring_loop.py`, `run_mimic.py --ring`. Needs only the measured dots and a fitted
+  ring.json with slots. Demo photo: dice to their nearest ring slot -> target order. Mess photo: every pick and
+  drop planned and checked before any move (4.5 s grip rule, base angle on the ring within 1.0 cm, dice 4 cm
+  apart and 4 cm from other slots). Each carry uses pick_once's moves; park at camera_clear, photo, measure: the
+  angular miss shifts the next drop (total within +-2 degrees), at most 2 retries picked up from where it landed;
+  the radial miss is logged, not corrected. Building the tests showed slots need 5.5 cm between them (4 cm + the
+  1.5 cm a passed die may be off), or a correctly placed die would block the next slot; the arc check uses that.
+  Layouts that do not fit are refused with the numbers. Tested with a fake ring world (pick at table height when
+  the claw closes, drop with a chosen miss).

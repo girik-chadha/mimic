@@ -137,3 +137,14 @@ def plan_touch(limits, start: dict, base: int, shoulder_table: int, approach: in
 
 def plan_lift(limits, start: dict, lift_to: int, stop_at: int) -> list[Step]:
     return _checked(limits, start, [(f"lift to {lift_to}", dict(start, shoulder=lift_to), False)], stop_at)
+
+
+def plan_park(limits, start: dict, pose: dict, stop_at: int) -> list[Step]:
+    """Claw open, to a parked pose ({"base", "shoulder"}: camera_clear), lifting first if the claw is low."""
+    target = dict(start, base=pose["base"], shoulder=pose["shoulder"], elbow=limits.home_deg["elbow"],
+                  grip=limits.grip_open_deg)
+    wanted = []
+    if start["shoulder"] > target["shoulder"] and start["base"] != target["base"]:
+        wanted.append(("lift before turning", dict(start, shoulder=target["shoulder"]), False))
+    wanted.append(("park (camera clear)", target, False))
+    return _checked(limits, start, wanted, stop_at)

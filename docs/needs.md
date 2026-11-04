@@ -475,6 +475,22 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     0-180. It never sends H: it lifts away, then "Hold the arm", 2 s, and disables, so the arm drops about 20
     degrees onto the table, possibly onto the die it just placed. Watch the shoulder while the claw is down at 173:
     nothing times out a shoulder pressing into the table if the tape slips.
+12c. **The whole task on the ring (4 Nov): `python scripts/run_mimic.py --ring`.** Needs the measured dots, a
+    fitted `calib/ring.json` with `slots_deg` set, and the arm unlocked; it asks before enabling (pose the shoulder
+    near 90 first). Then: put the dice in the ring slots (the demo photo; Spark names them, each goes to its
+    nearest slot), Enter; scatter them on the ring away from the slots, Enter. Before any move it checks every
+    pick and drop, and refuses, with the numbers:
+    - slots closer than 5.5 cm along the ring (4 cm for the jaws plus the 1.5 cm a placed die may be off its slot),
+      or an arc too short for the slots and the dice (for 3 slots about 23 cm: about 94 degrees of base at radius
+      14 cm), or a slot outside the base range;
+    - a die more than 1.0 cm off the ring, two dice closer than 4 cm, a die within 4 cm of a slot it is not going
+      to, or a carry that would keep the claw closed over 4.5 s (a 60-70 degree carry is already 4.3-4.4 s).
+    Each die is picked at its angle and dropped at its slot's angle with pick_once's moves; then the arm parks at
+    camera_clear (base 90, shoulder 90), a photo calibrates itself and measures where it landed. Within 1.5 cm: next
+    die. Otherwise the miss along the ring shifts the next drop the other way (the total at most 2 degrees) and the
+    die is picked up again from where it landed, at most 2 more times; a miss along the radius cannot be corrected
+    and is logged. A die left within 4 cm of a slot still to fill stops the run (clear it by hand). Numeric
+    corrections only, no Spark diagnosis. Logs in `runs/<time>/` (`"mode": "ring"`).
 13. Put the gripper marker on the claw tip. `python scripts/repeatability.py --pose B S E G` (a pose that hides no
     dot; `--target X Y` from a ruler is optional). It asks before enabling. Cost cap $0.10. Verdict: 2 x standard
     deviation under 0.5 cm, full corrections are fine; over 1 cm, apply only part of each miss.

@@ -17,6 +17,7 @@ mimic/                     the Python package
   sam.py                   parse SAM output (boxes, video tracks); find(image, name); track(video, name)
   ring.py                  (4 Nov) the ring the claw reaches with the elbow fixed: fit, base_angle_for, point_at
   pickdrop.py              (4 Nov) pick and drop moves on the ring, planned and checked (pick_once, ring mode)
+  ring_loop.py             (4 Nov) ring mode: run_mimic.py --ring, the whole task on the ring with the camera
   video.py                 (3 Nov) demo video: shrink to 10 fps / 720p, settled frame, arrival order
   brain.py                 Spark calls: name_objects(photo), diagnose(before, after, move)
   scene.py                 read_target(photo) -> ordered names; read_positions(photo) -> px

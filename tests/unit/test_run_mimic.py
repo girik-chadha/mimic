@@ -66,3 +66,39 @@ def test_run_mimic_does_not_run_without_a_yes(monkeypatch, capsys):
     assert run_mimic.main([], read=read) == 1
     assert runs == [] and transport.sent == ["?"]
     assert "Not enabled: nothing was moved." in capsys.readouterr().out
+
+
+# ---------- ring mode ----------
+
+def test_ring_mode_with_the_committed_placeholder_ring_refuses_before_opening_anything(monkeypatch, capsys):
+    monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("serial bridge opened"))
+    assert run_mimic.main(["--ring"]) == 1
+    assert "STOPPED before opening anything: calib/ring.json is still a placeholder" in capsys.readouterr().out
+
+
+def test_ring_and_push_together_are_refused(capsys):
+    assert run_mimic.main(["--ring", "--push"]) == 1
+    assert "--ring and --push cannot be used together" in capsys.readouterr().out
+
+
+def test_ring_mode_asks_before_enabling_runs_the_ring_loop_and_disables(monkeypatch, capsys):
+    from mimic import ring_loop, session
+    from mimic.arm import FakeTransport
+
+    limits = wide_limits()
+    transport = FakeTransport(limits)   # disarmed, like the firmware at power-on
+    monkeypatch.setattr(ring_loop, "load_and_check", lambda: ("layout", "ring", limits))
+    monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: transport)
+    monkeypatch.setattr(arm.time, "sleep", lambda s: None)
+    monkeypatch.setattr(session.time, "sleep", lambda s: None)
+    runs, prompts = [], []
+
+    def fake_run(a, capture, layout, the_ring, limits):
+        runs.append((layout, the_ring, a.status()["armed"]))
+        return {"success": True, "attempts": 3, "max_error_cm": 0.4, "cost_usd": 0.05}
+
+    monkeypatch.setattr(ring_loop, "run", fake_run)
+    assert run_mimic.main(["--ring"], read=lambda q: (prompts.append(q), "yes")[1]) == 0
+    assert runs == [("layout", "ring", True)]
+    assert prompts[0].startswith("Pose the shoulder near 90 by hand first")
+    assert transport.sent[-1] == "D" and "Hold the arm" in capsys.readouterr().out
