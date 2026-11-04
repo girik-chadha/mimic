@@ -68,6 +68,7 @@ class Ring:
     max_off_ring_cm: float = 1.0
     marker_name: str = "small yellow rectangle"  # the SAM prompt for the claw-tip marker (ring_calibrate.py)
     camera_frames: int = 15                      # frames each photo grab reads, keeping the last (camera.capture)
+    camera_name: str = "e2eSoft iVCam"           # the Windows webcam (MIMIC_CAMERA and --camera-name override it)
 
     @property
     def shoulder_stop(self) -> int:

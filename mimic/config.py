@@ -28,12 +28,12 @@ RUNS_DIR = ROOT / "runs"
 LAYOUT_PATH = ROOT / "calib" / "layout.json"  # stickers, slots, sheet size
 ARM_LIMITS_PATH = ROOT / "calib" / "arm_limits.json"  # pins, joint ranges, grip limit
 
-# The phone camera (needs.md A9): iVCam on Windows, read by Windows ffmpeg (installed with winget).
+# The phone camera (needs.md A9): a phone webcam app on Windows (iVCam or Camo), read by Windows ffmpeg (winget).
 # The winget folder name contains the version, so it can be overridden in .env after an upgrade.
 FFMPEG_PATH = os.environ.get("MIMIC_FFMPEG") or (
     "/mnt/c/Users/girik/AppData/Local/Microsoft/WinGet/Packages/"
     "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-9.0.2-full_build/bin/ffmpeg.exe")
-CAMERA_DEVICE = "e2eSoft iVCam"
+CAMERA_DEVICE = "e2eSoft iVCam"  # the default; camera.camera_name() also checks --camera-name, MIMIC_CAMERA, ring.json
 
 # Spark's fix for a missed placement is logged only, unless MIMIC_USE_SPARK_FIX=1 (needs.md A5c).
 USE_SPARK_FIX = os.environ.get("MIMIC_USE_SPARK_FIX") == "1"

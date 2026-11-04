@@ -102,8 +102,8 @@ def test_five_points_fit_the_true_ring_and_save_it(monkeypatch, tmp_path):
 def test_the_table_angle_comes_from_ring_json_and_the_stop_is_3_past_it(monkeypatch, tmp_path):
     world = FakeWorld(monkeypatch, tmp_path)
     code, said = world.run(["yes"] + ANGLES + ["done", "yes"])
-    assert ("Table height: shoulder 180; the shoulder is never sent past 183. Marker: 'small yellow rectangle'."
-            in said)
+    assert any(line.startswith("Table height: shoulder 180; the shoulder is never sent past 183. Marker: 'small yellow "
+                               "rectangle'.") for line in said)
     assert set(world.asked) == {"small yellow rectangle"}             # marker_name from calib/ring.json
     moves = [[int(v) for v in line.split()[1:5]] for line in world.transport.sent if line.startswith("J")]
     assert max(m[1] for m in moves) == 180 and moves[0][1] == 170     # the approach starts 10 above the table
@@ -226,18 +226,26 @@ def test_the_real_camera_reads_camera_frames_from_ring_json_or_the_option(monkey
     world = FakeWorld(monkeypatch, tmp_path)
     grabs = []
 
-    def fake_capture(path, frames=15, sleep=None, say=None):
-        grabs.append(frames)
+    def fake_capture(path, frames=15, sleep=None, say=None, name=None):
+        grabs.append((frames, name))
         return world.capture(path)
 
     monkeypatch.setattr(camera, "capture", fake_capture)
-    for argv, expected in (([], 15), (["--camera-frames", "30"], 30)):
+    cases = [([], None, (15, "e2eSoft iVCam")),                               # both from ring.json
+             (["--camera-frames", "30"], None, (30, "e2eSoft iVCam")),
+             ([], "Camo", (15, "Camo")),                                       # MIMIC_CAMERA over ring.json
+             (["--camera-name", "Other Cam"], "Camo", (15, "Other Cam"))]      # the option over everything
+    for argv, env, expected in cases:
+        if env:
+            monkeypatch.setenv("MIMIC_CAMERA", env)
         grabs.clear()
         world.transport.enabled = False
         queue = ["yes"] + ANGLES + ["done", "no"]
-        rc.main(argv, read=lambda q: queue.pop(0), sleep=lambda s: None, say=lambda s: None,
+        said = []
+        rc.main(argv, read=lambda q: queue.pop(0), sleep=lambda s: None, say=said.append,
                 ring_path=world.ring_path, out_root=tmp_path / "runs")      # no capture given: the real camera
         assert set(grabs) == {expected} and len(grabs) == 5
+        assert any(f"Camera: {expected[1]}, {expected[0]} frames per photo." in line for line in said)
 
 
 def test_done_before_5_points_and_a_repeated_angle_are_refused(monkeypatch, tmp_path):

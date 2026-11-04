@@ -91,7 +91,8 @@ def test_ring_mode_asks_before_enabling_runs_the_ring_loop_and_disables(monkeypa
     the_ring = ring.Ring(camera_frames=25)
     monkeypatch.setattr(ring_loop, "load_and_check", lambda: ("layout", the_ring, limits))
     grabs = []
-    monkeypatch.setattr(camera, "capture", lambda path, frames=15, **k: grabs.append(frames) or str(path))
+    monkeypatch.setattr(camera, "capture",
+                        lambda path, frames=15, name=None, **k: grabs.append((frames, name)) or str(path))
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: transport)
     monkeypatch.setattr(arm.time, "sleep", lambda s: None)
     monkeypatch.setattr(session.time, "sleep", lambda s: None)
@@ -105,8 +106,8 @@ def test_ring_mode_asks_before_enabling_runs_the_ring_loop_and_disables(monkeypa
     monkeypatch.setattr(ring_loop, "run", fake_run)
     assert run_mimic.main(["--ring"], read=lambda q: (prompts.append(q), "yes")[1]) == 0
     assert runs == [("layout", True, True)]
-    assert grabs == [25]                                  # camera_frames from ring.json
-    assert run_mimic.main(["--ring", "--camera-frames", "40"], read=lambda q: "yes") == 0
-    assert grabs == [25, 40]                              # the option wins
+    assert grabs == [(25, "e2eSoft iVCam")]               # camera_frames and camera_name from ring.json
+    assert run_mimic.main(["--ring", "--camera-frames", "40", "--camera-name", "Camo"], read=lambda q: "yes") == 0
+    assert grabs[-1] == (40, "Camo")                      # the options win
     assert "pose the arm like the start pose: upper arm vertical, forearm horizontal, claw open" in prompts[0]
     assert transport.sent[-1] == "D" and "Hold the arm" in capsys.readouterr().out

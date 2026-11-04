@@ -66,7 +66,7 @@ def test_ffmpeg_failure_is_a_camera_error(tmp_path):
 
 def test_timeout_is_a_camera_error(tmp_path):
     run = fake_ffmpeg(raises=subprocess.TimeoutExpired("ffmpeg", 10))
-    with pytest.raises(CameraError, match="more than 10 s: is iVCam open"):
+    with pytest.raises(CameraError, match="more than 10 s: is e2eSoft iVCam open"):
         grab(tmp_path, run)
 
 
@@ -86,7 +86,8 @@ def test_a_normal_photo_is_kept_first_time_and_its_brightness_printed(tmp_path):
     said, waits = [], []
     run = fake_ffmpeg(writes=sheet(grey=170))
     grab(tmp_path, run, said, waits)
-    assert said == ["  photo photo.jpg: brightness 170.0"] and waits == [] and len(run.calls) == 1
+    assert said == ["  photo photo.jpg: e2eSoft iVCam, 1280x720, brightness 170.0"] and waits == []
+    assert len(run.calls) == 1
 
 
 def test_a_blown_out_photo_is_taken_again_after_1_s(tmp_path):
@@ -94,22 +95,60 @@ def test_a_blown_out_photo_is_taken_again_after_1_s(tmp_path):
     run = fake_ffmpeg(writes=[sheet(grey=248), sheet(grey=170)])      # the first grab blown out, like iVCam's
     assert grab(tmp_path, run, said, waits) == str(tmp_path / "photo.jpg")
     assert waits == [1.0] and len(run.calls) == 2
-    assert said[0] == "  photo photo.jpg: brightness 248.0" and said[-1] == "  photo photo.jpg: brightness 170.0"
+    assert said[0] == "  photo photo.jpg: e2eSoft iVCam, 1280x720, brightness 248.0"
+    assert said[-1] == "  photo photo.jpg: e2eSoft iVCam, 1280x720, brightness 170.0"
 
 
 def test_too_bright_twice_is_refused_with_the_brightness_and_the_exposure_hint(tmp_path):
     run = fake_ffmpeg(writes=[sheet(grey=248), sheet(grey=248)])
-    with pytest.raises(CameraError, match=r"too bright \(blown out\): mean brightness 248.0, allowed 40-235, twice\. "
-                                          r"Lock the exposure in iVCam"):
+    with pytest.raises(CameraError, match=r"from e2eSoft iVCam is too bright \(blown out\): mean brightness 248.0, "
+                                          r"allowed 40-235, twice\. Lock the exposure in the camera app"):
         grab(tmp_path, run)
     assert len(run.calls) == 2
 
 
 def test_too_dark_twice_is_refused_with_the_brightness_and_both_hints(tmp_path):
     run = fake_ffmpeg(writes=[sheet(grey=20), sheet(grey=25)])
-    with pytest.raises(CameraError, match=r"too dark: mean brightness 25.0, allowed 40-235, twice\. "
-                                          r"Is the lens covered, or iVCam not connected\? Lock the exposure"):
+    with pytest.raises(CameraError, match=r"from e2eSoft iVCam is too dark: mean brightness 25.0, allowed 40-235, "
+                                          r"twice\. Is the lens covered, or e2eSoft iVCam not connected\? Lock the"):
         grab(tmp_path, run)
+
+
+def grab_from(tmp_path, run, name, said):
+    path = tmp_path / "photo.jpg"
+    run.target = str(path)
+    return camera.capture(path, run=run, say=said.append, sleep=lambda s: None, name=name)
+
+
+def test_camo_s_black_first_frame_is_retaken_and_the_camera_named_in_every_line(tmp_path):
+    said = []
+    run = fake_ffmpeg(writes=[sheet(1920, 1080, grey=0), sheet(1920, 1080, grey=153)])   # Camo's 2-frame black
+    grab_from(tmp_path, run, "Camo", said)
+    assert said[0] == "  photo photo.jpg: Camo, 1920x1080, brightness 0.0"
+    assert said[-1] == "  photo photo.jpg: Camo, 1920x1080, brightness 153.0"
+    assert run.calls[0][0][run.calls[0][0].index("-i") + 1] == "video=Camo"
+
+
+def test_a_refused_photo_names_the_camera(tmp_path):
+    run = fake_ffmpeg(writes=[sheet(grey=0), sheet(grey=0)])
+    with pytest.raises(CameraError, match="from Camo is too dark: mean brightness 0.0, .* or Camo not connected"):
+        grab_from(tmp_path, run, "Camo", [])
+
+
+def test_the_camera_name_comes_from_the_option_then_mimic_camera_then_ring_json_then_ivcam(monkeypatch):
+    assert camera.camera_name() == "e2eSoft iVCam"
+    assert camera.camera_name(None, "Camo") == "Camo"                       # ring.json
+    monkeypatch.setenv("MIMIC_CAMERA", "Camo")
+    assert camera.camera_name() == "Camo" and camera.camera_name(None, "e2eSoft iVCam") == "Camo"   # env over ring
+    assert camera.camera_name("Other Cam", "e2eSoft iVCam") == "Other Cam"  # the option over everything
+    command = camera.ffmpeg_command("C:\\x.jpg")
+    assert command[command.index("-i") + 1] == "video=Camo"
+
+
+def test_a_portrait_frame_is_fine_and_a_small_one_is_refused_without_naming_ivcam(tmp_path):
+    grab(tmp_path, fake_ffmpeg(writes=sheet(720, 1280)))                    # 720x1280: 1280x720 the other way round
+    with pytest.raises(CameraError, match="from Camo is 640x480, smaller than 1280x720: set the camera app"):
+        grab_from(tmp_path, fake_ffmpeg(writes=sheet(640, 480)), "Camo", [])
 
 
 def test_the_edges_of_the_window_are_fine(tmp_path):

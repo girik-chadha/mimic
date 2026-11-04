@@ -211,7 +211,16 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
   hint to lock the exposure in iVCam. The frame count is `camera_frames` in `calib/ring.json` (15), with
   `--camera-frames` on ring_calibrate.py and run_mimic.py to try more. If iVCam re-adjusts its exposure each time
   ffmpeg opens it, a retake will not help: locking the exposure is the fix.
-- A photo is also refused (`CameraError`) if ffmpeg fails, no file appears, or it is smaller than 1280x720. Girik's test photo through iVCam (`ivcam_sheet.jpg`, not
+- **Camo works too (Girik, 4 Nov).** The webcam name is `camera_name` in `calib/ring.json` (default "e2eSoft
+  iVCam"; Girik will use "Camo"), overridden by the `MIMIC_CAMERA` environment variable, and that by
+  `--camera-name` on ring_calibrate.py and run_mimic.py. Real 2-frame grabs: iVCam nearly white (247.5), **Camo
+  black (0.0)**; 15-frame grabs keeping the last: 170.5 and 152.7. So 15 frames stay the default for both. Every
+  photo prints the camera name, frame size and brightness, and a refusal names the camera.
+- A photo is also refused (`CameraError`) if ffmpeg fails, no file appears, or it is smaller than 1280x720 **either
+  way round** (since 4 Nov a portrait 720x1280 frame is fine). Checked 4 Nov: nothing else assumes iVCam or
+  1280x720 (dot sizes are fractions of the image width; the 720p limit is only for shrinking demo videos).
+  run_mimic.py uses camera.capture in both modes, as do repeatability.py and benchmark.py (they read
+  MIMIC_CAMERA); show_demo.py takes no photos at all (it reads a recorded video file). Girik's test photo through iVCam (`ivcam_sheet.jpg`, not
   committed) is 1280x720 with average brightness 140, so iVCam must stay at 1280x720 or more.
 - **Not yet done (needs the camera):** the B2 test from the plan, ten sharp overhead photos in a row in under 3 s each.
 - Never commit camera frames with people in them.

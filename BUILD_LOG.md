@@ -248,3 +248,9 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   `camera_frames` in ring.json (15), `--camera-frames` on ring_calibrate.py and run_mimic.py. Tests with fake frames
   (normal, too bright then normal, too bright twice, too dark twice, the 40 and 235 edges). run_mimic.py uses
   camera.capture in both modes; show_demo.py takes no photos (it reads a video file).
+- Camera name: `camera_name` in ring.json (default "e2eSoft iVCam"), `MIMIC_CAMERA`, `--camera-name` (on
+  ring_calibrate.py and run_mimic.py; that order of priority: option, environment, ring.json, default). Real grabs
+  (4 Nov): 2 frames give iVCam 247.5 and Camo 0.0, 15 frames give 170.5 and 152.7, so 15 frames stay the default.
+  Every photo prints camera, size and brightness; refusals name the camera. The 1280x720 minimum now works either
+  way round (a portrait frame was refused before). Nothing else assumed iVCam or 1280x720. A unit-test conftest
+  clears MIMIC_CAMERA so the shell cannot change the tests.

@@ -635,3 +635,13 @@ can be checked by eye."
 
 Two sentences: "Every photo's brightness is now measured, so a blown-out picture is retaken or refused instead of
 being sent to SAM. The real fix for this camera is locking its exposure, and the error message says so."
+
+### 4 Nov: choosing the camera
+
+- The camera is no longer fixed to iVCam: `camera_name` in `calib/ring.json`, the `MIMIC_CAMERA` environment
+  variable, or `--camera-name` picks it (Camo works too). Every photo says which camera took it, its size and its
+  brightness, so a bad photo is easy to trace.
+
+Two sentences: "Any phone webcam app can now be used by name, and every photo reports which camera, what size and
+how bright it was. Both cameras give useless first frames (white on iVCam, black on Camo), which is why every
+photo reads 15 frames and keeps the last."
