@@ -69,6 +69,7 @@ class Ring:
     marker_name: str = "small yellow rectangle"  # the SAM prompt for the claw-tip marker (ring_calibrate.py)
     camera_frames: int = 15                      # frames each photo grab reads, keeping the last (camera.capture)
     camera_name: str = "e2eSoft iVCam"           # the Windows webcam (MIMIC_CAMERA and --camera-name override it)
+    source: str | None = None                    # where the fit came from: "camera" (ring_calibrate) or "manual"
 
     @property
     def shoulder_stop(self) -> int:
@@ -217,10 +218,19 @@ def save_ring(ring: Ring, path=RING_PATH) -> None:
         f.write("\n")
 
 
-def with_fit(ring: Ring, result: Fit, points: list, note: str) -> Ring:
+def describe(result: Fit, points: list) -> list[str]:
+    """The fit and each point's error, as printed by ring_calibrate.py and ring_fit_manual.py."""
+    lines = [f"Ring: centre ({result.centre_cm[0]:.2f}, {result.centre_cm[1]:.2f}) cm, radius {result.radius_cm:.2f} cm, "
+             f"base scale {result.scale:+.3f}, offset {result.offset_deg:.1f} degrees ({result.scale_note})"]
+    lines += [f"  base {base:g}: ({x:.2f}, {y:.2f}) cm, {error:.2f} cm from the ring"
+              for (base, x, y), error in zip(points, result.errors_cm)]
+    return lines
+
+
+def with_fit(ring: Ring, result: Fit, points: list, note: str, source: str | None = None) -> Ring:
     """A copy of ring with a new fit (slots, camera_clear and the pick numbers are kept)."""
     data = asdict(ring)
-    data.update(placeholder=False, note=note, centre_cm=result.centre_cm, radius_cm=result.radius_cm,
+    data.update(placeholder=False, note=note, source=source, centre_cm=result.centre_cm, radius_cm=result.radius_cm,
                 scale=result.scale, offset_deg=result.offset_deg,
                 points=[{"base_deg": t, "x_cm": round(x, 2), "y_cm": round(y, 2), "error_cm": round(e, 3)}
                         for (t, x, y), e in zip(points, result.errors_cm)])

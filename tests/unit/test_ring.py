@@ -139,7 +139,7 @@ def test_save_and_load_round_trip(tmp_path):
 
 def test_committed_ring_is_a_placeholder_with_girik_s_settings():
     r = ring.load_ring(config.ROOT / "calib" / "ring.json")
-    assert r.placeholder is True and r.radius_cm is None and r.slots_deg == []
+    assert r.placeholder is True and r.radius_cm is None and r.slots_deg == [] and r.source is None
     assert r.camera_clear == {"base": 90, "shoulder": 90} and r.max_off_ring_cm == 1.0
     assert (r.shoulder_table, r.lift, r.approach) == (180, 20, 10)   # table at 180 (4 Nov); approach from 170
     assert r.grip_hold == 20                 # found by hand, 4 Nov

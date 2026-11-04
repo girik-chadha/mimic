@@ -89,7 +89,7 @@ def test_five_points_fit_the_true_ring_and_save_it(monkeypatch, tmp_path):
     code, said = world.run(["yes"] + ANGLES + ["done", "yes"])
     assert code == 0
     saved = ring.load_ring(world.ring_path)
-    assert saved.placeholder is False and len(saved.points) == 5
+    assert saved.placeholder is False and len(saved.points) == 5 and saved.source == "camera"
     assert saved.centre_cm == pytest.approx(CENTRE, abs=0.1) and saved.radius_cm == pytest.approx(RADIUS, abs=0.1)
     for base in (80, 100, 120):
         assert math.dist(saved.point_at(base), world.tip(base)) < 0.1

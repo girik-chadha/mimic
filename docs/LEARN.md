@@ -645,3 +645,12 @@ being sent to SAM. The real fix for this camera is locking its exposure, and the
 Two sentences: "Any phone webcam app can now be used by name, and every photo reports which camera, what size and
 how bright it was. Both cameras give useless first frames (white on iVCam, black on Camo), which is why every
 photo reads 15 frames and keeps the last."
+
+### 4 Nov: fitting the ring from a ruler
+
+- If the camera is not ready, the ring can be measured by hand: at five base angles, put a die where the claw
+  drops it and measure its centre with a ruler. `ring_fit_manual.py` fits the same circle with the same checks as
+  the camera calibration and marks the result as manual.
+
+Two sentences: "The ring can now be fitted from five ruler measurements instead of the camera, using exactly the
+same maths and checks. The saved file records whether its numbers came from the camera or from a ruler."

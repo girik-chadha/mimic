@@ -489,6 +489,11 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     it again). `grip_push` is 2 degrees more open than that, so the touching angle plus 2 (if they never touch
     before the limit, the limit plus 2): write it into `calib/pose_grid.json` as `"grip_push"`. Never use the
     closed limit itself: a stalled claw overheats. Until it is set, push mode refuses to run.
+12a-manual. **Or fit the ring from a ruler, without the arm or camera: `python scripts/ring_fit_manual.py`**
+    with `--point BASE X Y` five times or more: the base angle, and where the claw put a die's centre at that angle,
+    in sheet cm from the red dot's centre. Same fit and checks as ring_calibrate.py (0.5 cm per point; the point
+    that spoils a refused fit is named). Saves `calib/ring.json` with `source: "manual"`, placeholder false,
+    keeping the slots, camera_clear and pick numbers. A ruler has no camera parallax.
 12a. **Calibrate the ring (4 Nov, elbow dead, A10d): `python scripts/ring_calibrate.py`.** Put the gripper
     marker on the claw tip, facing the camera. Needs the measured dots and the arm unlocked. It asks before
     enabling (**pose the arm like the start pose: upper arm vertical, forearm horizontal, claw open**; enable jumps

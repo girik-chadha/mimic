@@ -180,10 +180,8 @@ def main(argv=None, read=input, capture=None, sleep=time.sleep, say=print, ring_
         except ring.RingError as error:
             say(f"Not saved: {error}")
             return 1
-        say(f"Ring: centre ({result.centre_cm[0]:.2f}, {result.centre_cm[1]:.2f}) cm, radius {result.radius_cm:.2f} cm, "
-            f"base scale {result.scale:+.3f}, offset {result.offset_deg:.1f} degrees")
-        for (base, x, y), error in zip(points, result.errors_cm):
-            say(f"  base {base}: ({x:.2f}, {y:.2f}) cm, {error:.2f} cm from the ring")
+        for line in ring.describe(result, points):
+            say(line)
         say(f"Cost: ${meta_api.cost_so_far():.4f}. Photos and labelled dots in {out_dir}")
         if session.ask(f"Type yes to save {ring_path}: ", read) != "yes":
             say("Not saved.")
@@ -191,7 +189,7 @@ def main(argv=None, read=input, capture=None, sleep=time.sleep, say=print, ring_
         note = (f"FITTED by scripts/ring_calibrate.py on {time.strftime('%Y-%m-%d %H:%M')} from {len(points)} points "
                 "(the tip at table height; the marker found by SAM in self-calibrated photos). slots_deg and "
                 "camera_clear are set by hand. See mimic/ring.py and needs.md A10d.")
-        ring.save_ring(ring.with_fit(the_ring, result, points, note), ring_path)
+        ring.save_ring(ring.with_fit(the_ring, result, points, note, source="camera"), ring_path)
         say(f"Saved {ring_path}.")
 
     return session.guarded(arm, body, say, sleep)

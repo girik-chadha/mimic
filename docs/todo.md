@@ -73,7 +73,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] ring.json: grip_hold 20 (by hand), command_s 0.01 (measured 3.5 / 4.7 ms), stop_at null = table + 3; `ring_calibrate.py --table-shoulder` (4 Nov)
 - [x] `calib/start_pose.json` (base 90, shoulder S0 = 90 PROVISIONAL, elbow 90, grip 90): every enable starts there, every script ramps back there before disabling, `arm_jog`/`teach` home is a slow J to it; ring.json table 180 (4 Nov)
 - [ ] Girik: the shoulder angle S0 with the upper arm vertical, into `calib/start_pose.json`
-- [ ] Girik: `python scripts/ring_calibrate.py` on the real arm (needs.md C7 step 12a), then set `slots_deg` in `calib/ring.json`
+- [x] `scripts/ring_fit_manual.py`: the ring from 5+ ruler-measured points (same fit and checks), saved with source "manual" (4 Nov)
+- [ ] Girik: `python scripts/ring_calibrate.py` on the real arm, or `ring_fit_manual.py` from a ruler (needs.md C7 step 12a), then set `slots_deg` in `calib/ring.json`
 - [x] Ring mode, part 2: `mimic/ring_loop.py`, `run_mimic.py --ring` (slots on the ring, 5.5 cm apart; every move checked first; angular miss corrected up to 2 degrees, 2 retries); tested with a fake ring world (4 Nov)
 - [ ] After calibrating and setting `slots_deg`: a first `run_mimic.py --ring` with 2 or 3 dice (needs.md C7 step 12c)
 - [ ] Decide the layout for the ring: slots and the mess area must lie on it (needs.md A10d)

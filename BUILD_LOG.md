@@ -254,3 +254,7 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   Every photo prints camera, size and brightness; refusals name the camera. The 1280x720 minimum now works either
   way round (a portrait frame was refused before). Nothing else assumed iVCam or 1280x720. A unit-test conftest
   clears MIMIC_CAMERA so the shell cannot change the tests.
+- `scripts/ring_fit_manual.py`: the ring from repeated `--point BASE X Y` (a base angle and the die's centre in
+  sheet cm, by ruler). No arm, camera or SAM. Same fit as ring_calibrate.py (mimic/ring.py, 0.5 cm check and
+  leave-one-out naming), at least 5 points; saves ring.json with `source: "manual"`, placeholder false, slots and
+  camera_clear kept. ring_calibrate.py now saves `source: "camera"`; the fit printout is shared (`ring.describe`).

@@ -34,6 +34,7 @@ scripts/
   plan_from_photos.py      Gate 1 demo: two photos in, plan out
   pick_once.py             (4 Nov, elbow dead) pick one die on the ring at a base angle, drop it at another
   ring_calibrate.py        (4 Nov) 5 base angles, the camera finds the tip marker: fits calib/ring.json
+  ring_fit_manual.py       (4 Nov) the same fit from 5+ ruler-measured points; no arm, camera or SAM
   show_demo.py             (3 Nov) the demo as a video: target order and arrival order out (opt-in;
                            run_mimic.py still takes a demo photo)
   arm_jog.py               move one joint at a time from the terminal
