@@ -626,3 +626,12 @@ degrees and says so."
 Two sentences: "The calibration names the marker the way SAM can find it, and when SAM finds more than one yellow
 rectangle it keeps only the one lying on the paper. Each photo is saved with the choice drawn on it, so the decision
 can be checked by eye."
+
+### 4 Nov: checking every photo's brightness
+
+- On this phone camera the first frames after it starts are almost white, until its auto exposure settles. Every
+  photo is now checked: its average brightness is printed, and a photo that is too bright or too dark is taken again
+  a second later; if it is still bad, it is refused with a hint to lock the exposure in iVCam.
+
+Two sentences: "Every photo's brightness is now measured, so a blown-out picture is retaken or refused instead of
+being sent to SAM. The real fix for this camera is locking its exposure, and the error message says so."

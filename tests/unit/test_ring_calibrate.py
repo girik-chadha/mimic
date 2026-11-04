@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 import pytest
 
-from mimic import arm, config, meta_api, ring, sam, scene, session
+from mimic import arm, camera, config, meta_api, ring, sam, scene, session
 from mimic.arm import Arm, FakeTransport
 from mimic.sam import Box
 
@@ -204,6 +204,40 @@ def test_no_box_on_the_sheet_or_two_on_it_refuse_the_point_and_list_every_box(tm
     with pytest.raises(scene.SceneError, match="2 boxes for 'small yellow rectangle', 2 on the sheet"):
         rc.measure_tip(photo, layout, tmp_path, "p3", "small yellow rectangle", lambda s: None)
     assert (tmp_path / "p2_marker.jpg").exists() and (tmp_path / "p3_marker.jpg").exists()   # saved to look at
+
+
+def test_a_photo_still_too_bright_after_the_retake_refuses_that_point_only(monkeypatch, tmp_path):
+    world = FakeWorld(monkeypatch, tmp_path)
+    real_capture = world.capture
+
+    def capture(path):
+        if world.transport.angles[0] == 90:
+            raise camera.CameraError("The photo x is too bright (blown out): mean brightness 247.6, allowed 40-235, "
+                                     "twice. Lock the exposure in iVCam")
+        return real_capture(path)
+
+    world.capture = capture
+    code, said = world.run(["yes", "80", "90", "95", "100", "110", "120", "done", "yes"])
+    assert code == 0 and [p["base_deg"] for p in ring.load_ring(world.ring_path).points] == [80, 95, 100, 110, 120]
+    assert any("skipped: The photo x is too bright (blown out): mean brightness 247.6" in line for line in said)
+
+
+def test_the_real_camera_reads_camera_frames_from_ring_json_or_the_option(monkeypatch, tmp_path):
+    world = FakeWorld(monkeypatch, tmp_path)
+    grabs = []
+
+    def fake_capture(path, frames=15, sleep=None, say=None):
+        grabs.append(frames)
+        return world.capture(path)
+
+    monkeypatch.setattr(camera, "capture", fake_capture)
+    for argv, expected in (([], 15), (["--camera-frames", "30"], 30)):
+        grabs.clear()
+        world.transport.enabled = False
+        queue = ["yes"] + ANGLES + ["done", "no"]
+        rc.main(argv, read=lambda q: queue.pop(0), sleep=lambda s: None, say=lambda s: None,
+                ring_path=world.ring_path, out_root=tmp_path / "runs")      # no capture given: the real camera
+        assert set(grabs) == {expected} and len(grabs) == 5
 
 
 def test_done_before_5_points_and_a_repeated_angle_are_refused(monkeypatch, tmp_path):

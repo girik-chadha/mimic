@@ -241,3 +241,10 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   the fit). Only boxes whose centre is on the calibrated sheet count (a lone box off the sheet too): exactly one must
   remain, or the point is refused listing every box and where it fell. Each point's photo is saved with every box
   drawn and the chosen one marked. Test with the two real boxes: the marker is chosen, the pins dropped.
+- Camera brightness (Girik's real iVCam test: 2 frames 247.5, 15 frames 170.5; ring_calibrate photos 247.6).
+  camera.capture already read 15 frames and kept the last, so the blown-out calibration photos were not a short
+  grab in the code. Now every photo's mean brightness is printed; outside 40-235 it is retaken once after 1 s, then
+  refused with the brightness and a hint to lock iVCam's exposure (ring_calibrate skips that point). Frames per grab:
+  `camera_frames` in ring.json (15), `--camera-frames` on ring_calibrate.py and run_mimic.py. Tests with fake frames
+  (normal, too bright then normal, too bright twice, too dark twice, the 40 and 235 edges). run_mimic.py uses
+  camera.capture in both modes; show_demo.py takes no photos (it reads a video file).

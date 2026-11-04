@@ -67,6 +67,7 @@ class Ring:
     command_s: float = 0.05
     max_off_ring_cm: float = 1.0
     marker_name: str = "small yellow rectangle"  # the SAM prompt for the claw-tip marker (ring_calibrate.py)
+    camera_frames: int = 15                      # frames each photo grab reads, keeping the last (camera.capture)
 
     @property
     def shoulder_stop(self) -> int:

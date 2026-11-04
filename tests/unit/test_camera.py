@@ -10,28 +10,32 @@ from mimic.camera import CameraError
 
 
 def fake_ffmpeg(writes=None, returncode=0, stderr="", raises=None):
-    """Pretends to be ffmpeg: optionally writes `writes` (an image array) to the photo path."""
+    """Pretends to be ffmpeg: optionally writes `writes` (an image array, or a list of them, one per grab) to the
+    photo path."""
     calls = []
+    frames = list(writes) if isinstance(writes, list) else None
 
     def run(command, capture_output, text, timeout):
         calls.append((command, timeout))
         if raises:
             raise raises
-        if writes is not None:
-            cv2.imwrite(run.target, writes)
+        image = frames.pop(0) if frames is not None else writes
+        if image is not None:
+            cv2.imwrite(run.target, image)
         return subprocess.CompletedProcess(command, returncode, "", stderr)
 
     run.calls = calls
     return run
 
 
-def grab(tmp_path, run):
+def grab(tmp_path, run, said=None, waits=None, frames=camera.FRAMES):
     path = tmp_path / "photo.jpg"
     run.target = str(path)
-    return camera.capture(path, run=run)
+    return camera.capture(path, run=run, frames=frames, say=(said if said is not None else []).append,
+                          sleep=(waits if waits is not None else []).append)
 
 
-def sheet(width=1280, height=720, grey=140):
+def sheet(width=1280, height=720, grey=170):
     return np.full((height, width, 3), grey, np.uint8)
 
 
@@ -78,9 +82,49 @@ def test_no_file_is_a_camera_error_and_an_old_photo_never_counts(tmp_path):
         grab(tmp_path, fake_ffmpeg(writes=None))
 
 
-def test_nearly_black_photo_is_a_camera_error(tmp_path):
-    with pytest.raises(CameraError, match="nearly black"):
-        grab(tmp_path, fake_ffmpeg(writes=sheet(grey=5)))
+def test_a_normal_photo_is_kept_first_time_and_its_brightness_printed(tmp_path):
+    said, waits = [], []
+    run = fake_ffmpeg(writes=sheet(grey=170))
+    grab(tmp_path, run, said, waits)
+    assert said == ["  photo photo.jpg: brightness 170.0"] and waits == [] and len(run.calls) == 1
+
+
+def test_a_blown_out_photo_is_taken_again_after_1_s(tmp_path):
+    said, waits = [], []
+    run = fake_ffmpeg(writes=[sheet(grey=248), sheet(grey=170)])      # the first grab blown out, like iVCam's
+    assert grab(tmp_path, run, said, waits) == str(tmp_path / "photo.jpg")
+    assert waits == [1.0] and len(run.calls) == 2
+    assert said[0] == "  photo photo.jpg: brightness 248.0" and said[-1] == "  photo photo.jpg: brightness 170.0"
+
+
+def test_too_bright_twice_is_refused_with_the_brightness_and_the_exposure_hint(tmp_path):
+    run = fake_ffmpeg(writes=[sheet(grey=248), sheet(grey=248)])
+    with pytest.raises(CameraError, match=r"too bright \(blown out\): mean brightness 248.0, allowed 40-235, twice\. "
+                                          r"Lock the exposure in iVCam"):
+        grab(tmp_path, run)
+    assert len(run.calls) == 2
+
+
+def test_too_dark_twice_is_refused_with_the_brightness_and_both_hints(tmp_path):
+    run = fake_ffmpeg(writes=[sheet(grey=20), sheet(grey=25)])
+    with pytest.raises(CameraError, match=r"too dark: mean brightness 25.0, allowed 40-235, twice\. "
+                                          r"Is the lens covered, or iVCam not connected\? Lock the exposure"):
+        grab(tmp_path, run)
+
+
+def test_the_edges_of_the_window_are_fine(tmp_path):
+    for grey in (40, 235):
+        run = fake_ffmpeg(writes=sheet(grey=grey))
+        grab(tmp_path, run)
+        assert len(run.calls) == 1
+
+
+def test_the_frame_count_goes_to_ffmpeg_and_the_default_is_15(tmp_path):
+    assert camera.ffmpeg_command("C:\\x.jpg")[camera.ffmpeg_command("C:\\x.jpg").index("-frames:v") + 1] == "15"
+    run = fake_ffmpeg(writes=sheet())
+    grab(tmp_path, run, frames=30)
+    command = run.calls[0][0]
+    assert command[command.index("-frames:v") + 1] == "30" and "-update" in command
 
 
 def test_small_photo_is_a_camera_error(tmp_path):

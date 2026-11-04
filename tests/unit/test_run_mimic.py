@@ -87,18 +87,26 @@ def test_ring_mode_asks_before_enabling_runs_the_ring_loop_and_disables(monkeypa
 
     limits = wide_limits()
     transport = FakeTransport(limits)   # disarmed, like the firmware at power-on
-    monkeypatch.setattr(ring_loop, "load_and_check", lambda: ("layout", "ring", limits))
+    from mimic import camera, ring
+    the_ring = ring.Ring(camera_frames=25)
+    monkeypatch.setattr(ring_loop, "load_and_check", lambda: ("layout", the_ring, limits))
+    grabs = []
+    monkeypatch.setattr(camera, "capture", lambda path, frames=15, **k: grabs.append(frames) or str(path))
     monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: transport)
     monkeypatch.setattr(arm.time, "sleep", lambda s: None)
     monkeypatch.setattr(session.time, "sleep", lambda s: None)
     runs, prompts = [], []
 
-    def fake_run(a, capture, layout, the_ring, limits):
-        runs.append((layout, the_ring, a.status()["armed"]))
+    def fake_run(a, capture, layout, ring_used, limits):
+        runs.append((layout, ring_used is the_ring, a.status()["armed"]))
+        capture("photo.jpg")
         return {"success": True, "attempts": 3, "max_error_cm": 0.4, "cost_usd": 0.05}
 
     monkeypatch.setattr(ring_loop, "run", fake_run)
     assert run_mimic.main(["--ring"], read=lambda q: (prompts.append(q), "yes")[1]) == 0
-    assert runs == [("layout", "ring", True)]
+    assert runs == [("layout", True, True)]
+    assert grabs == [25]                                  # camera_frames from ring.json
+    assert run_mimic.main(["--ring", "--camera-frames", "40"], read=lambda q: "yes") == 0
+    assert grabs == [25, 40]                              # the option wins
     assert "pose the arm like the start pose: upper arm vertical, forearm horizontal, claw open" in prompts[0]
     assert transport.sent[-1] == "D" and "Hold the arm" in capsys.readouterr().out

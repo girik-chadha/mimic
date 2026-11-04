@@ -202,8 +202,16 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
   with `MIMIC_FFMPEG` in `.env`, because the winget folder name contains the version):
   `ffmpeg.exe -f dshow -i video="e2eSoft iVCam" -frames:v 15 -update 1 -q:v 2 <photo as a Windows path>`
   (15 frames so the exposure settles; the last one is kept). 10 s timeout.
-- A photo is refused (`CameraError`) if ffmpeg fails, no file appears, it is nearly black (average brightness
-  under 20/255), or it is smaller than 1280x720. Girik's test photo through iVCam (`ivcam_sheet.jpg`, not
+- **Short grabs blow out on this camera (Girik, 4 Nov):** a 2-frame grab came out nearly white (mean brightness
+  247.5), a 15-frame grab keeping the last a normal 170.5. But ring_calibrate.py's photos also came out at 247.6,
+  although camera.capture has always read 15 frames and kept the last (it is the only photo capture in the code):
+  so 15 frames is not always enough for the exposure to settle (perhaps the first frames arrive in a burst when the
+  stream opens). Since 4 Nov every photo's mean brightness is printed; outside 40-235 it is taken again after 1 s,
+  and if it is still outside it is refused (a calibration point is skipped; a run stops) with the brightness and a
+  hint to lock the exposure in iVCam. The frame count is `camera_frames` in `calib/ring.json` (15), with
+  `--camera-frames` on ring_calibrate.py and run_mimic.py to try more. If iVCam re-adjusts its exposure each time
+  ffmpeg opens it, a retake will not help: locking the exposure is the fix.
+- A photo is also refused (`CameraError`) if ffmpeg fails, no file appears, or it is smaller than 1280x720. Girik's test photo through iVCam (`ivcam_sheet.jpg`, not
   committed) is 1280x720 with average brightness 140, so iVCam must stay at 1280x720 or more.
 - **Not yet done (needs the camera):** the B2 test from the plan, ten sharp overhead photos in a row in under 3 s each.
 - Never commit camera frames with people in them.
@@ -321,7 +329,7 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 | B7 | Does the Baseten Muse Spark Open endpoint use the OpenAI-compatible format? Model id given by the organisers: `meta-models/muse-spark-open-1026`. | One text call through the OpenAI SDK with Baseten's base URL. | Mon |
 | B8 | Does Muse Code bill to our credits or need its own plan? | Check the Muse Code page on dev.meta.ai. Only matters if we want to use it. | Any time |
 | B9 | Exact judging weights and bonus prize criteria. | Logged-in hackathon details page and Discord. | Any time |
-| B13 | The demo video, on the first real `show_demo.py` run: does SAM accept the shrunk video (10 fps H.264, made by ffmpeg, not a phone)? How long does a video call take (our timeout for video is 300 s; the 28 Oct call was never timed)? Does a track keep its id while a hand moves the block (A3's open question; if not, `show_demo.py` stops with "2 tracks")? | `python scripts/show_demo.py demo.mp4 --save-replies` on an 8-10 s video of the real sheet. Since 3 Nov it needs only the measured dots (`dots_measured`); the slot positions are still placeholders, so the blocks must sit within 3 cm of the slots in `layout.json` or it stops with "not in a slot". About $0.10-0.13 for 3 blocks. | Dots measured 3 Nov; when the video is recorded |
+| B13 | The demo video, on the first real `show_demo.py` run: does SAM accept the shrunk video (10 fps H.264, made by ffmpeg, not a phone)? How long does a video call take (our timeout for video is 300 s; the 28 Oct call was never timed)? Does a track keep its id while a hand moves the block (A3's open question; if not, `show_demo.py` stops with "2 tracks")? **Short grabs blow out on this camera (A9, 4 Nov):** the first frames are nearly white (brightness about 247), so a video's first second may be useless to SAM; show_demo.py reads the last settled frame, which is fine, but tracks may start late. | `python scripts/show_demo.py demo.mp4 --save-replies` on an 8-10 s video of the real sheet. Since 3 Nov it needs only the measured dots (`dots_measured`); the slot positions are still placeholders, so the blocks must sit within 3 cm of the slots in `layout.json` or it stops with "not in a slot". About $0.10-0.13 for 3 blocks. | Dots measured 3 Nov; when the video is recorded |
 | B14 | Does Spark name the dice "colour die" with the new prompt line, and does SAM find exactly 1 box for each such name (two dice of similar colours could share one)? | One real `brain.name_objects` call on a photo of the dice on the sheet; save Spark's reply and each SAM reply as fixtures. About $0.01-0.02. | When the dice photo is taken |
 | B12 | Does opening COM7 reset the board? The bridge sets DTR and RTS low before opening so that it should not. If it does, every session restarts the arm (since 3 Nov: it comes back disarmed, so an enabled arm goes limp at every session start) and a brownout is hidden by the next power-on. | After the upload (C7 step 4): `arm_jog.py`, type `boot` at once, `quit`, wait a minute, repeat. If the seconds are always 2-3, opening resets the board. | First powered session |
 
@@ -483,7 +491,9 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     rectangle"; `--marker-name` to try another, saved with the fit). Only boxes on the sheet count (A2c): exactly one
     must remain. Every box and where it fell is printed, and each point's photo is saved with all the boxes drawn and
     the chosen one marked (`runs/ring_calibrate_<time>/ring_<n>_base<angle>_marker.jpg`): look at it. Then the arm
-    lifts. A photo with a hidden dot, or not exactly one marker on the sheet, is skipped: type another angle. After 5 points type done: it fits the
+    lifts. A photo with a hidden dot, or not exactly one marker on the sheet, or still too bright or too dark after
+    one retake (every photo's brightness is printed; allowed 40-235, A9), is skipped: type another angle.
+    `--camera-frames N` reads more frames per photo (default `camera_frames` in ring.json, 15). After 5 points type done: it fits the
     ring (centre, radius, base scale; mimic/ring.py) and prints each point's distance from it. Any point over
     0.5 cm refuses the fit, and if leaving one point out lets the others fit, it names that point to re-measure.
     Type yes to save `calib/ring.json` (placeholder false; slots, camera_clear and the pick numbers are kept).

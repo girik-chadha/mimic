@@ -3,6 +3,7 @@
     python scripts/ring_calibrate.py
     python scripts/ring_calibrate.py --table-shoulder 171      a new table-height shoulder angle (saved with the fit)
     python scripts/ring_calibrate.py --marker-name "yellow tape"   another SAM prompt for the marker (saved too)
+    python scripts/ring_calibrate.py --camera-frames 30            read more frames per photo (camera_frames: 15)
 
 Put the gripper marker on the claw tip, facing the camera. Needs the measured dots (layout.json dots_measured) and
 the arm unlocked. After a typed yes to enable (at the start pose, calib/start_pose.json: pose the arm like it by
@@ -15,8 +16,9 @@ hand first), for each point:
    because the tip is lowered onto the paper (other yellow things, like the control board's pin sockets, are not);
    exactly one must remain, and it gives the tip's sheet position. Every box and where it fell is printed, and the
    photo is saved with all of them drawn and the chosen one marked (runs/ring_calibrate_<time>/..._marker.jpg);
-4. the arm lifts again. A photo that cannot calibrate, or has no single marker on the sheet, is skipped: try another
-   angle.
+4. the arm lifts again. A photo that cannot calibrate, has no single marker on the sheet, or is still too bright or
+   too dark after one retake (brightness outside 40-235: lock iVCam's exposure), is skipped: try another angle.
+Every photo's brightness is printed (camera.capture, camera_frames frames, keeping the last).
 After 5 points (more are allowed) type done. The ring is fitted (mimic/ring.py: centre, radius, and the base scale,
 which needs 4 or more points) and each point's error is shown; any point over 0.5 cm off refuses the fit. Type yes
 to save calib/ring.json: the fit and the points, placeholder false, and the table angle used (so a --table-shoulder
@@ -121,18 +123,20 @@ def collect(arm, limits, the_ring, layout, capture, ask, say, sleep, out_dir: Pa
             x, y = measure_tip(capture(out_dir / f"{label}.jpg"), layout, out_dir, label, the_ring.marker_name, say)
             points.append((base, x, y))
             say(f"  point {len(points)}: base {base} -> tip at ({x:.2f}, {y:.2f}) cm")
-        except scene.SceneError as error:
+        except (scene.SceneError, camera.CameraError) as error:
             say(f"  skipped: {error} Try another angle.")
         run_steps(arm, plan_lift(limits, arm.known_pose(), the_ring.shoulder_table - the_ring.lift,
                                  the_ring.shoulder_stop), say, sleep)
 
 
-def main(argv=None, read=input, capture=camera.capture, sleep=time.sleep, say=print, ring_path=ring.RING_PATH,
+def main(argv=None, read=input, capture=None, sleep=time.sleep, say=print, ring_path=ring.RING_PATH,
          out_root=config.RUNS_DIR) -> int:
     parser = argparse.ArgumentParser(description="Fit the ring the claw tip reaches, from 5 base angles.")
     parser.add_argument("--table-shoulder", type=int,
                         help="shoulder angle at table height (default: shoulder_table in calib/ring.json)")
     parser.add_argument("--marker-name", help="SAM prompt for the tip marker (default: marker_name in calib/ring.json)")
+    parser.add_argument("--camera-frames", type=int,
+                        help="frames per photo grab, keeping the last (default: camera_frames in calib/ring.json)")
     args = parser.parse_args(argv)
     try:
         layout = scene.load_layout()
@@ -142,6 +146,10 @@ def main(argv=None, read=input, capture=camera.capture, sleep=time.sleep, say=pr
             the_ring = dataclasses.replace(the_ring, shoulder_table=args.table_shoulder)
         if args.marker_name:
             the_ring = dataclasses.replace(the_ring, marker_name=args.marker_name)
+        frames = args.camera_frames or the_ring.camera_frames
+        if capture is None:  # the real camera, with this many frames per grab
+            def capture(path):
+                return camera.capture(path, frames=frames, sleep=sleep, say=say)
         limits = arm_module.load_limits()
         arm = session.connect(False, limits)   # a locked arm is refused here, before the bridge opens
     except (ArmError, scene.SceneError, ring.RingError) as error:
