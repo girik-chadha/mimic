@@ -69,6 +69,9 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [ ] Resume: `python scripts/first_moves.py --joints shoulder elbow --base-minus 15 --base-plus 35` (the elbow is now dead: answer n, or `--joints shoulder`)
 - [x] Elbow dead and unplugged, forearm taped: table height at shoulder 173 on a ring; grip 23 holds the die through a 20-degree lift (4 Nov, by hand). `scripts/pick_once.py` written and tested with fakes (4 Nov)
 - [ ] `pick_once.py --measure-latency`, then `--pick-only`, then a full pick and drop (needs.md C7 step 12b)
+- [x] Ring mode, part 1: `mimic/ring.py` (fit from base angles and tip positions, base_angle_for, 1 cm off-ring limit), `calib/ring.json` (placeholder, camera_clear 90/90), `scripts/ring_calibrate.py` (5 points); pick_once's moves moved to `mimic/pickdrop.py` (4 Nov)
+- [ ] Girik: `python scripts/ring_calibrate.py` on the real arm (needs.md C7 step 12a), then set `slots_deg` in `calib/ring.json`
+- [ ] Ring mode, part 2: the loop (`run_mimic.py --ring`)
 - [ ] Decide the layout for the ring: slots and the mess area must lie on it (needs.md A10d)
 - [ ] First powered session (needs.md C7) from step 3's upload: ranges with `first_moves.py`, copy into both files, upload; `grip_test.py`
 - [ ] Precision test B6: `repeatability.py`

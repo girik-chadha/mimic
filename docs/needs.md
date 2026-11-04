@@ -220,6 +220,15 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
 - **IO2 still gets a 90-degree signal after E.** It goes into an empty socket, which is harmless. Nothing in the
   firmware or Python needed changing for the dead elbow: the firmware never senses servos (it counts all four as
   switched on), and every move sends the elbow as 90, inside its range. The "elbow_fixed" plan (3-4 Nov) was dropped.
+- **The ring itself (4 Nov):** `mimic/ring.py` fits it from calibration points (base angle, tip position in sheet
+  cm), so the base angle for any point on the ring follows; `calib/ring.json` holds the fit, the slots (base angles,
+  set by hand) and camera_clear (base 90, shoulder 90, set by hand). A point more than 1.0 cm off the ring is
+  refused. Found while building it: on a short arc (base 80-120 is about 40 degrees) a different base scale and a
+  different radius describe almost the same points, so with only 3 points a servo that turns 15% short shows up as
+  a radius of 16.4 cm instead of 14 while every point still fits within 0.12 cm; and with 5 points, 0.2 cm of camera
+  error alone can push a fitted scale to its limit. So the scale stays 1 unless another fits clearly better (an error
+  at least 25% smaller), and calibration asks for 5 points. Inside the calibrated arc either description puts the
+  claw in the same places; outside it, do not trust the fit.
 - **What this means for the full task:** the claw can only reach the table on that ring, so slots and the mess area
   must lie on it. The straight slot row and the rectangular mess area in `layout.json` do not, and pushes in a
   straight line are no longer possible (only along the ring, by turning the base). `scripts/pick_once.py` picks and
@@ -436,6 +445,19 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     it again). `grip_push` is 2 degrees more open than that, so the touching angle plus 2 (if they never touch
     before the limit, the limit plus 2): write it into `calib/pose_grid.json` as `"grip_push"`. Never use the
     closed limit itself: a stalled claw overheats. Until it is set, push mode refuses to run.
+12a. **Calibrate the ring (4 Nov, elbow dead, A10d): `python scripts/ring_calibrate.py`.** Put the gripper
+    marker on the claw tip, facing the camera. Needs the measured dots and the arm unlocked. It asks before
+    enabling (**pose the shoulder near 90 by hand first: enable jumps every joint to 90**). Then type 5 base angles,
+    spread across the range you will use (for example 80, 90, 100, 110, 120). For each one the arm lifts if it is
+    low, turns the base, and lowers the claw onto the table in 2-degree steps (shoulder 173); a photo with the arm in
+    view calibrates itself from the 6 dots and SAM finds the "gripper marker"; then the arm lifts. A photo with a
+    hidden dot, or not exactly one marker, is skipped: type another angle. After 5 points type done: it fits the
+    ring (centre, radius, base scale; mimic/ring.py) and prints each point's distance from it. Any point over
+    0.5 cm refuses the fit, and if leaving one point out lets the others fit, it names that point to re-measure.
+    Type yes to save `calib/ring.json` (placeholder false; slots, camera_clear and the pick numbers are kept).
+    **Time: about 10-15 s per point (base move and lowering 2-3 s, photo 1-2 s, two SAM calls about 2-6 s, not
+    timed yet), so about 1.5-2 minutes for 5 points, plus enabling. Cost about $0.025 (capped at $0.05).**
+    Afterwards set `slots_deg` in `calib/ring.json` by hand, once the base range is re-measured.
 12b. **Pick once, on the ring (4 Nov, elbow dead, A10d):** `scripts/pick_once.py` picks a die at one base angle
     and puts it down at another, at shoulder 173 (table height), with grip 23 by default. In this order:
     - `python scripts/pick_once.py --measure-latency`: times 20 harmless status calls (nothing moves) and prints a

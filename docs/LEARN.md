@@ -565,3 +565,17 @@ to a move you have actually watched."
 Two sentences: "With the elbow taped, the claw reaches the table only on one ring around the base, and a new script
 picks a die up on that ring and puts it down at another angle. It plans every move first and refuses to start if
 the claw would be closed long enough for the firmware's 5-second safety release to drop the die."
+
+### 4 Nov: measuring the ring
+
+- With the elbow taped, the claw touches the table only on a circle around the base. To use it, the system needs
+  that circle in sheet centimetres and the base angle for each point on it. `ring_calibrate.py` lowers the claw
+  onto the table at 5 base angles, photographs the marker on its tip, and fits the circle.
+- The fit uses the base angles too, not just the positions, which keeps it steady even though the 5 points only
+  cover a short arc. Testing found that on a short arc a slightly wrong servo scale and a wrong radius look almost
+  the same, so the scale is assumed to be exact unless the data clearly says otherwise, and 5 points are required.
+- If one photo is off, the fit is refused, and it says which point to measure again.
+
+Two sentences: "The ring calibration lowers the claw at five base angles, finds its tip in a photo each time, and
+fits the circle the claw can reach, in sheet centimetres. From then on, the base angle for any die on that circle
+is a calculation, and a die more than a centimetre off it is refused because the claw cannot reach it."

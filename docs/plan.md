@@ -15,6 +15,8 @@ mimic/                     the Python package
   meta_api.py              one client for every Meta call: data URLs, retries,
                            response cache, cost counter, budget guard
   sam.py                   parse SAM output (boxes, video tracks); find(image, name); track(video, name)
+  ring.py                  (4 Nov) the ring the claw reaches with the elbow fixed: fit, base_angle_for, point_at
+  pickdrop.py              (4 Nov) pick and drop moves on the ring, planned and checked (pick_once, ring mode)
   video.py                 (3 Nov) demo video: shrink to 10 fps / 720p, settled frame, arrival order
   brain.py                 Spark calls: name_objects(photo), diagnose(before, after, move)
   scene.py                 read_target(photo) -> ordered names; read_positions(photo) -> px
@@ -30,6 +32,7 @@ firmware/
 scripts/
   plan_from_photos.py      Gate 1 demo: two photos in, plan out
   pick_once.py             (4 Nov, elbow dead) pick one die on the ring at a base angle, drop it at another
+  ring_calibrate.py        (4 Nov) 5 base angles, the camera finds the tip marker: fits calib/ring.json
   show_demo.py             (3 Nov) the demo as a video: target order and arrival order out (opt-in;
                            run_mimic.py still takes a demo photo)
   arm_jog.py               move one joint at a time from the terminal

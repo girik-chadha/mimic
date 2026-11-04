@@ -204,3 +204,12 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   the approved 80-120. The enable question now starts "Pose the shoulder near 90 by hand first". Breaking the
   4.5 s refusal on purpose failed 3 tests; restored. The elbow_fixed plan is dropped: IO2 sends 90 into an empty
   socket, which is harmless (needs.md A10d).
+- Ring mode, part 1. `mimic/ring.py`: the claw tip at table height is on a circle around the base axis; the fit
+  takes (base angle, tip sheet cm) points and finds centre, radius, base scale and offset (for a fixed scale it is a
+  linear least-squares fit). Scale is 1 unless another (0.85-1.15, needs 4+ points) fits clearly better: building it
+  showed that on a 40-degree arc scale and radius trade off, so 3 points hide a short servo as a wrong radius and
+  0.2 cm of camera noise could push a free scale to its limit. A refused fit names the point that spoils it (leave
+  one out). `base_angle_for` refuses points more than 1.0 cm off the ring. `calib/ring.json` (placeholder,
+  camera_clear 90/90, pick_once's numbers). `scripts/ring_calibrate.py`: 5 base angles; at each the claw goes down
+  onto the table, a self-calibrated photo, SAM finds the "gripper marker"; fit, show the errors, save on a yes.
+  pick_once's planning moved to `mimic/pickdrop.py` (with plan_touch / plan_lift); pick_once unchanged.

@@ -1,0 +1,18 @@
+{
+  "placeholder": true,
+  "note": "PLACEHOLDER: the ring the claw tip reaches with the elbow taped (needs.md A10d). scripts/ring_calibrate.py fits centre_cm, radius_cm, scale and offset_deg from 5 points (base angle, tip position in sheet cm) and sets placeholder false. slots_deg (base angles on the ring) are set by hand once the base range is re-measured. camera_clear is set by hand (base 90, shoulder 90, Girik 4 Nov). The pick numbers are pick_once.py's; command_s is a guess until pick_once.py --measure-latency. A point more than max_off_ring_cm from the ring is refused.",
+  "centre_cm": null,
+  "radius_cm": null,
+  "scale": null,
+  "offset_deg": null,
+  "points": [],
+  "slots_deg": [],
+  "camera_clear": {"base": 90, "shoulder": 90},
+  "shoulder_table": 173,
+  "grip_hold": 23,
+  "lift": 20,
+  "approach": 10,
+  "stop_at": 175,
+  "command_s": 0.05,
+  "max_off_ring_cm": 1.0
+}
