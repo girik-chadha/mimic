@@ -48,6 +48,10 @@ class Teacher:
         biggest = max(abs(round(pose[j]) - round(current[j])) for j in JOINTS)
         self.arm.move(pose, ms=max(MIN_STEP_MS, biggest * self.arm.limits.min_ms_per_degree))
 
+    def _limit_note(self, joint: str, pose: dict) -> str:
+        warning = arm_module.grip_limit_warning(self.arm.limits, pose["grip"]) if joint == "grip" else None
+        return f"\n{warning}" if warning else ""
+
     def _save(self) -> None:
         kinematics.save_grid(self.grid, self.grid_path)
 
@@ -82,12 +86,12 @@ class Teacher:
                 pose = self.arm.known_pose()
                 pose[words[0]] += step
                 self._move_to(pose)
-                return f"{words[0]} now {pose[words[0]]}"
+                return f"{words[0]} now {pose[words[0]]}" + self._limit_note(words[0], pose)
             if len(words) == 3 and words[0] == "set" and words[1] in JOINTS and re.fullmatch(r"\d+", words[2]):
                 pose = self.arm.known_pose()
                 pose[words[1]] = int(words[2])
                 self._move_to(pose)
-                return f"{words[1]} now {pose[words[1]]}"
+                return f"{words[1]} now {pose[words[1]]}" + self._limit_note(words[1], pose)
             if len(words) == 4 and words[0] == "save" and words[1] in ("hover", "grab"):
                 x, y = float(words[2]), float(words[3])
                 pose = self.arm.known_pose()

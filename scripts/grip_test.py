@@ -8,12 +8,14 @@ calib/arm_limits.json (first_moves never measures the grip); the real arm must b
 The closing direction comes from the closed limit (on this claw a LOWER angle closes it, 4 Nov).
 1. The arm goes home with the claw open (90). While you place the die between the open jaws nothing is sent;
    press Enter when it is there.
-2. The claw closes towards the closed limit in 2-degree steps, starting at --start (default 50). Each step: close,
-   hold 1.5 s, open again, then you are asked "holding? y/n". It opens between steps because the firmware lets
-   go of any grip held closed for 5 s, and your answer can take longer than that.
-3. At the first y, grip_hold is that angle plus 3 degrees further closed, never past the closed limit. Then the
-   lift check at grip_hold: close, lift (--lift: one or more joints, 10 degrees in total at most), hold 2 s,
-   lower, open. The planned time the grip is closed must stay under max_grip_hold_s minus 0.5 s, or nothing moves.
+2. The claw closes towards the closed limit in 2-degree steps, starting at --start (default 50); the last step is
+   the limit itself, with a warning. Each step: close, hold 1.5 s, open again, then you are asked "holding? y/n".
+   It opens between steps because the firmware lets go of any grip held closed for 5 s, and your answer can take
+   longer than that. No y down to the limit: it stops with "no hold found down to the limit".
+3. At the first y, grip_hold is that angle plus 3 degrees further closed. If that would be at or past the closed
+   limit it stops the same way: it never holds or lifts at the limit. Otherwise the lift check at grip_hold:
+   close, lift (--lift: one or more joints, 10 degrees in total at most), hold 2 s, lower, open. The planned time
+   the grip is closed must stay under max_grip_hold_s minus 0.5 s, or nothing moves.
 4. If the die stayed held, grip_hold is written into the proposal as grip_hold_deg: copy it into
    calib/arm_limits.json ('grip close' uses it) and use it as grip_closed when teaching. arm_limits.json is never
    changed here.
@@ -32,6 +34,7 @@ from mimic.arm import ArmError
 GRIP_STEP_DEG = 2
 HOLD_EXTRA_DEG = 3           # grip_hold = the first angle that held, plus this much further closed
 DEFAULT_START_DEG = 50       # the first angle tried (Girik, 4 Nov: the empty jaws do not touch down to 40)
+NO_HOLD = "no hold found down to the limit"
 STEP_HOLD_S = 1.5
 LIFT_HOLD_S = 2.0
 MAX_LIFT_DEG = 10
@@ -79,14 +82,23 @@ def check_start(limits, start: int) -> None:
                             f"on the closing side.")
 
 
-def hold_angle(limits, held_at: int, say=print) -> int:
-    """HOLD_EXTRA_DEG further closed than the first angle that held, but never past the closed limit."""
+def hold_angle(limits, held_at: int) -> int | None:
+    """HOLD_EXTRA_DEG further closed than the first angle that held, or None if that would be at or past the
+    closed limit: it never holds at the limit."""
     d, limit = limits.grip_close_dir, limits.grip_closed_limit_deg
     hold = held_at + d * HOLD_EXTRA_DEG
-    if (hold - limit) * d > 0:
-        say(f"  {held_at} + {HOLD_EXTRA_DEG} degrees closed would pass the closed limit {limit}: using {limit}.")
-        hold = limit
-    return hold
+    return None if (hold - limit) * d >= 0 else hold
+
+
+def next_step(limits, angle: int | None, start: int) -> int | None:
+    """The next angle to try: --start first, then 2 degrees further closed; the last step is the limit itself."""
+    d, limit = limits.grip_close_dir, limits.grip_closed_limit_deg
+    if angle is None:
+        return start
+    if angle == limit:
+        return None
+    step = angle + d * GRIP_STEP_DEG
+    return limit if (step - limit) * d > 0 else step
 
 
 def run_test(arm, lift: dict, ask, say=print, sleep=time.sleep, start: int = DEFAULT_START_DEG) -> int | None:
@@ -98,13 +110,15 @@ def run_test(arm, lift: dict, ask, say=print, sleep=time.sleep, start: int = DEF
     _move(arm, home, _ms(arm, home, STEP_MS_PER_DEGREE), sleep)
     ask("Place the die between the open jaws (nothing is being sent), then press Enter: ")
 
-    direction = limits.grip_close_dir   # -1 on this claw: a lower angle closes it
-    angle = start - direction * GRIP_STEP_DEG  # so the first step below is exactly --start
+    angle = None
     while True:
-        angle += direction * GRIP_STEP_DEG
-        if (angle - limits.grip_closed_limit_deg) * direction > 0:
-            say("Reached the grip's closed limit without a hold: check the die size and the claw.")
+        angle = next_step(limits, angle, start)  # towards the limit (a lower angle on this claw)
+        if angle is None:
+            say(f"{NO_HOLD} ({limits.grip_closed_limit_deg}): check the die size, the pads and the claw.")
             return None
+        warning = arm_module.grip_limit_warning(limits, angle)
+        if warning:
+            say(warning)
         closed = dict(home, grip=angle)
         close_ms = _ms(arm, closed, STEP_MS_PER_DEGREE)
         if close_ms / 1000 + STEP_HOLD_S > allowed:
@@ -118,8 +132,12 @@ def run_test(arm, lift: dict, ask, say=print, sleep=time.sleep, start: int = DEF
             break
 
     held_at = angle
-    angle = hold_angle(limits, held_at, say)
-    say(f"Held at {held_at}: grip_hold = {angle} ({HOLD_EXTRA_DEG} degrees further closed, never past the limit)")
+    angle = hold_angle(limits, held_at)
+    if angle is None:
+        say(f"{NO_HOLD}: it held at {held_at}, but {HOLD_EXTRA_DEG} degrees further closed would be at or past the "
+            f"closed limit ({limits.grip_closed_limit_deg}), so it does not hold or lift there.")
+        return None
+    say(f"Held at {held_at}: grip_hold = {angle} ({HOLD_EXTRA_DEG} degrees further closed, short of the limit)")
 
     # the lift check: close, lift, hold 2 s, lower, open, at normal speed so the grip timer is respected
     closed = dict(home, grip=angle)

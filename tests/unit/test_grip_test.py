@@ -61,19 +61,53 @@ def test_closes_down_from_start_in_2_degree_steps_and_holds_3_degrees_further_cl
     assert t.sent[n] == "J 90 90 90 50 1200"                   # then --start, after Enter: 40 degrees * 30 ms
 
 
-def test_grip_hold_is_never_past_the_closed_limit():
-    limits = proposed_limits()
-    said = []
+def test_grip_hold_is_never_at_or_past_the_closed_limit():
+    limits = proposed_limits()                                  # closed limit 3
     assert gt.hold_angle(limits, 30) == 27
-    assert gt.hold_angle(limits, 22, said.append) == 20        # 19 would pass the limit (20)
-    assert "would pass the closed limit 20: using 20" in said[0]
+    assert gt.hold_angle(limits, 7) == 4                        # just short of the limit: fine
+    assert gt.hold_angle(limits, 6) is None                     # 3 would be the limit itself
+    assert gt.hold_angle(limits, 4) is None                     # 1 would be past it
+
+
+def test_steps_go_down_from_start_and_the_last_one_is_the_limit_itself():
+    limits = proposed_limits()
+    steps, angle = [], None
+    while (angle := gt.next_step(limits, angle, 50)) is not None:
+        steps.append(angle)
+    assert steps[:3] == [50, 48, 46] and steps[-3:] == [6, 4, 3] and len(steps) == 25
+
+
+def test_no_hold_down_to_the_limit_stops_after_testing_the_limit_with_a_warning():
+    limits = proposed_limits()
+    t = FakeTransport(limits, enabled=True)
+    said = []
+    angle = gt.run_test(Arm(t, limits), {"shoulder": -4}, answers(None, "", *["n"] * 25), say=said.append,
+                        sleep=lambda s: None, start=50)
+    assert angle is None and said[-1].startswith("no hold found down to the limit (3)")
+    grips = [int(line.split()[4]) for line in t.sent if line.startswith("J")]
+    assert min(grips) == 3 and grips.count(3) == 1                      # the limit step, tested once
+    warning = said.index("  grip 3") - 1
+    assert said[warning].startswith("WARNING: the grip is at its closed limit (3, PROVISIONAL)")
+    assert sum(line.startswith("WARNING") for line in said) == 1        # only for the limit step
+
+
+@pytest.mark.parametrize("held_at, answers_n", [(3, 24), (6, 22)])
+def test_a_hold_whose_extra_3_degrees_reach_the_limit_never_holds_or_lifts_there(held_at, answers_n):
+    limits = proposed_limits()
+    t = FakeTransport(limits, enabled=True)
+    said = []
+    angle = gt.run_test(Arm(t, limits), {"shoulder": -4}, answers(None, "", *["n"] * answers_n, "y"),
+                        say=said.append, sleep=lambda s: None, start=50)
+    assert angle is None
+    assert said[-1].startswith(f"no hold found down to the limit: it held at {held_at}, but 3 degrees further closed")
+    assert not any(line.startswith("J 90 86") for line in t.sent)       # no lift
 
 
 def test_start_must_close_the_claw_and_not_be_past_the_limit():
     limits = proposed_limits()
     gt.check_start(limits, 50)
-    gt.check_start(limits, 20)
-    for bad in (90, 95, 19):
+    gt.check_start(limits, 3)
+    for bad in (90, 95, 2):
         with pytest.raises(gt.GripTestError, match=f"--start {bad} must be between open \\(90\\) and the closed limit"):
             gt.check_start(limits, bad)
 
@@ -137,7 +171,7 @@ def test_a_bad_start_is_refused_before_anything_moves(tmp_path):
     said = []
     assert gt.main(["--lift", "shoulder -4", "--dry-run", "--start", "100"], read=answers(), say=said.append,
                    proposed_path=proposed) == 1
-    assert said[0].startswith("STOPPED: --start 100 must be between open (90) and the closed limit (20)")
+    assert said[0].startswith("STOPPED: --start 100 must be between open (90) and the closed limit (3)")
 
 
 def test_main_needs_the_proposal_first(tmp_path):

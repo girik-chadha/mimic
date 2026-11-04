@@ -21,10 +21,11 @@
 #define GRIP_OPEN 90               // open, and where the 5 s relaxation returns the grip
 // The closed limit is the ONE setting for the claw's direction: below GRIP_OPEN means a lower angle closes the claw
 // (Girik's claw, 4 Nov), above it means a higher angle closes it. Never close further than this.
-// PROVISIONAL (4 Nov): 20. The empty jaws do not touch anywhere down to 40; below 40 is not checked yet. If they
-// touch at 20 or above, raise it (to the touching angle plus 2) in BOTH files.
+// PROVISIONAL (4 Nov): 3. With foam pads the empty jaws are still wider than a 19 mm die at 20, so the limit goes
+// almost to the end; not 0, because 0 is the servo's own end stop and may stall even with the jaws empty. Girik is
+// measuring the pad-to-pad gap at 90 and 20 to predict whether this is enough. Change it in BOTH files.
 #ifndef GRIP_CLOSED_LIMIT
-#define GRIP_CLOSED_LIMIT 20
+#define GRIP_CLOSED_LIMIT 3
 #endif
 #define GRIP_CLOSE_DIR (GRIP_CLOSED_LIMIT < GRIP_OPEN ? -1 : 1)  // -1: a lower angle closes
 #define MIN_MS_PER_DEGREE 10       // speed limit: a move of 20 degrees takes at least 200 ms
@@ -35,8 +36,9 @@ const int PINS[4] = {16, 17, 2, 4};          // base, shoulder, elbow, grip (kit
 const int MIN_ANGLE[3] = {0, 80, 30};        // base, shoulder, elbow
 const int MAX_ANGLE[3] = {180, 180, 120};    // base, shoulder, elbow
 const int HOME[4] = {90, 90, 90, 90};        // base, shoulder, elbow, grip
-const int GRIP_RANGE[2] = {10, 140};         // the grip servo's whole range (4 Nov); the grip is only ever sent from
-                                             // GRIP_CLOSED_LIMIT to the far end on the open side (clamp_joint)
+const int GRIP_RANGE[2] = {0, 140};          // the grip servo's whole range (4 Nov; 0 is its own end stop); the grip
+                                             // is only ever sent from GRIP_CLOSED_LIMIT to the far end on the open
+                                             // side (clamp_joint), so never to 0
 
 #define GRIP_CLOSED_THRESHOLD 5    // the grip counts as closed once it is this far from open
 #define HOME_MS 1500               // how long H takes (at least; the speed limit can make it longer)

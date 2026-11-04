@@ -67,7 +67,7 @@ def test_needs_grip_values_and_camera_clear():
 
 
 def test_taught_values_must_be_inside_the_arm_limits():
-    with pytest.raises(KinematicsError, match="grip_closed 150 is outside the grip range 10-140"):
+    with pytest.raises(KinematicsError, match="grip_closed 150 is outside the grip range 0-140"):
         dataclasses.replace(linear_grid(), grip_closed=150).check_against(wide_limits())
     tight = dataclasses.replace(wide_limits(), ranges_deg={"base": (70, 110), "shoulder": (0, 180), "elbow": (0, 180)})
     with pytest.raises(KinematicsError, match="base .* is outside its range 70-110"):
@@ -75,7 +75,7 @@ def test_taught_values_must_be_inside_the_arm_limits():
 
 
 def test_grip_push_must_be_in_the_grip_range_and_never_the_closed_limit():
-    with pytest.raises(KinematicsError, match="grip_push 145 is outside the grip range 10-140"):
+    with pytest.raises(KinematicsError, match="grip_push 145 is outside the grip range 0-140"):
         dataclasses.replace(linear_grid(), grip_push=145).check_against(wide_limits())
     with pytest.raises(KinematicsError, match="grip_push 140 is the closed limit: .* overheats"):
         dataclasses.replace(linear_grid(), grip_push=140).check_against(wide_limits())

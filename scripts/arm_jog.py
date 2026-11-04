@@ -70,7 +70,8 @@ def handle(arm: Arm, line: str) -> str:
             pose = arm.known_pose()
             pose[words[0]] += step
             arm.move(pose, ms=max(MIN_STEP_MS, abs(step) * arm.limits.min_ms_per_degree))
-            return f"{words[0]} now {pose[words[0]]}"
+            warning = arm_module.grip_limit_warning(arm.limits, pose["grip"]) if words[0] == "grip" else None
+            return f"{words[0]} now {pose[words[0]]}" + (f"\n{warning}" if warning else "")
     except ArmError as error:
         return f"refused: {error}"
     return HELP

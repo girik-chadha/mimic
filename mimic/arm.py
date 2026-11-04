@@ -100,9 +100,9 @@ def load_limits(path=config.ARM_LIMITS_PATH) -> ArmLimits:
     hold = limits.grip_hold_deg
     if hold is not None:
         d, open_deg, limit = limits.grip_close_dir, limits.grip_open_deg, limits.grip_closed_limit_deg
-        if not ((hold - open_deg) * d > 0 and (hold - limit) * d <= 0):
+        if not ((hold - open_deg) * d > 0 and (hold - limit) * d < 0):
             raise ArmError(f"arm_limits.json: grip_hold_deg {hold} must be on the closing side of open "
-                           f"({open_deg}) and not past the closed limit ({limit}).")
+                           f"({open_deg}) and short of the closed limit ({limit}): never hold at the limit.")
     for joint in JOINTS:
         lo, hi = limits.range_of(joint)
         if not lo <= limits.home_deg[joint] <= hi:
@@ -110,6 +110,14 @@ def load_limits(path=config.ARM_LIMITS_PATH) -> ArmLimits:
     if limits.min_ms_per_degree <= 0 or limits.max_grip_hold_s <= 0:
         raise ArmError("arm_limits.json: min_ms_per_degree and max_grip_hold_s must be above 0.")
     return limits
+
+
+def grip_limit_warning(limits: ArmLimits, grip: int) -> str | None:
+    """A warning when a grip angle is the closed limit itself (provisional, and close to the servo's end stop)."""
+    if grip != limits.grip_closed_limit_deg:
+        return None
+    return (f"WARNING: the grip is at its closed limit ({grip}, PROVISIONAL): watch and listen for a stall; "
+            "the firmware opens it again after 5 s.")
 
 
 def refuse_unchecked_limits(limits: ArmLimits) -> None:

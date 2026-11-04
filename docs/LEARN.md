@@ -522,3 +522,15 @@ script ends, is stopped, or fails. That means power cuts and restarts can no lon
 Two sentences: "One number, the closed limit, now decides which way the claw closes, so the whole system flipped to
 match this claw by changing it. The claw closes to a measured hold angle, never to its limit, so it cannot squeeze
 itself or a die hard enough to stall and overheat."
+
+### 4 Nov: letting the claw close almost all the way
+
+- With foam pads on the jaws, the claw at 20 degrees was still too wide for a 19 mm die, so the closed limit is now
+  3, almost the end of the servo's travel. Not 0: that is the servo's own end stop, where it can stall and heat up
+  even with nothing in the jaws. It is marked provisional until Girik's gap measurements say whether it is enough.
+- Going to the limit now prints a warning, and the grip test never holds a die at the limit: if the die only holds
+  right at the end, it says "no hold found down to the limit" instead of squeezing there.
+
+Two sentences: "The claw may now close almost to the end of its travel, because the padded jaws needed it, but it
+stops 3 degrees short of the servo's own end stop. The grip test warns at the limit and refuses to hold a die there,
+so a die that only holds at full squeeze is reported rather than gripped."

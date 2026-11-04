@@ -51,7 +51,7 @@ def test_set_goes_through_the_range_and_speed_limits(teacher):
     tt, t, _ = teacher
     assert tt.handle("set base 150") == "base now 150"
     assert t.sent[-1] == "J 150 90 90 90 600"            # 60 degrees * 10 ms
-    assert tt.handle("set grip 200").startswith("refused: grip 200 degrees is outside its range 10-140")
+    assert tt.handle("set grip 200").startswith("refused: grip 200 degrees is outside its range 0-140")
 
 
 def test_saving_poses_and_finishing(teacher):
@@ -109,3 +109,13 @@ def test_real_arm_refused_while_locked_before_the_bridge_opens(monkeypatch):
     with pytest.raises(ArmError, match="placeholder"):
         teach.make_arm(dry_run=False, limits=dataclasses.replace(arm.load_limits(config.ARM_LIMITS_PATH),
                                                                  placeholder=True))
+
+
+def test_setting_the_grip_onto_the_closed_limit_warns(tmp_path):
+    grid_path = tmp_path / "pose_grid.json"
+    shutil.copy(kinematics.POSE_GRID_PATH, grid_path)
+    limits = arm.load_limits(config.ARM_LIMITS_PATH)          # the committed grip: closed limit 3
+    tt = teach.Teacher(Arm(FakeTransport(limits, enabled=True), limits), grid_path, ask=lambda q: "no")
+    assert tt.handle("set grip 3").startswith("grip now 3\nWARNING: the grip is at its closed limit (3, PROVISIONAL)")
+    assert tt.handle("set grip 10") == "grip now 10"
+    assert tt.handle("set grip 2").startswith("refused: grip 2 degrees is outside its range 3-140")

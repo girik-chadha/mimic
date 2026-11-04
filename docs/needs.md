@@ -219,15 +219,21 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
   `grip_closed_limit_deg` in `arm_limits.json`, kept equal by the sync test). Below open (90) means a lower angle
   closes; above open would mean a higher angle closes. There is no separate direction flag, so the two can never
   disagree. The g++ tests run both ways (the committed limit, and the limit moved to 140).
-- **Closed limit 20, PROVISIONAL:** the empty jaws do not touch anywhere down to 40; below 40 is not checked yet
-  (C7 step 9). If they touch at 20 or above, the limit goes up to the touching angle plus 2, so the jaws can never
-  be driven into each other with no die.
-- **Grip range 10-140** is the servo's whole range, but the grip is only ever sent from the closed limit up to 140:
-  the firmware clamps there, and `Arm.move` refuses anything outside 20-140 before sending it.
+- **Closed limit 3, PROVISIONAL (4 Nov, second change that day):** with foam pads on, the empty jaws are still
+  wider than a 19 mm die at 20, so the limit goes almost to the end of the servo's travel. Not 0: 0 is the servo's
+  own end stop and may stall even with the jaws empty. Girik is measuring the pad-to-pad gap at 90 and at 20 to
+  predict whether 3 closes far enough (straight-line estimate: gap(3) is about gap(20) - 17 x (gap(90) - gap(20)) /
+  70; jaw opening is not exactly proportional to angle, so a close call is not trusted). While the limit is this
+  low, nothing stops the empty jaws pressing pad against pad except the 5 s relaxation.
+- **Grip range 0-140** is the servo's whole range, but the grip is only ever sent from the closed limit up to 140:
+  the firmware clamps there, and `Arm.move` refuses anything outside 3-140 before sending it. A grip move onto the
+  limit itself prints a warning in `arm_jog`, `teach.py` and `grip_test.py`.
 - **`grip_hold_deg`** (in `arm_limits.json`, `null` until found) is what `grip close` uses: never the closed limit,
   because a die between the jaws would stall the claw. `grip_test.py` finds it: from `--start` (default 50) it
-  closes 2 degrees at a time towards the limit, at the first "holding? y" adds 3 degrees further closed (lower),
-  never past the limit, then checks the hold through a lift.
+  closes 2 degrees at a time towards the limit, the last step being the limit itself (with a warning). At the first
+  "holding? y" it adds 3 degrees further closed (lower) and checks the hold through a lift. No y down to the limit,
+  or a hold whose extra 3 degrees would reach or pass the limit: it stops with "no hold found down to the limit" and
+  never holds or lifts there. `arm_limits.json` refuses a `grip_hold_deg` equal to the limit too.
 - What flipped with the setting: the firmware clamp, `range_of("grip")` and `load_limits`'s checks, `grip close`
   (now `grip_hold_deg`), `grip_test.py` (direction, `--start`, +3), the `grip_push` rule ("2 degrees more open than
   where the tips touch", in motion.py, kinematics.py, pose_grid.json and C7). Unchanged because it never assumed a
@@ -368,12 +374,14 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
    **Whenever the arm twitches, drops or stops answering, type `boot` straight away:** `brownout` (or a small
    number of seconds you did not expect) means the ESP32 restarted: it comes back disarmed, so the arm goes limp.
    Switch off and check the batteries.
-9. **Do the empty jaws touch at 20 or above? (A10c)** Still in `arm_jog`, with the arm enabled and the claw empty:
-   `grip -50` (to 40), then `grip -5` at a time (35, 30, 25, 20), watching the tips each time. Python refuses
-   anything below 20. After 5 s closed the firmware opens the claw back to 90; the next `grip -5` then closes it
-   again from 90 to the next angle, slowed by the speed limit, which is fine. **If the tips touch at 20 or above:**
-   `grip open` at once and tell Claude the angle: the closed limit goes up to that angle plus 2 in both files, and
-   you upload again. Finish with `grip open`.
+9. **How far do the padded jaws close? (A10c)** First, with the arm off, measure the pad-to-pad gap at 90 and at
+   20 (from the 4 Nov session) and tell Claude: that predicts whether the provisional limit 3 is enough for a 19 mm
+   die. Then in `arm_jog`, with the arm enabled and the claw empty: `grip -70` (to 20), then `grip -5` at a time
+   (15, 10, 5) and finally `grip -2` (to 3, the limit: a WARNING is printed), watching the pads and listening each
+   time. Python refuses anything below 3. After 5 s closed the firmware opens the claw back to 90; the next step
+   then closes it again from 90, slowed by the speed limit, which is fine. **If the pads touch, or the servo buzzes
+   or strains, at any angle:** `grip open` at once and tell Claude the angle: the closed limit goes up to that
+   angle plus 2 in both files, and you upload again. Finish with `grip open`.
 
 **Ranges**
 10. `python scripts/first_moves.py`: it asks before enabling (type yes once the arm is posed at 90). Then base,
@@ -391,9 +399,11 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
 12. `python scripts/grip_test.py --lift "<the lift you wrote down, e.g. shoulder -4>"` (one or more joints, 10
     degrees in total at most; `--start 50` is the default first angle). It asks before enabling. At home with the
     claw open (90), place the die between the jaws while nothing is sent, press Enter. It closes towards the limit
-    in 2-degree steps from `--start` (50, 48, 46 ...), opening to 90 between steps because of the 5 s grip timer,
-    and asks "holding? y/n". At the first y, grip_hold is that angle plus 3 degrees further closed (lower), never
-    past the closed limit; then it lifts, holds 2 s, lowers and opens to check. If held, grip_hold goes into the
+    in 2-degree steps from `--start` (50, 48, 46 ... 4, then 3, the limit, with a warning), opening to 90 between
+    steps because of the 5 s grip timer, and asks "holding? y/n". At the first y, grip_hold is that angle plus 3
+    degrees further closed (lower); then it lifts, holds 2 s, lowers and opens to check. No hold down to the limit,
+    or a hold so near the limit that the extra 3 degrees would reach it: it stops with "no hold found down to the
+    limit" and never holds or lifts at the limit (thicker pads, or tell Claude the gap measurements). If held, grip_hold goes into the
     proposal as `grip_hold_deg`: **copy it into `calib/arm_limits.json`**. `grip close` in `arm_jog.py` uses it
     (and refuses until it is set); it never goes to the closed limit.
     **Push mode only (opt-in): `grip_push` is unknown until this test.** With the claw empty, in

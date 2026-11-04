@@ -178,3 +178,10 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   (limit 20 and 140); breaking the clamp on purpose failed 3 checks in the downward build. Compiled (301,681
   bytes), Windows copy refreshed, not uploaded. B15 moved to needs.md A10c. The "claw fixed" plan is cancelled
   (the claw works).
+- Grip closed limit 20 -> 3 (PROVISIONAL; not 0, because 0 is the servo's own end stop and may stall even empty),
+  grip range 10-140 -> 0-140, in both limit files (sync test passes). With foam pads the empty jaws are still wider
+  than a 19 mm die at 20; Girik is measuring the pad-to-pad gap at 90 and 20. `grip_test.py`: the last step is the
+  limit itself, with a warning; no hold down to the limit, or a hold whose extra 3 degrees would reach the limit,
+  stops with "no hold found down to the limit" (no hold or lift at the limit). `arm_limits.json` refuses a
+  `grip_hold_deg` equal to the limit. `arm_jog` and `teach.py` warn on a grip move onto the limit. Relaxation still
+  returns to 90. g++ tests pass in all four builds. Compiled (301,681 bytes), Windows copy refreshed, not uploaded.

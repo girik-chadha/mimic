@@ -68,10 +68,10 @@ def test_committed_limits_are_unlocked_with_the_kit_ranges_for_the_first_powered
     limits = committed_limits()
     assert limits.placeholder is False and limits.limits_checked_by_hand is True
     assert limits.ranges_deg == {"base": (0, 180), "shoulder": (80, 180), "elbow": (30, 120)}
-    # 4 Nov (Girik): a LOWER angle closes this claw; open 90; closed limit 20 PROVISIONAL (no touch down to 40)
-    assert (limits.grip_open_deg, limits.grip_closed_limit_deg) == (90, 20)
-    assert limits.grip_range_deg == (10, 140) and limits.grip_close_dir == -1
-    assert limits.range_of("grip") == (20, 140)                   # never past the closed limit
+    # 4 Nov (Girik): a LOWER angle closes this claw; open 90; closed limit 3 PROVISIONAL (not 0: the servo's end stop)
+    assert (limits.grip_open_deg, limits.grip_closed_limit_deg) == (90, 3)
+    assert limits.grip_range_deg == (0, 140) and limits.grip_close_dir == -1
+    assert limits.range_of("grip") == (3, 140)                    # never past the closed limit, so never 0
     assert limits.grip_hold_deg is None                           # unknown until grip_test.py
     assert limits.home_deg == {"base": 90, "shoulder": 90, "elbow": 90, "grip": 90}
 
@@ -205,8 +205,8 @@ def test_grip_can_go_5_degrees_below_open():
 def test_the_closed_limit_alone_sets_the_closing_direction():
     down = committed_limits()                                                   # limit 20, below open
     up = dataclasses.replace(down, grip_closed_limit_deg=140)                   # limit on the other side of open
-    assert (down.grip_close_dir, down.range_of("grip")) == (-1, (20, 140))
-    assert (up.grip_close_dir, up.range_of("grip")) == (1, (10, 140))
+    assert (down.grip_close_dir, down.range_of("grip")) == (-1, (3, 140))
+    assert (up.grip_close_dir, up.range_of("grip")) == (1, (0, 140))
 
 
 def write_limits(tmp_path, **changes):
@@ -218,10 +218,11 @@ def write_limits(tmp_path, **changes):
 
 
 @pytest.mark.parametrize("changes, problem", [
-    ({"grip_closed_limit_deg": 5}, "closed limit 5 is outside the grip range 10-140"),
+    ({"grip_closed_limit_deg": 150}, "closed limit 150 is outside the grip range 0-140"),
     ({"grip_range_deg": [95, 140]}, "include open"),
     ({"grip_hold_deg": 95}, "grip_hold_deg 95 must be on the closing side of open"),    # that would open it
-    ({"grip_hold_deg": 15}, "grip_hold_deg 15 must be .* not past the closed limit"),
+    ({"grip_hold_deg": 1}, "grip_hold_deg 1 must be .* short of the closed limit"),      # past the limit
+    ({"grip_hold_deg": 3}, r"grip_hold_deg 3 must be .* short of the closed limit \(3\): never hold at the limit"),
     ({"grip_hold_deg": 90}, "grip_hold_deg 90 must be on the closing side"),
 ])
 def test_bad_grip_settings_are_refused(tmp_path, changes, problem):
@@ -231,12 +232,18 @@ def test_bad_grip_settings_are_refused(tmp_path, changes, problem):
 
 def test_good_grip_hold_and_an_older_file_without_a_range(tmp_path):
     assert arm.load_limits(write_limits(tmp_path, grip_hold_deg=45)).grip_hold_deg == 45
-    assert arm.load_limits(write_limits(tmp_path, grip_hold_deg=20)).grip_hold_deg == 20   # right at the limit: ok
+    assert arm.load_limits(write_limits(tmp_path, grip_hold_deg=4)).grip_hold_deg == 4     # just short of the limit
     data = json.loads(config.ARM_LIMITS_PATH.read_text())
     del data["grip_range_deg"]             # an older file: the range is just open .. closed limit
     path = tmp_path / "old.json"
     path.write_text(json.dumps(data))
-    assert arm.load_limits(path).grip_range_deg == (20, 90)
+    assert arm.load_limits(path).grip_range_deg == (3, 90)
+
+
+def test_the_limit_warning_is_only_for_the_closed_limit_itself():
+    limits = committed_limits()
+    assert "closed limit (3, PROVISIONAL)" in arm.grip_limit_warning(limits, 3)
+    assert arm.grip_limit_warning(limits, 4) is None and arm.grip_limit_warning(limits, 90) is None
 
 
 @pytest.mark.parametrize("reply", ["A 90 90 90 90 X", "A 90 90 90 90 L extra", "B 90 90 90 90"])
@@ -330,8 +337,9 @@ def test_stop_sends_S_and_forgets_the_pose():
     ({"base": 181, "shoulder": 90, "elbow": 90, "grip": 90}, "base 181 degrees is outside its range 0-180"),
     ({"base": 90, "shoulder": 79, "elbow": 90, "grip": 90}, "shoulder 79 degrees is outside its range 80-180"),
     ({"base": 90, "shoulder": 90, "elbow": 121, "grip": 90}, "elbow 121 degrees is outside its range 30-120"),
-    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 141}, "grip 141 degrees is outside its range 20-140"),
-    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 19}, "grip 19 degrees is outside its range 20-140"),
+    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 141}, "grip 141 degrees is outside its range 3-140"),
+    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 2}, "grip 2 degrees is outside its range 3-140"),
+    ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 0}, "grip 0 degrees is outside its range 3-140"),
     ({"base": 90, "shoulder": 90, "elbow": 90}, "needs exactly these joints"),
     ({"base": 90, "shoulder": 90, "elbow": 90, "grip": 90, "wrist": 90}, "needs exactly these joints"),
 ])

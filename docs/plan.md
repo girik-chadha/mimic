@@ -190,8 +190,8 @@ Details settled 29 Oct (firmware/mimic_arm/arm_logic.h, tested with g++ on the l
   Python: `arm.enable()` / `arm.disable()`; every script asks before enabling; `s`, Ctrl+C and errors send S then
   D; a normal quit says "Hold the arm" and disables.
 - (4 Nov, Girik) **A lower angle closes this claw.** The closed limit is the one setting for the direction (below
-  open 90 = lower closes): `GRIP_CLOSED_LIMIT 20` (provisional), `GRIP_RANGE` 10-140, and the clamp never sends
-  the grip past the limit. `grip close` goes to `grip_hold_deg` (found by `grip_test.py`), never to the limit.
+  open 90 = lower closes): `GRIP_CLOSED_LIMIT 3` (provisional; not 0, the servo's own end stop), `GRIP_RANGE`
+  0-140, and the clamp never sends the grip past the limit. `grip close` goes to `grip_hold_deg` (found by `grip_test.py`), never to the limit.
   The 5 s relaxation still returns the grip to 90 (needs.md A10c).
 - (3 Nov) `B` is read-only and always allowed, like `?` and `S`. The reason comes from the ESP32's reset code
   (mapping in `arm_logic.h`, tested with g++; the numbers are checked against the ESP32's own names at compile time).

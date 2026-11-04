@@ -38,7 +38,7 @@ def test_measured_but_not_checked_by_hand_still_refuses(tmp_path):
 
 def test_moves_clamps_ramps_and_grip_timer(tmp_path):
     result = build_and_run(tmp_path, "-DLIMITS_ARE_PLACEHOLDER=0", "-DLIMITS_CHECKED_BY_HAND=1")
-    assert "grip closes downwards (closed limit 20)" in result.stdout   # the committed setting (4 Nov)
+    assert "grip closes downwards (closed limit 3)" in result.stdout    # the committed setting (4 Nov)
     assert "ok   grip never closes past its limit" in result.stdout
     assert result.returncode == 0, result.stdout
 

@@ -51,7 +51,14 @@ def test_grip_close_goes_to_grip_hold_once_it_is_known():
     a = Arm(t, limits)
     assert jog.handle(a, "grip close") == "grip close"
     assert t.sent[-1] == "J 90 90 90 45 500"                    # a lower angle closes this claw
-    assert jog.handle(a, "grip -30").startswith("refused: grip 15 degrees is outside its range 20-140")
+    assert jog.handle(a, "grip -43").startswith("refused: grip 2 degrees is outside its range 3-140")
+
+
+def test_a_grip_step_onto_the_closed_limit_warns(fake):
+    a, t = fake
+    reply = jog.handle(a, "grip -87")                           # 90 -> 3, the closed limit
+    assert reply.startswith("grip now 3\nWARNING: the grip is at its closed limit (3, PROVISIONAL)")
+    assert jog.handle(a, "grip +2") == "grip now 5"             # off the limit: no warning
 
 
 def test_step_past_a_limit_is_refused_and_not_sent(fake):

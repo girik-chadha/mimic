@@ -334,7 +334,7 @@ static void test_grip_relaxes() {
   char line[64];
   snprintf(line, sizeof line, "J %d %d %d %d 500", HOME[0], HOME[1], HOME[2], GRIP_CLOSED_LIMIT);
   send(a, line, 0);
-  unsigned long arrive = a.ms;  // the move time, after the speed limit (90 -> 20 takes 700 ms)
+  unsigned long arrive = a.ms;  // the move time, after the speed limit (90 -> 3 takes 870 ms)
   run_until(a, 20, arrive + 100);
   CHECK(near(a.now[3], GRIP_CLOSED_LIMIT), "the grip closes");
   unsigned long closed_at = a.grip_closed_since;

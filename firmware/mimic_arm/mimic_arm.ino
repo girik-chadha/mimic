@@ -18,7 +18,7 @@
 //
 // Status 3 Nov: UNLOCKED with the kit's ranges (from its sample code, untested on this arm) for the first powered
 // session (needs.md C7), with B, and disarmed at power-on (E and D). Grip: a lower angle closes (4 Nov), open 90,
-// closed limit 20 (PROVISIONAL), range 10-140. Compiles for
+// closed limit 3 (PROVISIONAL), range 0-140. Compiles for
 // esp32:esp32:esp32 (ESP32 core 2.0.12, ESP32Servo 1.2.1); not uploaded yet, so the board still runs the locked
 // build (which has no B, E or D). Pins are from the kit's sample code (untested on this arm).
 // The servo ports need battery power: USB alone does not move them.
