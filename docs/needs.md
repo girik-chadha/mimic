@@ -66,6 +66,15 @@ client.responses.create(model="sam-3.1", input=[{"role": "user", "content": [
   (about 38 px, 0.030) is now kept as a candidate, and the robust dot finding leaves it out because no set of 6
   that includes it fits the layout.
 
+### A2c. SAM finds the claw-tip marker (real iVCam frame, 4 Nov, Girik)
+
+- **"gripper marker", "yellow square", "yellow sticker" and "yellow foam" found nothing** (0 boxes).
+- **"small yellow rectangle" found 2 boxes:** the marker on the claw at (743, 182) px, and the yellow pin sockets
+  on the control board at (578, 160) px. So it is the default `marker_name` in `calib/ring.json`
+  (`ring_calibrate.py --marker-name` to try another), and only boxes whose centre is on the calibrated sheet count:
+  the tip is lowered onto the paper, the board is not on it. Exactly one must remain, or the point is refused with
+  every box and where it fell. A test uses these two boxes (the marker chosen, the pins dropped).
+
 ### A3. SAM 3.1 on a video (tested 28 Oct)
 
 Request: same as A2 but `{"type": "input_video", "video_url": "data:video/mp4;base64,..."}`. A 3.2 MB, 317-frame, 1280x720 MP4 sent as a data URL worked.
@@ -470,8 +479,11 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     spread across the range you will use (for example 80, 90, 100, 110, 120). For each one the arm lifts if it is
     low, turns the base, and lowers the claw onto the table in 2-degree steps (to `shoulder_table` from ring.json, or
     `--table-shoulder N`, which is then saved with the fit); a photo with the arm in
-    view calibrates itself from the 6 dots and SAM finds the "gripper marker"; then the arm lifts. A photo with a
-    hidden dot, or not exactly one marker, is skipped: type another angle. After 5 points type done: it fits the
+    view calibrates itself from the 6 dots and SAM looks for `marker_name` from ring.json ("small yellow
+    rectangle"; `--marker-name` to try another, saved with the fit). Only boxes on the sheet count (A2c): exactly one
+    must remain. Every box and where it fell is printed, and each point's photo is saved with all the boxes drawn and
+    the chosen one marked (`runs/ring_calibrate_<time>/ring_<n>_base<angle>_marker.jpg`): look at it. Then the arm
+    lifts. A photo with a hidden dot, or not exactly one marker on the sheet, is skipped: type another angle. After 5 points type done: it fits the
     ring (centre, radius, base scale; mimic/ring.py) and prints each point's distance from it. Any point over
     0.5 cm refuses the fit, and if leaving one point out lets the others fit, it names that point to re-measure.
     Type yes to save `calib/ring.json` (placeholder false; slots, camera_clear and the pick numbers are kept).

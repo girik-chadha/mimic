@@ -45,7 +45,7 @@ class FakeWorld:
         self.arm = Arm(self.transport, LIMITS)
         self.ring_path = tmp_path / "ring.json"
         shutil.copy(config.ROOT / "calib" / "ring.json", self.ring_path)
-        self.photos, self.budgets = {}, []
+        self.photos, self.budgets, self.asked = {}, [], []
         self.hide_dot_at, self.extra_marker_at, self.marker_shift = set(), set(), {}
         monkeypatch.setattr(arm, "load_limits", lambda path=config.ARM_LIMITS_PATH: LIMITS)
         monkeypatch.setattr(session, "connect", lambda dry_run, limits, echo=print: self.arm)
@@ -68,7 +68,7 @@ class FakeWorld:
         if name == self.layout.dot_prompt:
             dots = [box_at(cm, 25) for cm in self.layout.dots_cm.values()]
             return dots[:5] if base in self.hide_dot_at else dots
-        assert name == "gripper marker"
+        self.asked.append(name)
         x, y = self.tip(base)
         dx, dy = self.marker_shift.get(base, (0, 0))
         boxes = [box_at((x + dx, y + dy), 30)]
@@ -102,7 +102,9 @@ def test_five_points_fit_the_true_ring_and_save_it(monkeypatch, tmp_path):
 def test_the_table_angle_comes_from_ring_json_and_the_stop_is_3_past_it(monkeypatch, tmp_path):
     world = FakeWorld(monkeypatch, tmp_path)
     code, said = world.run(["yes"] + ANGLES + ["done", "yes"])
-    assert "Table height: shoulder 180; the shoulder is never sent past 183." in said
+    assert ("Table height: shoulder 180; the shoulder is never sent past 183. Marker: 'small yellow rectangle'."
+            in said)
+    assert set(world.asked) == {"small yellow rectangle"}             # marker_name from calib/ring.json
     moves = [[int(v) for v in line.split()[1:5]] for line in world.transport.sent if line.startswith("J")]
     assert max(m[1] for m in moves) == 180 and moves[0][1] == 170     # the approach starts 10 above the table
 
@@ -111,7 +113,7 @@ def test_table_shoulder_overrides_ring_json_and_is_saved_with_the_fit(monkeypatc
     world = FakeWorld(monkeypatch, tmp_path, table=170)
     code, said = world.run(["yes"] + ANGLES + ["done", "yes"], argv=["--table-shoulder", "170"])
     assert code == 0
-    assert "Table height: shoulder 170; the shoulder is never sent past 173." in said
+    assert any(line.startswith("Table height: shoulder 170; the shoulder is never sent past 173.") for line in said)
     moves = [[int(v) for v in line.split()[1:5]] for line in world.transport.sent if line.startswith("J")]
     assert max(m[1] for m in moves) == 170 and [m[1] for m in moves[:2]] == [160, 162]  # above: 170 - approach 10
     saved = ring.load_ring(world.ring_path)
@@ -141,7 +143,67 @@ def test_a_photo_with_a_hidden_dot_or_two_markers_is_skipped_and_another_angle_a
     code, said = world.run(["yes", "80", "90", "95", "100", "110", "115", "120", "done", "yes"])
     assert code == 0 and [p["base_deg"] for p in ring.load_ring(world.ring_path).points] == [80, 95, 100, 115, 120]
     assert any("skipped: Found 5 dots" in line for line in said)
-    assert any("skipped: SAM found 2 boxes for 'gripper marker'" in line for line in said)
+    assert any("skipped: SAM found 2 boxes for 'small yellow rectangle', 2 on the sheet (exactly 1 is needed)" in line
+               for line in said)
+
+
+def test_marker_name_override_is_used_and_saved_and_every_point_has_its_marker_photo(monkeypatch, tmp_path):
+    world = FakeWorld(monkeypatch, tmp_path)
+    code, said = world.run(["yes"] + ANGLES + ["done", "yes"], argv=["--marker-name", "yellow tape"])
+    assert code == 0 and set(world.asked) == {"yellow tape"}
+    assert ring.load_ring(world.ring_path).marker_name == "yellow tape"
+    run_dir = next((world.ring_path.parent / "runs").iterdir())
+    assert len(list(run_dir.glob("*_marker.jpg"))) == 5
+
+
+# ---------- choosing the marker among several boxes (the real iVCam frame, 4 Nov) ----------
+
+def real_frame_px(cm):
+    """A made-up camera in which, as on the real frame, (743, 182) is on the sheet and (578, 160) is just off it."""
+    return (100 + cm[0] * 28, 715 - cm[1] * 20)
+
+
+def frame_with(tmp_path, monkeypatch, marker_boxes):
+    layout = scene.load_layout(config.LAYOUT_PATH)
+    photo = tmp_path / "frame.jpg"
+    cv2.imwrite(str(photo), np.full((H, W, 3), 230, np.uint8))
+
+    def find(image_path, name, use_cache=True):
+        if name == layout.dot_prompt:
+            return [Box(*(round(v) for v in (x - 12, y - 12, x + 12, y + 12)), W, H)
+                    for x, y in (real_frame_px(cm) for cm in layout.dots_cm.values())]
+        return marker_boxes
+
+    monkeypatch.setattr(sam, "find", find)
+    return str(photo), layout
+
+
+def box_around(px, w, h):
+    return Box(px[0] - w // 2, px[1] - h // 2, px[0] + w // 2, px[1] + h // 2, W, H)
+
+
+def test_the_marker_on_the_sheet_is_chosen_and_the_board_pins_are_dropped(tmp_path, monkeypatch):
+    marker, pins = box_around((743, 182), 30, 20), box_around((578, 160), 40, 14)
+    photo, layout = frame_with(tmp_path, monkeypatch, [marker, pins])
+    said = []
+    x, y = rc.measure_tip(photo, layout, tmp_path, "p1", "small yellow rectangle", said.append)
+    assert (x, y) == pytest.approx(((743 - 100) / 28, (715 - 182) / 20), abs=0.05)    # the marker, on the sheet
+    assert "(743, 182) px -> (23.0, 26.6) cm, on the sheet" in said[0]
+    assert "(578, 160) px -> (17.1, 27.7) cm, off the sheet" in said[0] and "using the one on the sheet" in said[0]
+    assert cv2.imread(str(tmp_path / "p1_marker.jpg")) is not None                     # the labelled photo
+
+
+def test_no_box_on_the_sheet_or_two_on_it_refuse_the_point_and_list_every_box(tmp_path, monkeypatch):
+    pins = box_around((578, 160), 40, 14)
+    photo, layout = frame_with(tmp_path, monkeypatch, [pins])          # a lone box off the sheet is not the tip
+    with pytest.raises(scene.SceneError, match=r"1 boxes for 'small yellow rectangle', 0 on the sheet .*"
+                                               r"\(578, 160\) px -> \(17.1, 27.7\) cm, off the sheet"):
+        rc.measure_tip(photo, layout, tmp_path, "p2", "small yellow rectangle", lambda s: None)
+    two = [box_around((743, 182), 30, 20), box_around((700, 400), 30, 20)]
+    photo, layout = frame_with(tmp_path, monkeypatch, two)
+    with pytest.raises(scene.SceneError, match="2 boxes for 'small yellow rectangle', 2 on the sheet"):
+        rc.measure_tip(photo, layout, tmp_path, "p3", "small yellow rectangle", lambda s: None)
+    assert (tmp_path / "p2_marker.jpg").exists() and (tmp_path / "p3_marker.jpg").exists()   # saved to look at
 
 
 def test_done_before_5_points_and_a_repeated_angle_are_refused(monkeypatch, tmp_path):

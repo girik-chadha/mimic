@@ -235,3 +235,9 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   it. `arm_jog` and `teach` `home` are a slow J to it (no firmware change). Every script's normal end ramps back to
   it (30 ms per degree, at least 1 s) before "Hold the arm", 2 s and D; stops never ramp. ring.json shoulder_table
   180 (approach 10, so from 170).
+- Real iVCam frame (Girik): "gripper marker", "yellow square", "yellow sticker", "yellow foam" found nothing;
+  "small yellow rectangle" found the claw marker (743, 182) and the control board's yellow pin sockets (578, 160).
+  `marker_name` in calib/ring.json (default "small yellow rectangle"), `ring_calibrate.py --marker-name` (saved with
+  the fit). Only boxes whose centre is on the calibrated sheet count (a lone box off the sheet too): exactly one must
+  remain, or the point is refused listing every box and where it fell. Each point's photo is saved with every box
+  drawn and the chosen one marked. Test with the two real boxes: the marker is chosen, the pins dropped.

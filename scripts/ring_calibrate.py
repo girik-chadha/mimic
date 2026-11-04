@@ -2,6 +2,7 @@
 
     python scripts/ring_calibrate.py
     python scripts/ring_calibrate.py --table-shoulder 171      a new table-height shoulder angle (saved with the fit)
+    python scripts/ring_calibrate.py --marker-name "yellow tape"   another SAM prompt for the marker (saved too)
 
 Put the gripper marker on the claw tip, facing the camera. Needs the measured dots (layout.json dots_measured) and
 the arm unlocked. After a typed yes to enable (at the start pose, calib/start_pose.json: pose the arm like it by
@@ -9,9 +10,13 @@ hand first), for each point:
 1. you type a base angle (spread them out: for example 80, 90, 100, 110, 120);
 2. the arm lifts if it is low, turns the base, and lowers the claw onto the table in 2-degree steps, to shoulder_table
    from calib/ring.json (or --table-shoulder), never past the shoulder stop (stop_at, or 3 degrees past the table);
-3. a photo, with the arm in view: it calibrates itself from the 6 dots (so no dot may be hidden), and SAM finds
-   the "gripper marker" (exactly one box), which gives the tip's sheet position;
-4. the arm lifts again. A photo that cannot calibrate, or has no single marker, is skipped: try another angle.
+3. a photo, with the arm in view: it calibrates itself from the 6 dots (so no dot may be hidden), and SAM looks for
+   marker_name from calib/ring.json (default "small yellow rectangle"). Only boxes whose centre is on the sheet count,
+   because the tip is lowered onto the paper (other yellow things, like the control board's pin sockets, are not);
+   exactly one must remain, and it gives the tip's sheet position. Every box and where it fell is printed, and the
+   photo is saved with all of them drawn and the chosen one marked (runs/ring_calibrate_<time>/..._marker.jpg);
+4. the arm lifts again. A photo that cannot calibrate, or has no single marker on the sheet, is skipped: try another
+   angle.
 After 5 points (more are allowed) type done. The ring is fitted (mimic/ring.py: centre, radius, and the base scale,
 which needs 4 or more points) and each point's error is shown; any point over 0.5 cm off refuses the fit. Type yes
 to save calib/ring.json: the fit and the points, placeholder false, and the table angle used (so a --table-shoulder
@@ -23,23 +28,66 @@ import sys
 import time
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 from mimic import arm as arm_module
 from mimic import camera, config, meta_api, ring, sam, scene, session
 from mimic.arm import ArmError
 from mimic.pickdrop import PickError, plan_lift, plan_touch, run_steps
 
 POINTS_NEEDED = 5
-MARKER_PROMPT = "gripper marker"
 RUN_BUDGET_USD = 0.05
+CHOSEN, OTHER, SHEET = (0, 180, 0), (0, 0, 220), (200, 120, 0)   # drawing colours (blue, green, red)
 
 
-def measure_tip(photo: str, layout, out_dir: Path, label: str) -> tuple[float, float]:
-    """The marker's sheet position in this photo (which calibrates itself). Raises SceneError if it cannot."""
+def on_sheet(boxes: list, c, layout) -> tuple[list, list[str]]:
+    """The boxes whose centre is on the sheet (where the tip is lowered), and a line for every box saying where it fell."""
+    (x0, y0), (x1, y1) = layout.sheet_min_cm, layout.sheet_max_cm
+    inside, lines = [], []
+    for b in boxes:
+        x, y = c.px_to_cm(b.centre)
+        on = x0 <= x <= x1 and y0 <= y <= y1
+        lines.append(f"({b.centre[0]:.0f}, {b.centre[1]:.0f}) px -> ({x:.1f}, {y:.1f}) cm, "
+                     f"{'on the sheet' if on else 'off the sheet'}")
+        if on:
+            inside.append(b)
+    return inside, lines
+
+
+def _pt(p):
+    return (int(round(p[0])), int(round(p[1])))
+
+
+def draw_marker(photo: str, boxes: list, chosen, c, layout, out_path) -> None:
+    """The photo with the sheet outlined, every matched box drawn, and the chosen one marked."""
+    img = cv2.imread(photo)
+    (x0, y0), (x1, y1) = layout.sheet_min_cm, layout.sheet_max_cm
+    corners = [_pt(c.cm_to_px(p)) for p in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
+    cv2.polylines(img, [np.array(corners, np.int32)], True, SHEET, 2)
+    for b in boxes:
+        colour = CHOSEN if b is chosen else OTHER
+        cv2.rectangle(img, (b.x1, b.y1), (b.x2, b.y2), colour, 3)
+        cv2.putText(img, "chosen" if b is chosen else "not used", (b.x1, b.y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                    colour, 2)
+    cv2.imwrite(str(out_path), img)
+
+
+def measure_tip(photo: str, layout, out_dir: Path, label: str, marker_name: str, say=print) -> tuple[float, float]:
+    """The marker's sheet position in this photo (which calibrates itself). Raises SceneError if there is not exactly
+    one matching box on the sheet. Saves the photo with every box drawn and the chosen one marked."""
     c = scene.calibrate(photo, layout, out_dir / f"{label}_dots.jpg")
-    boxes = sam.find(photo, MARKER_PROMPT)
-    if len(boxes) != 1:
-        raise scene.SceneError(f"SAM found {len(boxes)} boxes for {MARKER_PROMPT!r}, not exactly 1.")
-    return c.px_to_cm(boxes[0].centre)  # the marker is at table height: no height correction
+    boxes = sam.find(photo, marker_name)
+    inside, lines = on_sheet(boxes, c, layout)
+    chosen = inside[0] if len(inside) == 1 else None
+    marked = out_dir / f"{label}_marker.jpg"
+    draw_marker(photo, boxes, chosen, c, layout, marked)
+    if chosen is None:
+        raise scene.SceneError(f"SAM found {len(boxes)} boxes for {marker_name!r}, {len(inside)} on the sheet (exactly "
+                               f"1 is needed): " + ("; ".join(lines) if lines else "none") + f". Photo: {marked}")
+    if len(boxes) > 1:
+        say(f"  {len(boxes)} boxes for {marker_name!r}: " + "; ".join(lines) + " -> using the one on the sheet")
+    return c.px_to_cm(chosen.centre)  # the marker is at table height: no height correction
 
 
 def collect(arm, limits, the_ring, layout, capture, ask, say, sleep, out_dir: Path) -> list:
@@ -70,7 +118,7 @@ def collect(arm, limits, the_ring, layout, capture, ask, say, sleep, out_dir: Pa
         run_steps(arm, steps, say, sleep)
         label = f"ring_{len(points) + 1}_base{base}"
         try:
-            x, y = measure_tip(capture(out_dir / f"{label}.jpg"), layout, out_dir, label)
+            x, y = measure_tip(capture(out_dir / f"{label}.jpg"), layout, out_dir, label, the_ring.marker_name, say)
             points.append((base, x, y))
             say(f"  point {len(points)}: base {base} -> tip at ({x:.2f}, {y:.2f}) cm")
         except scene.SceneError as error:
@@ -84,6 +132,7 @@ def main(argv=None, read=input, capture=camera.capture, sleep=time.sleep, say=pr
     parser = argparse.ArgumentParser(description="Fit the ring the claw tip reaches, from 5 base angles.")
     parser.add_argument("--table-shoulder", type=int,
                         help="shoulder angle at table height (default: shoulder_table in calib/ring.json)")
+    parser.add_argument("--marker-name", help="SAM prompt for the tip marker (default: marker_name in calib/ring.json)")
     args = parser.parse_args(argv)
     try:
         layout = scene.load_layout()
@@ -91,6 +140,8 @@ def main(argv=None, read=input, capture=camera.capture, sleep=time.sleep, say=pr
         the_ring = ring.load_ring(ring_path)
         if args.table_shoulder is not None:
             the_ring = dataclasses.replace(the_ring, shoulder_table=args.table_shoulder)
+        if args.marker_name:
+            the_ring = dataclasses.replace(the_ring, marker_name=args.marker_name)
         limits = arm_module.load_limits()
         arm = session.connect(False, limits)   # a locked arm is refused here, before the bridge opens
     except (ArmError, scene.SceneError, ring.RingError) as error:
@@ -98,7 +149,8 @@ def main(argv=None, read=input, capture=camera.capture, sleep=time.sleep, say=pr
         return 1
     out_dir = Path(out_root) / f"ring_calibrate_{time.strftime('%Y%m%d-%H%M%S')}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    say(f"Table height: shoulder {the_ring.shoulder_table}; the shoulder is never sent past {the_ring.shoulder_stop}.")
+    say(f"Table height: shoulder {the_ring.shoulder_table}; the shoulder is never sent past {the_ring.shoulder_stop}. "
+        f"Marker: {the_ring.marker_name!r}.")
 
     def body():
         session.confirm_and_enable(arm, read, say, sleep)  # at the start pose

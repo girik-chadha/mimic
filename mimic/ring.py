@@ -66,6 +66,7 @@ class Ring:
     stop_at: int | None = None   # None: shoulder_table + STOP_MARGIN_DEG (see shoulder_stop)
     command_s: float = 0.05
     max_off_ring_cm: float = 1.0
+    marker_name: str = "small yellow rectangle"  # the SAM prompt for the claw-tip marker (ring_calibrate.py)
 
     @property
     def shoulder_stop(self) -> int:

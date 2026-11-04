@@ -615,3 +615,14 @@ there. Measuring the real command time (under 5 ms) gave back half a second of g
 Two sentences: "Every script now starts the arm in one known pose and returns it there before switching off, so the
 person at the arm always knows how to pose it. If the start-pose file goes missing, everything falls back to 90
 degrees and says so."
+
+### 4 Nov: finding the marker on the claw
+
+- SAM could not find a "gripper marker", but "small yellow rectangle" found two things: the marker on the claw and
+  the yellow pin sockets on the arm's control board. The marker is always lowered onto the paper sheet and the board
+  is not, so only a box on the calibrated sheet counts. If anything else is left, the point is refused, and every
+  photo is saved with what SAM found and what was chosen, so a person can check it.
+
+Two sentences: "The calibration names the marker the way SAM can find it, and when SAM finds more than one yellow
+rectangle it keeps only the one lying on the paper. Each photo is saved with the choice drawn on it, so the decision
+can be checked by eye."
