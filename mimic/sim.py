@@ -32,6 +32,7 @@ Outputs, in runs/<time>_simulation/, every name starting with "simulation_":
 import dataclasses
 import json
 import math
+import re
 import shutil
 import time
 from pathlib import Path
@@ -50,6 +51,7 @@ PICK_RADIUS_CM = 1.0          # the claw picks up a die whose centre is this clo
 INSTRUCTION_MODES = ("row", "stack")
 DIE_SUFFIX = " die"           # the naming prompt asks for "colour die"; anything else is not a die
 LABEL = "placed on the made-up ring"
+SIM_TAG = "[simulated] "
 MARK = "SIMULATION: an output of Mimic's simulation mode (run_mimic.py --ring --sim); the arm was simulated."
 STACK_WHY = ("The real arm cannot stack: with the elbow taped, the claw reaches the table only at one shoulder "
              "angle, and lifting it (a smaller shoulder angle) also moves it along the radius, so it cannot let go "
@@ -89,7 +91,8 @@ class SimArm(FakeTransport):
 
     def __init__(self, limits, ring, dice: dict, say=print, miss: tuple | None = None):
         super().__init__(limits)
-        self.ring, self.limits, self.out = ring, limits, say
+        self.ring, self.limits = ring, limits
+        self.out = lambda text: say(SIM_TAG + text)  # every line about the arm says it is the simulated one
         self.dice = dict(dice)        # name -> (x, y) cm; None while held
         self.level = {n: 0 for n in dice}   # 0 on the table, 1 on top of one die, ...
         self.held = None
@@ -169,6 +172,68 @@ def parse_instruction(text: str) -> tuple[str, list[str]]:
     return parts[0], colours
 
 
+GOAL_EXAMPLES = ('Goals that work: "put black on blue, then red on black" (a stack, built on slot 1 from the bottom '
+                 'die up), "row black, blue, red" (slots 1, 2, 3), "stack black, blue, red" (bottom first), or leave '
+                 "it empty for the photo's left-to-right order.")
+PAIR = re.compile(r"^(?:(?:and|then|put|place)\s+)*(?:the\s+)?(.+?)\s+on\s+(?:top\s+of\s+)?(?:the\s+)?(.+)$")
+
+
+def parse_goal(text: str) -> tuple[str, list]:
+    """The goal, read by code (no API call), before anything else runs:
+        ""                                       -> ("photo", [])           the photo's left-to-right order
+        "row black, blue, red"                   -> ("row", ["black", ...])
+        "stack black, blue, red"                 -> ("stack", ["black", ...])   bottom first
+        "put black on blue, then red on black"   -> ("pairs", [("black", "blue"), ("red", "black")])
+    Anything else is refused with GOAL_EXAMPLES."""
+    text = " ".join(text.strip().lower().split())
+    if not text:
+        return "photo", []
+    first = text.split(None, 1)[0]
+    if first in INSTRUCTION_MODES:
+        try:
+            return parse_instruction(text)
+        except SimError:
+            raise SimError(f"Not understood: {text!r}. {GOAL_EXAMPLES}") from None
+    if " on " not in f" {text} ":
+        raise SimError(f"Not understood: {text!r}. {GOAL_EXAMPLES}")
+    pairs = []
+    for clause in (c.strip() for c in re.split(r",|\bthen\b", text)):
+        clause = re.sub(r"^(?:and\s+)+|\s+and$", "", clause).strip()
+        if not clause:
+            continue
+        found = PAIR.match(clause)
+        if not found:
+            raise SimError(f"Not understood: {clause!r}. {GOAL_EXAMPLES}")
+        pairs.append((found.group(1).strip(), found.group(2).strip()))
+    if not pairs:
+        raise SimError(f"Not understood: {text!r}. {GOAL_EXAMPLES}")
+    return "pairs", pairs
+
+
+def resolve_goal(mode: str, spec: list, names: list[str], seen: dict) -> list[str]:
+    """The target order (for a stack: bottom first), with each colour matched to exactly one of Spark's names.
+    "X on Y" pairs must build one pile: each Y is the die on top so far ("red on black" after "black on blue")."""
+    if mode == "photo":
+        return photo_order(seen)
+    if mode in INSTRUCTION_MODES:
+        return match_colours(spec, names)
+    order = []
+    for x_colour, y_colour in spec:
+        x, y = match_colours([x_colour], names)[0], match_colours([y_colour], names)[0]
+        if x == y:
+            raise SimError(f"{x} cannot go on itself.")
+        if not order:
+            order = [y, x]
+            continue
+        if y != order[-1]:
+            raise SimError(f"{x_colour} on {y_colour}: {y} is not on top of the pile ({order[-1]} is). Each pair "
+                           f"puts a die on the one placed last. {GOAL_EXAMPLES}")
+        if x in order:
+            raise SimError(f"{x} is already in the pile.")
+        order.append(x)
+    return order
+
+
 def match_colours(colours: list[str], names: list[str]) -> list[str]:
     """Each colour (one or more words) must be in exactly one of Spark's names: 'blue' -> 'blue die'. A die's
     whole name always picks that die ('blue die' when there is also a 'dark blue die')."""
@@ -213,8 +278,8 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
     start = arm_module.load_start_pose(say=say)
     the_ring = made_up_ring(ring_module.load_ring())
     ring_loop.preflight(layout, the_ring, limits)
-    mode, colours = parse_instruction(instruction) if instruction else ("row", None)
-    stack = mode == "stack"
+    mode, spec = parse_goal(instruction or "")   # refused here, before any API call
+    stack = mode in ("stack", "pairs")
 
     out_dir = Path(out_root) / f"{time.strftime('%Y%m%d-%H%M%S')}_simulation"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -236,7 +301,13 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
         try:
             say(f"Perception on {photo} (real SAM and Spark calls, cap ${ring_loop.RUN_BUDGET_USD:.2f})")
             calib = scene.calibrate(str(photo), layout, out_dir / "simulation_photo_dots.jpg")
+            checks = [f"{role} {calib.check(px, cm):.2f} cm" for role, px, cm in
+                      zip(scene.ROLES[4:], calib.pixel_pts[4:], calib.table_pts_cm[4:])]
+            say(f"  SAM found the 6 dots; the photo calibrated itself, check dots off by {', '.join(checks)}  "
+                f"(${meta_api.cost_so_far():.4f} so far)")
             names = brain.name_objects(str(photo))
+            say(f"  Spark named: {', '.join(names)}; SAM found exactly 1 box for each  "
+                f"(${meta_api.cost_so_far():.4f} so far)")
             dice = [n for n in names if n.endswith(DIE_SUFFIX)]
             if len(dice) < len(names):
                 say(f"  not dice, left out: {', '.join(n for n in names if n not in dice)}")
@@ -244,9 +315,9 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
         finally:
             config.BUDGET_USD = budget_before
             summary["cost_usd"] = round(meta_api.cost_so_far(), 4)
-        target = match_colours(colours, dice) if colours else photo_order(seen)
+        target = resolve_goal(mode, spec, dice, seen)
         summary["target"] = target
-        how = "typed" if colours else "photo order, left to right"
+        how = "photo order, left to right" if mode == "photo" else "read from the goal by code"
         if stack:
             say(f"Target ({how}): a stack on slot 1, bottom first: {', '.join(target)}. SIMULATION ONLY: {STACK_WHY}")
         else:

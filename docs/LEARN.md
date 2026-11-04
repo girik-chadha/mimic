@@ -685,3 +685,17 @@ the real arm would be sent, and every file and every video frame says it is a si
 Two sentences: "Stacking is shown only in the simulation, and every move of it is marked simulation-only, because the
 taped elbow cannot release a die higher up at the same spot. The same report script that summarises real runs now
 summarises a simulation too, with the banner on the page and on the picture."
+
+### 4 Nov: the demo page, step 1
+
+- `python web/app.py` serves one page on this computer only. You give it a photo and a goal; the server runs the
+  simulation in the background and sends every line it prints to the page while it runs, then the page plays the
+  "Expected simulation" video. It uses only Python's built-in web server, and the page loads nothing from the
+  internet (the fonts are in `web/fonts/`).
+- The goal is read by plain code, not AI: "put black on blue, then red on black" becomes a pile, bottom first; "row
+  ..." fills the slots; an empty goal uses the photo's left-to-right order. Anything else is refused with examples
+  before anything is sent to Meta.
+
+Two sentences: "The demo page is a small local web server that runs the real perception and planner on your photo
+and streams every step to the browser as it happens. It labels everything as an expected simulation, and the log
+tags every line about the arm as simulated."

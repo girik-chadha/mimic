@@ -107,6 +107,10 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 
 ## Mon 2 Nov: Phase 5, demo quality (freeze 18:00)
 
+- [x] Demo page, step 1 (4 Nov): `python web/app.py` -> http://127.0.0.1:8000. Upload (JPEG/PNG only, checked by bytes) or the sample photo, a goal read by code (`put black on blue, then red on black`, `row ...`, `stack ...`, empty = photo order; anything else refused with examples), use cache (off by default), Run; the "Expected simulation" video looping; the live log streamed from the server (lines about the arm tagged simulated); cost against the $0.30 cap. `/?run=<folder>` replays a finished run with no calls. Video now 15 fps.
+- [ ] Demo page, step 2: the "Arm program ready" card and the zip (job script, moves.json, README, `calib/stack.json`)
+- [ ] Demo page, step 3: tabs (What SAM sees, What Spark read, Plan)
+
 - [ ] Web page; Spark Open on Baseten (B7); benchmark 10 runs
 
 ## Tue 3 to Wed 4 Nov: Phase 6

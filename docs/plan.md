@@ -32,6 +32,8 @@ mimic/                     the Python package
   camera.py                capture(path) -> photo
   loop.py                  run(): the whole see-plan-act-check loop, writes runs/<time>/
   web.py                   (Phase 5) local web page: camera, plan, attempt log
+web/                       (4 Nov) the demo page: app.py (standard-library server on 127.0.0.1:8000),
+                           index.html (inline CSS/JS), fonts/ (Archivo, JetBrains Mono, OFL licences)
 firmware/
   mimic_arm/mimic_arm.ino  ESP32: tiny command protocol, smooth moves, safety limits
 scripts/

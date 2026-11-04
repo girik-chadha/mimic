@@ -196,7 +196,9 @@ def test_an_injected_miss_shows_the_retry_and_is_labelled(tmp_path, monkeypatch)
     assert not any("INJECTED" in text for text in sim_video.overlay_texts(story, red[1]["sim_time_s"] + 1.5))
     claw = [c.get("simulated_claw") for c in fakes.moves_json()["commands"] if c.get("simulated_claw")]
     assert claw[:2] == ["picked up red die", "INJECTED TEST MISS: red die put down +6 degrees from the claw"]
-    assert "  INJECTED TEST MISS: red die put down +6 degrees from the claw (simulation only)" in fakes.said
+    assert "[simulated]   INJECTED TEST MISS: red die put down +6 degrees from the claw (simulation only)" in fakes.said
+    assert not any(line.lstrip().startswith(("lower to", "Hold the arm")) for line in fakes.said)   # all tagged
+    assert any(line.startswith("[simulated] Hold the arm") for line in fakes.said)
 
 
 # ---------- refused before anything moves ----------
@@ -318,3 +320,51 @@ def test_the_real_replies_on_dice_sheet_fit_the_made_up_ring(tmp_path, monkeypat
     assert summary["target"] == ["red die", "black die", "blue die"] and summary["success"] is True
     assert any("red die: photo (11.7, 6.7) cm -> placed on the made-up ring at base 72" in s for s in fakes.said)
     assert [c["send"] for c in fakes.moves_json()["commands"]][-1] == "D"
+
+
+# ---------- the goal, read by code ----------
+
+NAMES3 = ["red die", "black die", "blue die"]
+
+
+@pytest.mark.parametrize("text, mode, order", [
+    ("", "photo", ["red die", "black die", "blue die"]),
+    ("row blue, red, black", "row", ["blue die", "red die", "black die"]),
+    ("stack black, blue, red", "stack", ["black die", "blue die", "red die"]),
+    ("put black on blue, then red on black", "pairs", ["blue die", "black die", "red die"]),
+    ("Put the black die on the blue die and then red on top of black", "pairs", ["blue die", "black die", "red die"]),
+    ("red on blue", "pairs", ["blue die", "red die"]),
+])
+def test_goals_that_code_can_read(text, mode, order):
+    parsed_mode, spec = sim.parse_goal(text)
+    assert parsed_mode == mode
+    assert sim.resolve_goal(parsed_mode, spec, NAMES3, SEEN) == order
+
+
+@pytest.mark.parametrize("text, problem", [
+    ("make a tower", "Not understood: 'make a tower'. Goals that work: \"put black on blue"),
+    ("row", "Not understood: 'row'"),
+    ("black on blue, sideways", "Not understood: 'sideways'"),
+])
+def test_other_goals_are_refused_with_an_example_before_any_call(text, problem):
+    with pytest.raises(sim.SimError, match=problem):
+        sim.parse_goal(text)
+
+
+@pytest.mark.parametrize("text, problem", [
+    ("black on blue, then red on blue", "blue die is not on top of the pile \\(black die is\\)"),
+    ("black on black", "black die cannot go on itself"),
+    ("black on blue, then blue on black", "blue die is already in the pile"),
+    ("purple on blue", "'purple' matches 0 of the dice Spark named"),
+])
+def test_pairs_that_do_not_make_one_pile_are_refused(text, problem):
+    mode, spec = sim.parse_goal(text)
+    with pytest.raises(sim.SimError, match=problem):
+        sim.resolve_goal(mode, spec, NAMES3, SEEN)
+
+
+def test_a_pairs_goal_runs_as_a_simulated_stack(tmp_path, monkeypatch):
+    fakes = Fakes(tmp_path, monkeypatch)
+    summary = fakes.run("put black on blue, then red on black")
+    assert summary["stack"] is True and summary["target"] == ["blue die", "black die", "red die"]
+    assert summary["success"] is True

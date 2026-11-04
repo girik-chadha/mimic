@@ -13,8 +13,9 @@ says the real arm cannot stack.
 save_stills() also saves single frames as JPEGs for the report: before the first carry, at every camera check, and
 at the end.
 
-Frames are written as PNGs into the run folder, joined by Windows ffmpeg at 20 frames a second (H.264, with
-"SIMULATION" in the video's title and comment), then deleted.
+Frames are written as PNGs into the run folder, joined by Windows ffmpeg at 15 frames a second (H.264, with
+"SIMULATION" in the video's title and comment, and its index at the front so a browser can start playing it at once),
+then deleted.
 """
 import math
 import shutil
@@ -28,7 +29,7 @@ import numpy as np
 
 from mimic import camera, config
 
-FPS = 20
+FPS = 15
 TITLE_S = 2.0
 END_S = 2.0
 W, H = 1280, 720
@@ -47,6 +48,7 @@ VIDEO_TITLE = "Mimic SIMULATION (simulated execution, not the real arm)"
 VIDEO_COMMENT = ("SIMULATION. The arm in this video is simulated on a made-up ring. Perception (SAM 3.1, Muse Spark "
                  "1.3) and planning ran live on a real photo; the move list is the one the real arm would receive.")
 FFMPEG_TIMEOUT_S = 300
+PROGRESS_EVERY = 150         # frames between progress lines
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
 BG, SHEET, INK, MUTED = (236, 236, 232), (255, 255, 255), (40, 40, 40), (120, 120, 115)
@@ -323,6 +325,7 @@ def frame_times(end_s: float) -> list:
 def ffmpeg_command(frames_windows_dir: str, out_windows_path: str) -> list[str]:
     return [config.FFMPEG_PATH, "-hide_banner", "-loglevel", "error", "-y", "-framerate", str(FPS),
             "-i", frames_windows_dir + "\\frame_%05d.png", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
             "-metadata", f"title={VIDEO_TITLE}", "-metadata", f"comment={VIDEO_COMMENT}", out_windows_path]
 
 
@@ -338,8 +341,11 @@ def render(out_path, story: Story, say=print, run=subprocess.run, to_windows=cam
     for i, t in enumerate(times):
         image = card if t is None else frame_at(story, t, thumb)
         cv2.imwrite(str(frames_dir / f"frame_{i:05d}.png"), image, [cv2.IMWRITE_PNG_COMPRESSION, 1])
+        if (i + 1) % PROGRESS_EVERY == 0:
+            say(f"  drawn {i + 1} of {len(times)} frames")
     if out_path.exists():
         out_path.unlink()  # so an old file can never be mistaken for the new one
+    say(f"Encoding the video with ffmpeg ({len(times)} frames)...")
     command = ffmpeg_command(to_windows(frames_dir), to_windows(out_path))
     try:
         result = run(command, capture_output=True, text=True, timeout=FFMPEG_TIMEOUT_S)

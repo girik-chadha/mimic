@@ -285,3 +285,12 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   start, every simulated camera check) and `simulation_summary.png` (banner strip, PNG text "SIMULATION");
   `run_mimic.py --ring --sim` runs it at the end. Cached runs on dice_sheet.jpg ($0): row 3/3, injected miss RETRY
   then PASS at 0.7 cm, stack 3/3.
+- Demo page, step 1: `web/app.py` (standard library only, 127.0.0.1:8000) and `web/index.html` (blueprint look,
+  Archivo and JetBrains Mono bundled with their OFL licences, nothing loaded from the internet). Upload or the sample
+  photo, goal, use cache (off by default), Run; the simulation runs in a background thread and every line it prints
+  is streamed to the page as it happens (Server-Sent Events); lines about the arm are tagged "[simulated]". The goal
+  is read by code (`sim.parse_goal`): "put black on blue, then red on black" (a stack built on slot 1 from the bottom
+  die up), "row ...", "stack ...", or empty for the photo order; anything else is refused with examples before any
+  call. Photos must really be JPEG or PNG (first bytes and a decode). The run now prints the check-dot errors and
+  Spark's names, and the video draws at 15 fps with frame-progress lines. A cached run of "put black on blue, then
+  red on black" through the server: 3 of 3 stacked, $0.
