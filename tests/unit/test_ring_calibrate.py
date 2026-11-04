@@ -38,8 +38,8 @@ def box_at(cm, size):
 class FakeWorld:
     """The true ring: base theta puts the tip at phi = theta / scale + 180 degrees around CENTRE."""
 
-    def __init__(self, monkeypatch, tmp_path, scale=1.0):
-        self.scale = scale
+    def __init__(self, monkeypatch, tmp_path, scale=1.0, table=173):
+        self.scale, self.table = scale, table
         self.layout = scene.load_layout(config.LAYOUT_PATH)       # dots measured
         self.transport = FakeTransport(LIMITS)                     # disarmed, like the firmware
         self.arm = Arm(self.transport, LIMITS)
@@ -57,7 +57,7 @@ class FakeWorld:
 
     def capture(self, path):
         base, shoulder = self.transport.angles[0], self.transport.angles[1]
-        assert shoulder == 173, "the photo must be taken with the tip on the table"
+        assert shoulder == self.table, "the photo must be taken with the tip on the table"
         cv2.imwrite(str(path), np.full((H, W, 3), 230, np.uint8))
         self.photos[str(path)] = base
         return str(path)
@@ -74,9 +74,9 @@ class FakeWorld:
         boxes = [box_at((x + dx, y + dy), 30)]
         return boxes * 2 if base in self.extra_marker_at else boxes
 
-    def run(self, typed):
+    def run(self, typed, argv=()):
         queue, said = list(typed), []
-        code = rc.main([], read=lambda q: queue.pop(0), capture=self.capture, sleep=lambda s: None,
+        code = rc.main(list(argv), read=lambda q: queue.pop(0), capture=self.capture, sleep=lambda s: None,
                        say=said.append, ring_path=self.ring_path, out_root=self.ring_path.parent / "runs")
         return code, said
 
@@ -97,6 +97,25 @@ def test_five_points_fit_the_true_ring_and_save_it(monkeypatch, tmp_path):
     assert any(line.startswith("Ring: centre") for line in said)
     assert set(world.budgets) == {0.05} and config.BUDGET_USD != 0.05           # capped, then put back
     assert world.transport.sent[-1] == "D" and any(line.startswith("Hold the arm") for line in said)
+
+
+def test_the_table_angle_comes_from_ring_json_and_the_stop_is_3_past_it(monkeypatch, tmp_path):
+    world = FakeWorld(monkeypatch, tmp_path)
+    code, said = world.run(["yes"] + ANGLES + ["done", "yes"])
+    assert "Table height: shoulder 173; the shoulder is never sent past 176." in said
+    moves = [[int(v) for v in line.split()[1:5]] for line in world.transport.sent if line.startswith("J")]
+    assert max(m[1] for m in moves) == 173
+
+
+def test_table_shoulder_overrides_ring_json_and_is_saved_with_the_fit(monkeypatch, tmp_path):
+    world = FakeWorld(monkeypatch, tmp_path, table=170)
+    code, said = world.run(["yes"] + ANGLES + ["done", "yes"], argv=["--table-shoulder", "170"])
+    assert code == 0
+    assert "Table height: shoulder 170; the shoulder is never sent past 173." in said
+    moves = [[int(v) for v in line.split()[1:5]] for line in world.transport.sent if line.startswith("J")]
+    assert max(m[1] for m in moves) == 170 and [m[1] for m in moves[:2]] == [160, 162]  # above: 170 - approach 10
+    saved = ring.load_ring(world.ring_path)
+    assert saved.shoulder_table == 170 and saved.stop_at is None and saved.grip_hold == 20   # the rest kept
 
 
 def test_a_servo_that_turns_short_has_its_scale_fitted(monkeypatch, tmp_path):

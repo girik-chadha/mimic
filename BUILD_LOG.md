@@ -222,3 +222,8 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   1.5 cm a passed die may be off), or a correctly placed die would block the next slot; the arc check uses that.
   Layouts that do not fit are refused with the numbers. Tested with a fake ring world (pick at table height when
   the claw closes, drop with a chosen miss).
+- calib/ring.json: grip_hold 20 (found by hand), command_s 0.01 (measured with pick_once.py --measure-latency: 3.5 ms
+  mean, 4.7 ms slowest), stop_at null so the shoulder stop is 3 degrees past shoulder_table whatever it is
+  (`Ring.shoulder_stop`). shoulder_table stays 173: the new angle was not given ("[MY NEW ANGLE]" came through);
+  `ring_calibrate.py --table-shoulder N` uses N and saves it with the fit. Tests check that ring_calibrate.py and
+  ring mode take the table angle, grip, bridge time and stop from the ring, not from defaults.

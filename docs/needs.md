@@ -217,6 +217,15 @@ KEYESTUDIO ESP32 Smart Robot Arm Kit, 4 DOF, joystick, ordered 28 Oct, expected 
   linked: the claw tip is at table height only at **shoulder 173**, on a ring around the base axis. A **smaller**
   shoulder angle lifts it (and moves it along the radius at the same time).
 - **Grip 23 holds the 19 mm die through a 20-degree shoulder lift** (that is `grip -67` from 90), proven by hand.
+  **Later the same day, by hand: grip 20**, now `grip_hold` in `calib/ring.json` (pick_once.py keeps its own
+  `--grip-hold` default of 23).
+- **Bridge time per command, measured** (`pick_once.py --measure-latency`, 4 Nov): 3.5 ms mean, 4.7 ms slowest over
+  20 status calls, so `command_s` is 0.01 s in `calib/ring.json` instead of the 0.05 s guess. That gives back about
+  0.56 s of claw-closed time per carry: a 60-degree carry is about 3.7 s instead of 4.3 s.
+- **Table angle:** `shoulder_table` in `calib/ring.json` (173 until Girik's new angle is in);
+  `ring_calibrate.py --table-shoulder N` uses N for a calibration and saves it with the fit. `stop_at` is left null,
+  so the shoulder is never sent more than 3 degrees past the table angle, whatever it is. ring_calibrate.py and
+  run_mimic.py --ring read the table angle, grip_hold, lift, approach, command_s and the stop from ring.json.
 - **IO2 still gets a 90-degree signal after E.** It goes into an empty socket, which is harmless. Nothing in the
   firmware or Python needed changing for the dead elbow: the firmware never senses servos (it counts all four as
   switched on), and every move sends the elbow as 90, inside its range. The "elbow_fixed" plan (3-4 Nov) was dropped.
@@ -449,7 +458,8 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
     marker on the claw tip, facing the camera. Needs the measured dots and the arm unlocked. It asks before
     enabling (**pose the shoulder near 90 by hand first: enable jumps every joint to 90**). Then type 5 base angles,
     spread across the range you will use (for example 80, 90, 100, 110, 120). For each one the arm lifts if it is
-    low, turns the base, and lowers the claw onto the table in 2-degree steps (shoulder 173); a photo with the arm in
+    low, turns the base, and lowers the claw onto the table in 2-degree steps (to `shoulder_table` from ring.json, or
+    `--table-shoulder N`, which is then saved with the fit); a photo with the arm in
     view calibrates itself from the 6 dots and SAM finds the "gripper marker"; then the arm lifts. A photo with a
     hidden dot, or not exactly one marker, is skipped: type another angle. After 5 points type done: it fits the
     ring (centre, radius, base scale; mimic/ring.py) and prints each point's distance from it. Any point over
@@ -484,7 +494,8 @@ unlocked, disarmed start with E and D, B command, firmware compiled and copied t
       or an arc too short for the slots and the dice (for 3 slots about 23 cm: about 94 degrees of base at radius
       14 cm), or a slot outside the base range;
     - a die more than 1.0 cm off the ring, two dice closer than 4 cm, a die within 4 cm of a slot it is not going
-      to, or a carry that would keep the claw closed over 4.5 s (a 60-70 degree carry is already 4.3-4.4 s).
+      to, or a carry that would keep the claw closed over 4.5 s (with the measured 0.01 s per command, a 60-degree
+      carry is about 3.7 s).
     Each die is picked at its angle and dropped at its slot's angle with pick_once's moves; then the arm parks at
     camera_clear (base 90, shoulder 90), a photo calibrates itself and measures where it landed. Within 1.5 cm: next
     die. Otherwise the miss along the ring shifts the next drop the other way (the total at most 2 degrees) and the

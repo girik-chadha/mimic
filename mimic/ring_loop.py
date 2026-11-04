@@ -69,7 +69,7 @@ def preflight(layout, ring, limits) -> None:
     scene.refuse_unmeasured_dots(layout)
     ring.check_ready()
     check_room(ring, limits)
-    pickdrop.plan_park(limits, dict(limits.home_deg), ring.camera_clear, ring.stop_at)  # camera_clear in range
+    pickdrop.plan_park(limits, dict(limits.home_deg), ring.camera_clear, ring.shoulder_stop)  # camera_clear in range
 
 
 def load_and_check():
@@ -85,7 +85,7 @@ def load_and_check():
 def pick_drop_plan(ring, limits, start: dict, pick_deg: float, drop_deg: float):
     return pickdrop.plan(limits, start, base_pick=round(pick_deg), base_drop=round(drop_deg),
                          shoulder_pick=ring.shoulder_table, grip_hold=ring.grip_hold, lift=ring.lift,
-                         approach=ring.approach, stop_at=ring.stop_at, command_s=ring.command_s)
+                         approach=ring.approach, stop_at=ring.shoulder_stop, command_s=ring.command_s)
 
 
 def check_clear(name: str, slot_deg: float, positions: dict, ring) -> None:
@@ -142,8 +142,8 @@ def run(arm, capture, layout, ring, limits, wait_for_user=input, out_root=config
     config.BUDGET_USD = min(config.BUDGET_USD, RUN_BUDGET_USD)
 
     def photo(name: str):
-        pickdrop.run_steps(arm, pickdrop.plan_park(limits, arm.known_pose(), ring.camera_clear, ring.stop_at),
-                           say, sleep)
+        park = pickdrop.plan_park(limits, arm.known_pose(), ring.camera_clear, ring.shoulder_stop)
+        pickdrop.run_steps(arm, park, say, sleep)
         path = capture(out_dir / name)
         return path, scene.calibrate(path, layout, out_dir / f"{Path(name).stem}_dots.jpg")
 

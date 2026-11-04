@@ -141,4 +141,12 @@ def test_committed_ring_is_a_placeholder_with_girik_s_settings():
     r = ring.load_ring(config.ROOT / "calib" / "ring.json")
     assert r.placeholder is True and r.radius_cm is None and r.slots_deg == []
     assert r.camera_clear == {"base": 90, "shoulder": 90} and r.max_off_ring_cm == 1.0
-    assert (r.shoulder_table, r.grip_hold, r.lift, r.approach, r.stop_at) == (173, 23, 20, 10, 175)
+    assert (r.shoulder_table, r.lift, r.approach) == (173, 20, 10)
+    assert r.grip_hold == 20                 # found by hand, 4 Nov
+    assert r.command_s == 0.01               # measured: 3.5 ms mean, 4.7 ms slowest
+    assert r.stop_at is None and r.shoulder_stop == 176   # 3 degrees past the table angle
+
+
+def test_the_shoulder_stop_follows_the_table_angle_unless_set():
+    assert ring.Ring(shoulder_table=170).shoulder_stop == 173
+    assert ring.Ring(shoulder_table=170, stop_at=172).shoulder_stop == 172

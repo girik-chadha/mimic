@@ -130,6 +130,19 @@ def test_three_dice_are_carried_round_the_ring_into_their_slots(tmp_path, monkey
     assert (first["pick_deg"], first["drop_deg"], first["slot_deg"]) == (40, 100, 100)
 
 
+def test_the_table_angle_grip_and_bridge_time_come_from_the_ring(tmp_path, monkeypatch):
+    own = dataclasses.replace(RING, shoulder_table=170, grip_hold=20, command_s=0.01)
+    rig = Rig(tmp_path, monkeypatch, the_ring=own)
+    assert rig.run()["success"] is True
+    moves = moves_sent(rig.world)
+    assert max(m[1] for m in moves) == 170 and {m[3] for m in moves} == {90, 20}   # never past the table; grip 20
+    default = Rig(tmp_path / "default", monkeypatch)
+    default.run()
+    # 0.01 s per command instead of 0.05: 14 commands x 0.04 s less claw-closed time per carry (grip 20 adds 0.03 s)
+    assert rig.attempts()[0]["claw_closed_s"] == pytest.approx(default.attempts()[0]["claw_closed_s"] - 0.56 + 0.03,
+                                                               abs=0.01)
+
+
 # ---------- misses ----------
 
 def test_a_steady_angular_miss_shifts_the_next_drop_by_at_most_2_degrees(tmp_path, monkeypatch):

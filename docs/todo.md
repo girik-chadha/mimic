@@ -70,7 +70,8 @@ The arm arrives Fri. Everything that does not need the arm must be finished by T
 - [x] Elbow dead and unplugged, forearm taped: table height at shoulder 173 on a ring; grip 23 holds the die through a 20-degree lift (4 Nov, by hand). `scripts/pick_once.py` written and tested with fakes (4 Nov)
 - [ ] `pick_once.py --measure-latency`, then `--pick-only`, then a full pick and drop (needs.md C7 step 12b)
 - [x] Ring mode, part 1: `mimic/ring.py` (fit from base angles and tip positions, base_angle_for, 1 cm off-ring limit), `calib/ring.json` (placeholder, camera_clear 90/90), `scripts/ring_calibrate.py` (5 points); pick_once's moves moved to `mimic/pickdrop.py` (4 Nov)
-- [ ] Girik: `python scripts/ring_calibrate.py` on the real arm (needs.md C7 step 12a), then set `slots_deg` in `calib/ring.json`
+- [x] ring.json: grip_hold 20 (by hand), command_s 0.01 (measured 3.5 / 4.7 ms), stop_at null = table + 3; `ring_calibrate.py --table-shoulder` (4 Nov)
+- [ ] Girik: `python scripts/ring_calibrate.py --table-shoulder <new angle>` on the real arm (needs.md C7 step 12a), then set `slots_deg` in `calib/ring.json`
 - [x] Ring mode, part 2: `mimic/ring_loop.py`, `run_mimic.py --ring` (slots on the ring, 5.5 cm apart; every move checked first; angular miss corrected up to 2 degrees, 2 retries); tested with a fake ring world (4 Nov)
 - [ ] After calibrating and setting `slots_deg`: a first `run_mimic.py --ring` with 2 or 3 dice (needs.md C7 step 12c)
 - [ ] Decide the layout for the ring: slots and the mess area must lie on it (needs.md A10d)

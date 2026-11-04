@@ -1,20 +1,23 @@
 """Find the ring the claw tip reaches (elbow taped, needs.md A10d): 5 base angles, the camera measures the tip.
 
     python scripts/ring_calibrate.py
+    python scripts/ring_calibrate.py --table-shoulder 171      a new table-height shoulder angle (saved with the fit)
 
 Put the gripper marker on the claw tip, facing the camera. Needs the measured dots (layout.json dots_measured) and
 the arm unlocked. After a typed yes to enable (pose the shoulder near 90 by hand first), for each point:
 1. you type a base angle (spread them out: for example 80, 90, 100, 110, 120);
-2. the arm lifts if it is low, turns the base, and lowers the claw onto the table in 2-degree steps (shoulder 173);
+2. the arm lifts if it is low, turns the base, and lowers the claw onto the table in 2-degree steps, to shoulder_table
+   from calib/ring.json (or --table-shoulder), never past the shoulder stop (stop_at, or 3 degrees past the table);
 3. a photo, with the arm in view: it calibrates itself from the 6 dots (so no dot may be hidden), and SAM finds
    the "gripper marker" (exactly one box), which gives the tip's sheet position;
 4. the arm lifts again. A photo that cannot calibrate, or has no single marker, is skipped: try another angle.
 After 5 points (more are allowed) type done. The ring is fitted (mimic/ring.py: centre, radius, and the base scale,
 which needs 4 or more points) and each point's error is shown; any point over 0.5 cm off refuses the fit. Type yes
-to save calib/ring.json: the fit and the points, placeholder false. Slots, camera_clear and the pick numbers already
-in ring.json are kept. Cost about $0.005 per point (2 SAM calls), capped at $0.05. Then "Hold the arm" and disable.
+to save calib/ring.json: the fit and the points, placeholder false, and the table angle used (so a --table-shoulder
+value is saved with the ring it measured). Slots, camera_clear and the other pick numbers in ring.json are kept. Cost about $0.005 per point (2 SAM calls), capped at $0.05. Then "Hold the arm" and disable.
 """
 import argparse
+import dataclasses
 import sys
 import time
 from pathlib import Path
@@ -59,7 +62,7 @@ def collect(arm, limits, the_ring, layout, capture, ask, say, sleep, out_dir: Pa
             continue
         try:
             steps = plan_touch(limits, arm.known_pose(), base, the_ring.shoulder_table, the_ring.approach,
-                               the_ring.stop_at)
+                               the_ring.shoulder_stop)
         except PickError as error:
             say(f"  refused: {error}")
             continue
@@ -72,17 +75,21 @@ def collect(arm, limits, the_ring, layout, capture, ask, say, sleep, out_dir: Pa
         except scene.SceneError as error:
             say(f"  skipped: {error} Try another angle.")
         run_steps(arm, plan_lift(limits, arm.known_pose(), the_ring.shoulder_table - the_ring.lift,
-                                 the_ring.stop_at), say, sleep)
+                                 the_ring.shoulder_stop), say, sleep)
 
 
 def main(argv=None, read=input, capture=camera.capture, sleep=time.sleep, say=print, ring_path=ring.RING_PATH,
          out_root=config.RUNS_DIR) -> int:
     parser = argparse.ArgumentParser(description="Fit the ring the claw tip reaches, from 5 base angles.")
-    parser.parse_args(argv)
+    parser.add_argument("--table-shoulder", type=int,
+                        help="shoulder angle at table height (default: shoulder_table in calib/ring.json)")
+    args = parser.parse_args(argv)
     try:
         layout = scene.load_layout()
         scene.refuse_unmeasured_dots(layout)  # each photo calibrates itself from the dots
         the_ring = ring.load_ring(ring_path)
+        if args.table_shoulder is not None:
+            the_ring = dataclasses.replace(the_ring, shoulder_table=args.table_shoulder)
         limits = arm_module.load_limits()
         arm = session.connect(False, limits)   # a locked arm is refused here, before the bridge opens
     except (ArmError, scene.SceneError, ring.RingError) as error:
@@ -90,6 +97,7 @@ def main(argv=None, read=input, capture=camera.capture, sleep=time.sleep, say=pr
         return 1
     out_dir = Path(out_root) / f"ring_calibrate_{time.strftime('%Y%m%d-%H%M%S')}"
     out_dir.mkdir(parents=True, exist_ok=True)
+    say(f"Table height: shoulder {the_ring.shoulder_table}; the shoulder is never sent past {the_ring.shoulder_stop}.")
 
     def body():
         session.confirm_and_enable(arm, read, say, sleep, note=ENABLE_NOTE)

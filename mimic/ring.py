@@ -10,8 +10,10 @@ different scale and a different radius describe almost the same points, so small
 otherwise pick a wrong scale. Inside the calibrated arc both descriptions put the claw in the same places.
 
 calib/ring.json holds the fit (from scripts/ring_calibrate.py), the slots (base angles on the ring, set by hand),
-a camera_clear pose (by hand), and pick_once's numbers. A point more than max_off_ring_cm from the circle is refused:
-the claw cannot reach it.
+a camera_clear pose (by hand), and the pick numbers that ring_calibrate.py and run_mimic.py --ring use: shoulder_table
+(the shoulder angle at table height), grip_hold, lift, approach, command_s (seconds per command for the bridge) and
+stop_at. stop_at may be left null: then the shoulder is never sent more than STOP_MARGIN_DEG past shoulder_table.
+A point more than max_off_ring_cm from the circle is refused: the claw cannot reach it.
 """
 import json
 import math
@@ -29,6 +31,7 @@ MIN_POINTS_FOR_SCALE = 4      # with fewer, one servo degree is taken to be one 
 SCALE_RANGE = (0.85, 1.15)
 SCALE_STEP = 0.005
 CLEARLY_BETTER = 0.75         # a scale other than 1 is kept only if its error is at most this fraction of scale 1's
+STOP_MARGIN_DEG = 3           # with stop_at null: the shoulder is never sent past shoulder_table + this
 
 
 class RingError(ValueError):
@@ -60,9 +63,14 @@ class Ring:
     grip_hold: int = 23
     lift: int = 20
     approach: int = 10
-    stop_at: int = 175
+    stop_at: int | None = None   # None: shoulder_table + STOP_MARGIN_DEG (see shoulder_stop)
     command_s: float = 0.05
     max_off_ring_cm: float = 1.0
+
+    @property
+    def shoulder_stop(self) -> int:
+        """The shoulder is never sent past this: stop_at if set, otherwise 3 degrees past the table angle."""
+        return self.stop_at if self.stop_at is not None else self.shoulder_table + STOP_MARGIN_DEG
 
     # ---------- using the fit ----------
 

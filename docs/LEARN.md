@@ -594,3 +594,12 @@ is a calculation, and a die more than a centimetre off it is refused because the
 Two sentences: "Ring mode runs the whole Mimic task with the taped elbow, carrying each die round the ring to its
 slot and correcting misses along the ring by adjusting the base angle. Everything is checked before the first move,
 and a layout that cannot work is refused with the numbers that show why."
+
+### 4 Nov: the ring's numbers in one file
+
+- The grip angle (20), the measured time per command to the arm (0.01 s), and the shoulder's table angle now all
+  come from `calib/ring.json`, so ring calibration and ring mode always agree. The shoulder's safety stop follows
+  the table angle automatically (3 degrees past it), so changing the table angle can never leave a stale stop.
+
+Two sentences: "Ring mode's numbers live in one file, and both the calibration and the full run read them from
+there. Measuring the real command time (under 5 ms) gave back half a second of grip time on every carry."
