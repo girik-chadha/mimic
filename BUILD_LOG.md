@@ -348,3 +348,12 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   0.16 cm off. Its two SAM replies are fixtures ($0.0075 of new calls). The goal parser now finds "X on Y" and "X on
   top of Y" inside a longer sentence (the word before "on", skipping a noun like "die"), and refuses only when no pair
   is found, still before any API call.
+- Demo page, left card at 1280x720: it now spans the window's height, scrolls on its own and keeps Run visible. The
+  photo is shown whole (object-fit contain, at least 320 px tall, the card's width, rounded), opens full size in a
+  lightbox (Esc or a click closes it), with its name and "Choose another" on one quiet line; Spark's chips sit on it.
+  The goal box is large (18 px, line height 1.5, 4 lines tall, growing to about 8 with no inner scrollbar, soft
+  background, blue focus ring). Errors show as a soft coral box under Run with one plain sentence ("I found 3 of the
+  6 dots. Check that all six are in view."), and "Show details" reveals the technical text (file paths removed) and
+  the labelled photo, which opens full size; the server now sends the failed run's folder for it. The privacy line
+  moved to the README. Girik's real upload and long goal through the server: calibrated (0.19 and 0.16 cm), Spark
+  named red, blue and black die, read as black on blue then red on black, pile built where blue lies, $0.0136.

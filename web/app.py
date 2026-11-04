@@ -126,6 +126,16 @@ def result_of(summary: dict) -> dict:
             "cap_usd": ring_loop.RUN_BUDGET_USD}
 
 
+def failed_folder(lines: list) -> str | None:
+    """The simulation folder a stopped run had made (sim.run prints "Simulation log: <folder>"), so the page can show
+    its labelled photo."""
+    for line in lines:
+        if line["text"].startswith("Simulation log: "):
+            name = Path(line["text"].split()[2]).name
+            return name if RUN_FOLDER.match(name) else None
+    return None
+
+
 def start_job(photo: Path, goal: str, use_cache: bool, run=None) -> Job:
     """Starts the simulation in a background thread. Refused (Refused("busy")) while another run is going."""
     if not RUNNING.acquire(blocking=False):
@@ -144,8 +154,8 @@ def start_job(photo: Path, goal: str, use_cache: bool, run=None) -> Job:
             job.finish(result_of((run or sim.run)(photo, goal or None, 0.0, say=job.say)))
         except Exception as error:
             job.say(f"Stopped: {error}")
-            job.finish({"ok": False, "error": str(error), "cost_usd": round(meta_api.cost_so_far(), 4),
-                        "cap_usd": ring_loop.RUN_BUDGET_USD})
+            job.finish({"ok": False, "error": str(error), "folder": failed_folder(job.lines),
+                        "cost_usd": round(meta_api.cost_so_far(), 4), "cap_usd": ring_loop.RUN_BUDGET_USD})
         finally:
             meta_api.cache_enabled = cache_before
             RUNNING.release()

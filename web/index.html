@@ -135,13 +135,13 @@ header .brand i { font-family: "Instrument Serif", serif; font-size: 20px; color
 .state.stopped { background: rgba(255, 90, 54, .14); color: #C7361A; }
 
 /* ---------- left: the scene and the goal ---------- */
-aside { padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 9px; overflow: auto; }
+aside { grid-row: 2 / 4; padding: 16px 18px 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 aside > * { flex-shrink: 0; }
 aside .titled { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 aside .titled button { padding: 6px 12px; font-size: 13px; }
 h2 { font-family: "Instrument Serif", serif; font-weight: 400; font-size: 25px; line-height: 1; margin: 2px 0 0; }
 .drop {
-  height: 104px; border-radius: 16px; display: grid; place-items: center; text-align: center; padding: 8px;
+  height: 200px; border-radius: 16px; display: grid; place-items: center; text-align: center; padding: 8px;
   cursor: pointer; overflow: hidden; color: var(--soft); font-size: 14px; position: relative;
   background: rgba(45, 91, 255, .045); border: 1.5px dashed rgba(45, 91, 255, .28);
   transition: box-shadow .25s var(--ease), background .25s, border-color .25s, transform .25s var(--spring);
@@ -149,27 +149,49 @@ h2 { font-family: "Instrument Serif", serif; font-weight: 400; font-size: 25px; 
 .drop:hover { background: rgba(45, 91, 255, .07); color: var(--ink); }
 .drop.over { border-color: var(--blue); background: rgba(45, 91, 255, .1); transform: scale(1.015);
   box-shadow: 0 0 0 6px rgba(45, 91, 255, .12), 0 16px 44px -10px rgba(45, 91, 255, .55); }
-.drop img { width: 100%; height: 100%; object-fit: contain; border-radius: 10px; }
-.scene { position: relative; }
-.found { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; flex-wrap: wrap; gap: 5px;
+.drop[hidden], .preview[hidden] { display: none; }
+.preview { margin: 0; }
+.preview .shot { position: relative; border-radius: 16px; overflow: hidden; background: rgba(20, 18, 31, .05);
+  cursor: zoom-in; transition: box-shadow .25s var(--ease); }
+.preview .shot.over { box-shadow: 0 0 0 6px rgba(45, 91, 255, .14), 0 16px 44px -10px rgba(45, 91, 255, .55); }
+.preview img { display: block; width: 100%; height: auto; min-height: 320px; max-height: 460px; object-fit: contain; }
+.preview figcaption { display: flex; gap: 6px; font-size: 13px; color: var(--soft); margin-top: 6px; white-space: nowrap; }
+.preview figcaption span { overflow: hidden; text-overflow: ellipsis; }
+button.link { background: none; padding: 0; border-radius: 4px; color: var(--blue); font-weight: 600; font-size: inherit; }
+button.link:hover { text-decoration: underline; }
+#lightbox { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 28px;
+  background: rgba(20, 18, 31, .8); cursor: zoom-out; }
+#lightbox[hidden] { display: none; }
+#lightbox img { max-width: 100%; max-height: 100%; border-radius: 14px; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .6); }
+.found { position: absolute; left: 8px; right: 8px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 5px;
   justify-content: center; pointer-events: none; }
 .found .obj { pointer-events: auto; font-size: 12.5px; animation: chip-in .5s var(--spring) both; }
 @keyframes chip-in { from { transform: translateY(8px) scale(.5); opacity: 0; } }
 .row { display: flex; gap: 10px; align-items: center; }
 .row .soft { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 textarea {
-  font: inherit; color: var(--ink); background: #fff; border: 0; border-radius: 14px; padding: 10px 12px;
-  resize: none; height: 54px; width: 100%; box-shadow: inset 0 0 0 1px var(--hair);
-  transition: box-shadow .2s var(--ease);
+  font: 18px/1.5 "Archivo", system-ui, sans-serif; color: var(--ink); background: rgba(20, 18, 31, .045); border: 0;
+  border-radius: 16px; padding: 12px 14px; resize: none; width: 100%; min-height: calc(4 * 1.5em + 24px);
+  overflow-y: hidden; transition: box-shadow .2s var(--ease), background .2s;
 }
 textarea::placeholder { color: #ADA9BC; }
-textarea:focus { outline: none; box-shadow: inset 0 0 0 2px var(--blue), 0 0 0 5px rgba(45, 91, 255, .12); }
+textarea:focus { outline: none; background: #fff; box-shadow: 0 0 0 3px rgba(45, 91, 255, .45), 0 0 0 7px rgba(45, 91, 255, .1); }
 .help { font-size: 12.5px; color: var(--soft); margin: 0; line-height: 1.45; }
 .help q { color: var(--ink); }
 .error { color: #D2391B; font-size: 13px; margin: 0; } .error:empty { display: none; }
 label.check { display: flex; gap: 9px; align-items: flex-start; cursor: pointer; font-size: 14px; }
 label.check input { accent-color: var(--blue); width: 16px; height: 16px; margin-top: 2px; }
-#run { font-size: 16px; padding: 12px 18px; margin-top: 2px; }
+#run { font-size: 16px; padding: 12px 18px; width: 100%; }
+.runbar { position: sticky; bottom: 0; margin-top: auto; padding: 12px 0 16px;
+  background: linear-gradient(rgba(255, 255, 255, 0), #fff 22%); }
+.problem { margin-top: 10px; background: rgba(255, 90, 54, .1); color: #9E2A12; border-radius: 14px; padding: 10px 14px;
+  font-size: 14px; line-height: 1.45; }
+.problem[hidden] { display: none; }
+.problem p { margin: 0 0 4px; }
+.problem button.link { color: #9E2A12; text-decoration: underline; }
+.problem pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 11.5px/1.5 "JetBrains Mono", monospace;
+  color: var(--ink); margin: 8px 0; max-height: 150px; overflow-y: auto; }
+.problem img { width: 100%; border-radius: 10px; cursor: zoom-in; display: block; }
 
 /* ---------- centre: the expected simulation and the tabs ---------- */
 main { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -225,10 +247,10 @@ main { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px
 .clock .track i.close { background: var(--sun); }
 
 /* ---------- bottom: the live log and the arm program ---------- */
-.bottom { grid-column: 1 / -1; display: flex; gap: 14px; min-height: 0; }
+.bottom { grid-column: 2; grid-row: 3; display: flex; gap: 14px; min-height: 0; }
 .log { flex: 1; min-width: 0; padding: 12px 18px 10px; display: flex; flex-direction: column; }
 .log .head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
-.log .head h2 { font-size: 22px; }
+.log .head h2 { font-size: 22px; white-space: nowrap; }
 .log .head span { font-size: 12.5px; color: var(--soft); }
 #log { flex: 1; min-height: 0; overflow-y: auto; font: 12px/1.6 "JetBrains Mono", ui-monospace, monospace;
   white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
@@ -293,23 +315,24 @@ main { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px
 
 <aside class="card" aria-label="Scene and goal">
   <div class="titled"><h2>Your scene</h2><button type="button" class="ghost" id="sample">Use the sample photo</button></div>
-  <div class="scene">
-    <div class="drop" id="drop" role="button" tabindex="0" aria-describedby="drophelp">
-      <span id="drophelp">Drop a photo of the sheet here, or click to choose one (JPEG or PNG)</span>
-    </div>
-    <div class="found" id="found" hidden aria-live="polite" aria-label="The objects Spark named"></div>
+  <div class="drop" id="drop" role="button" tabindex="0" aria-describedby="drophelp">
+    <span id="drophelp">Drop a photo of the sheet here, or click to choose one (JPEG or PNG)</span>
   </div>
+  <figure class="preview" id="preview" hidden>
+    <div class="shot" id="shot"><img id="previewimg" alt="" tabindex="0">
+      <div class="found" id="found" hidden aria-live="polite" aria-label="The objects Spark named"></div></div>
+    <figcaption><span id="photoname"></span>·<button type="button" class="link" id="change">Choose another</button></figcaption>
+  </figure>
   <input type="file" id="file" accept="image/jpeg,image/png" hidden>
-  <p class="help"><span id="photoname">No photo yet</span> · sent to SAM 3.1 and Muse Spark 1.3; keep faces out.</p>
   <p class="error" id="photoerror" role="alert"></p>
   <h2><label for="goal">Goal</label></h2>
-  <textarea id="goal" placeholder="e.g. put black on blue, then red on black"></textarea>
-  <p class="help">Or <q>row black, blue, red</q>; empty = the photo's order.</p>
+  <textarea id="goal" rows="4" placeholder="e.g. put black on blue, then red on black"></textarea>
   <p class="error" id="goalerror" role="alert"></p>
   <label class="check"><input type="checkbox" id="cache"> <span>Use cache <span class="soft">($0, not live)</span></span></label>
-  <button type="button" class="primary" id="run">Run</button>
-  <p class="error" id="runerror" role="alert"></p>
+  <div class="runbar"><button type="button" class="primary" id="run">Run</button>
+    <div class="problem" id="runerror" role="alert" hidden></div></div>
 </aside>
+<div id="lightbox" hidden role="dialog" aria-label="The photo, full size" tabindex="-1"><img id="lightboximg" alt=""></div>
 
 <main class="card" aria-label="Expected simulation">
   <div class="tabs" role="tablist" aria-label="Views of the run">
@@ -338,8 +361,7 @@ main { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px
 
 <div class="bottom">
   <section class="card log" aria-label="Live log">
-    <div class="head"><h2>Live log</h2><span>Every line the run prints, as it happens. Lines about the arm are tagged
-      simulated.</span></div>
+    <div class="head"><h2>Live log</h2><span>Every line, as it happens; lines about the arm are tagged simulated.</span></div>
     <div id="log" role="log" aria-live="off"></div>
   </section>
   <section class="card program" id="program" hidden aria-live="polite" aria-label="Arm program">
@@ -362,7 +384,7 @@ function begin() {
   if (!document.body.classList.contains("intro")) return;
   document.body.classList.remove("intro");
   setTimeout(() => { $("intro").hidden = true; }, still ? 0 : 750);
-  $("drop").focus({preventScroll: true});
+  ($("drop").hidden ? $("goal") : $("drop")).focus({preventScroll: true});
 }
 $("begin").addEventListener("click", begin);
 $("intro").addEventListener("click", (e) => { if (e.target.id === "intro") begin(); });
@@ -443,10 +465,80 @@ function addLine(line) {
 }
 
 function showPreview(src, name) {
-  const drop = $("drop"); drop.innerHTML = "";
-  const img = document.createElement("img"); img.src = src; img.alt = "The photo that will be used: " + name;
-  drop.appendChild(img); $("photoname").textContent = name;
+  $("drop").hidden = true; $("preview").hidden = false;
+  $("previewimg").src = src; $("previewimg").alt = "The photo that will be used: " + name;
+  $("photoname").textContent = name;
 }
+$("change").addEventListener("click", () => $("file").click());
+
+// the lightbox: a photo full size; Esc or a click closes it
+let lightboxFrom = null;
+function openLightbox(src, alt) {
+  lightboxFrom = document.activeElement;
+  $("lightboximg").src = src; $("lightboximg").alt = alt || "";
+  $("lightbox").hidden = false; $("lightbox").focus();
+}
+function closeLightbox() {
+  if ($("lightbox").hidden) return;
+  $("lightbox").hidden = true; if (lightboxFrom) lightboxFrom.focus();
+}
+$("lightbox").addEventListener("click", closeLightbox);
+addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
+$("previewimg").addEventListener("click", () => openLightbox($("previewimg").src, $("previewimg").alt));
+$("previewimg").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLightbox($("previewimg").src, $("previewimg").alt); }
+});
+["dragover", "dragleave", "drop"].forEach((kind) => $("shot").addEventListener(kind, (e) => {
+  e.preventDefault(); $("shot").classList.toggle("over", kind === "dragover");
+  if (kind === "drop") takeFile(e.dataTransfer.files[0]);
+}));
+
+// the goal grows with its text, up to about 8 lines, with no inner scrollbar until then
+function grow() {
+  const g = $("goal"), line = parseFloat(getComputedStyle(g).lineHeight), most = 8 * line + 24;
+  g.style.height = "auto";
+  g.style.height = Math.min(g.scrollHeight, most) + "px";
+  g.style.overflowY = g.scrollHeight > most ? "auto" : "hidden";
+}
+$("goal").addEventListener("input", grow);
+grow();
+
+// an error: one plain sentence, and the technical text (no file paths) and the labelled photo under "Show details"
+const PLAIN = [
+  [/Found (\d+) dots, need exactly 6/, (m) => `I found ${m[1]} of the 6 dots. Check that all six are in view.`],
+  [/four-sided shape|no 6 of them fit|No way of naming the dots|check dots|Two different (ways|sets)/,
+   () => "The dots don't match the sheet's layout. Check that the whole sheet is in view, flat and in focus."],
+  [/off the sheet/, () => "Something was found off the sheet. Check that the whole sheet is in view."],
+  [/No name that SAM finds exactly once/, () => "Spark and SAM could not agree on a name for every object. Try a clearer photo."],
+  [/matches \d+ of the (dice|objects) Spark named/, () => "Your goal names something I could not find in the photo."],
+  [/No "X on Y" found|Not understood/, () => "I could not read a goal in that. Try \u201cput black on blue, then red on black\u201d."],
+  [/apart|from slot|outside the ring|not on top of the pile|already in the pile/,
+   () => "I could not plan safe moves for this layout. Spread the objects out, or check the goal."],
+  [/budget|cap/i, () => "This run reached its cost cap."],
+  [/did not answer/, () => "The server did not answer. Is python web/app.py running?"],
+  [/already going/, () => "A run is already going. Wait for it to finish."],
+];
+const noPaths = (text) => String(text).replace(/(?:\/[\w.@-]+)+\/([\w.@-]+)/g, "$1");
+function showProblem(technical, folder) {
+  const found = PLAIN.find(([pattern]) => pattern.test(technical));
+  const plain = found ? found[1](technical.match(found[0])) : noPaths(technical).split(/(?<=\.)\s/)[0];
+  const box = $("runerror");
+  box.innerHTML = `<p>${escape(plain)}</p><button type="button" class="link" aria-expanded="false">Show details</button>` +
+    `<div hidden><pre>${escape(noPaths(technical))}</pre>${folder ? `<img src="/api/runs/${folder}/` +
+    `simulation_photo_dots.jpg" alt="The photo with the dots that were found marked" tabindex="0">` : ""}</div>`;
+  const toggle = box.querySelector("button"), more = box.querySelector("div");
+  toggle.addEventListener("click", () => {
+    more.hidden = !more.hidden; toggle.setAttribute("aria-expanded", !more.hidden);
+    toggle.textContent = more.hidden ? "Show details" : "Hide details";
+  });
+  const thumb = box.querySelector("img");
+  if (thumb) {
+    thumb.addEventListener("click", () => openLightbox(thumb.src, thumb.alt));
+    thumb.addEventListener("error", () => thumb.remove());
+  }
+  box.hidden = false;
+}
+function clearProblem() { $("runerror").hidden = true; $("runerror").innerHTML = ""; }
 function takeFile(file) {
   $("photoerror").textContent = "";
   if (!file) return;
@@ -487,7 +579,7 @@ function finish(r) {
   $("run").disabled = false;
   if (!r.ok) {
     setState("Stopped", "stopped"); setCost(r.cost_usd, r.cap_usd); stepTo(Math.max(stepAt, 0), true);
-    $("runerror").textContent = r.error; $("result").textContent = "";
+    showProblem(r.error, r.folder); $("result").textContent = "";
     return;
   }
   stepTo(STEPS.length);
@@ -621,6 +713,7 @@ if (earlier && /^\d{8}-\d{6}_simulation$/.test(earlier)) {
     if (!s) return;
     addLine({text: `Showing an earlier run: ${earlier} (no new calls)`, simulated: false});
     showPreview(`/api/runs/${earlier}/${s.photo_copy || "simulation_photo.jpg"}`, "The photo of this run");
+    $("goal").value = s.instruction || ""; grow();
     finish({ok: true, folder: earlier, video: `/api/runs/${earlier}/simulation_video.mp4`, summary: s, cap_usd: 0.30});
     const tab = $("tab-" + params.get("tab"));
     if (tab) setTimeout(() => selectTab(tab), 300);
@@ -628,7 +721,7 @@ if (earlier && /^\d{8}-\d{6}_simulation$/.test(earlier)) {
 }
 
 $("run").addEventListener("click", async () => {
-  ["runerror", "goalerror", "photoerror"].forEach((id) => $(id).textContent = "");
+  ["goalerror", "photoerror"].forEach((id) => $(id).textContent = ""); clearProblem();
   if (!photo) { $("photoerror").textContent = "Choose a photo first, or use the sample photo."; return; }
   $("run").disabled = true; setState("Starting", "running");
   let reply;
@@ -638,12 +731,13 @@ $("run").addEventListener("click", async () => {
     reply = await response.json();
   } catch (err) {
     $("run").disabled = false; setState("Stopped", "stopped");
-    $("runerror").textContent = "The server did not answer: is python web/app.py running?"; return;
+    showProblem("The server did not answer: is python web/app.py running?"); return;
   }
   if (!reply.job) {
     $("run").disabled = false; setState("Ready");
-    const target = {photo: "photoerror", goal: "goalerror"}[reply.field] || "runerror";
-    $(target).textContent = reply.error; return;
+    const target = {photo: "photoerror", goal: "goalerror"}[reply.field];
+    if (target) $(target).textContent = reply.error; else showProblem(reply.error);
+    return;
   }
   $("log").innerHTML = ""; $("result").textContent = ""; $("program").hidden = true; setCost(0, reply.cap_usd);
   showFound([]);

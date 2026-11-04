@@ -38,7 +38,7 @@ Design rule: **code for exact logic, AI for judgement.**
 
 ## The demo page
 
-`python web/app.py`, then open http://127.0.0.1:8000. Upload a photo (JPEG or PNG only) or use the sample, type a goal, and Run. The server runs the real perception and planner and streams every line to the page as it happens, with the cost against the $0.30 cap; lines about the arm are tagged "simulated". Then the "Expected simulation" video plays, with tabs for what SAM saw, what Spark named, and the plan for every carry. At the end, "Download arm program" gives a script for the real arm: `--dry-run` replays the simulation on a fake arm; on the real arm it works out every angle again from the real ring calibration (or, for a stack, from `calib/stack.json`, measured by hand) and refuses until those exist, and refuses any base angle outside 80-120.
+`python web/app.py`, then open http://127.0.0.1:8000. Upload a photo (JPEG or PNG only) or use the sample, type a goal, and Run. The photo is sent to Meta's SAM 3.1 and Muse Spark 1.3, so keep faces out of it. The server runs the real perception and planner and streams every line to the page as it happens, with the cost against the $0.30 cap; lines about the arm are tagged "simulated". Then the "Expected simulation" video plays, with tabs for what SAM saw, what Spark named, and the plan for every carry. At the end, "Download arm program" gives a script for the real arm: `--dry-run` replays the simulation on a fake arm; on the real arm it works out every angle again from the real ring calibration (or, for a stack, from `calib/stack.json`, measured by hand) and refuses until those exist, and refuses any base angle outside 80-120.
 
 ## Safety
 
