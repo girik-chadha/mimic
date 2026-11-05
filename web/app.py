@@ -32,7 +32,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from mimic import config, job, meta_api, ring_loop, sim
+from mimic import config, job, meta_api, program, ring_loop, sim
 
 WEB = Path(__file__).resolve().parent
 PAGE = WEB / "index.html"
@@ -220,10 +220,14 @@ class Handler(BaseHTTPRequestHandler):
                 and RUN_FILE.match(parts[3]) and (config.RUNS_DIR / parts[2] / parts[3]).exists()):
             return self._file(config.RUNS_DIR / parts[2] / parts[3])
         if (len(parts) == 4 and parts[:2] == ["api", "runs"] and RUN_FOLDER.match(parts[2])
-                and parts[3] == "program.zip" and (config.RUNS_DIR / parts[2]).is_dir()):
+                and parts[3] in ("program.zip", "program.json") and (config.RUNS_DIR / parts[2]).is_dir()):
             try:
-                name, data = job.program_zip(config.RUNS_DIR / parts[2])
-            except (job.JobError, OSError, KeyError) as error:
+                if parts[3] == "program.json":   # the zip's file names and sizes, for the page's card
+                    files = program.program_files(config.RUNS_DIR / parts[2])
+                    return self._json(200, {"files": [{"name": n, "bytes": len(b)} for n, b in files.items()],
+                                            "simulation_angles": b"SIMULATION_ANGLES = True" in next(iter(files.values()))})
+                name, data = program.program_zip(config.RUNS_DIR / parts[2])
+            except (job.JobError, OSError, KeyError, ValueError) as error:
                 return self._json(404, {"error": f"No arm program for this run: {error}"})
             return self._send(200, data, "application/zip",
                               {"Content-Disposition": f'attachment; filename="{name}"'})

@@ -20,11 +20,8 @@ normal end (back to the start pose, "hold the arm", disable). s or Ctrl+C sends 
 """
 import argparse
 import dataclasses
-import io
 import json
-import pprint
 import time
-import zipfile
 from pathlib import Path
 
 from mimic import arm as arm_module
@@ -179,50 +176,6 @@ def main(job: dict, argv=None, read=input, say=print, sleep=None) -> int:
 
 # ---------- the download ----------
 
-SCRIPT = '''"""Mimic arm program {stamp}, from the expected simulation {folder}.
-
-    ~/mimic/.venv/bin/python {script} --dry-run    the fake arm: nothing moves, every line is printed
-    ~/mimic/.venv/bin/python {script}              the real arm (asks for a typed yes first)
-
-The work is done by mimic/job.py, with the project's arm.py, serial bridge, limits and start pose. On the real arm
-every angle is worked out again from calib/ring.json (a row) or calib/stack.json (a stack), never taken from the
-simulation, and anything outside base 80-120 is refused. No camera: each carry runs once. s or Ctrl+C: S then D.
-"""
-import sys
-
-from mimic.job import main
-
-JOB = {job}
-
-if __name__ == "__main__":
-    sys.exit(main(JOB))
-'''
-
-README = """# Mimic arm program {stamp}
-
-Made by the demo page from the expected simulation `{folder}` (photo: `{photo}`). Target: {kind} {target}.
-
-- `{script}`: the program. Run it with the project's Python: `~/mimic/.venv/bin/python {script} --dry-run` first
-  (the fake arm: nothing moves, every command is printed), then without `--dry-run` for the real arm.
-- `moves.json`: the expected simulation's move list, every line the simulated arm was sent. It was planned on a
-  MADE-UP ring, so the real arm's angles will differ: the program works them out again.
-
-What the program does on the real arm, and what it refuses:
-1. A row: each die is picked where SAM measured it, on the real ring (`calib/ring.json`, which must be calibrated, with
-   `slots_deg` set), and dropped in its real slot. A die more than 1 cm off the ring is refused.
-2. A stack: the pick angles, the stack's base angle and the shoulder angle to let go at for each level come from
-   `calib/stack.json`, measured by hand. While it is a placeholder the program refuses and says what to measure. A
-   pile built where its bottom die lies (an "X on Y" goal) does not move that die: `drop_base_deg` is where it lies.
-3. Every base angle must be inside 80-120; every carry is planned and checked against `calib/arm_limits.json`, the
-   shoulder stop and the 4.5 s grip rule before the serial bridge is opened.
-4. The start pose, a typed yes to enable, each carry once (no camera: no checks, no retries), then back to the start
-   pose, "hold the arm", and the servos off. `s` or Ctrl+C sends S then D.
-
-The dice must be where the photo showed them when the program runs. For checking and correcting each placement with
-the camera, use `python scripts/run_mimic.py --ring` instead.
-"""
-
-
 def job_from_run(run_dir) -> dict:
     run_dir = Path(run_dir)
     summary = json.loads((run_dir / "simulation_summary.json").read_text())
@@ -232,20 +185,3 @@ def job_from_run(run_dir) -> dict:
             "stack_in_place": bool(summary.get("stack_in_place")), "target": summary["target"],
             "carries": summary["carries"], "seen_cm": summary["seen_cm"],
             "placed_cm": summary["placed_cm"], "made_up_ring": summary["made_up_ring"]}
-
-
-def program_zip(run_dir) -> tuple[str, bytes]:
-    """(the zip's file name, its bytes): mimic_job_<time>.py, moves.json and README.md."""
-    run_dir = Path(run_dir)
-    job = job_from_run(run_dir)
-    stamp = run_dir.name.removesuffix("_simulation")
-    script = f"mimic_job_{stamp}.py"
-    fields = dict(stamp=stamp, folder=run_dir.name, script=script, photo=job["photo"],
-                  kind="a stack (bottom first):" if job["stack"] else "a row (slot 1 first):",
-                  target=", ".join(job["target"]))
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr(script, SCRIPT.format(job=pprint.pformat(job, width=110, sort_dicts=False), **fields))
-        z.writestr("moves.json", (run_dir / "simulation_moves.json").read_bytes())
-        z.writestr("README.md", README.format(**fields))
-    return f"mimic_arm_program_{stamp}.zip", buffer.getvalue()

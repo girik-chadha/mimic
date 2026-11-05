@@ -820,7 +820,14 @@ function fillSparkRead(s, read) {
 
 function showProgram(r) {
   const stamp = r.folder.replace(/_simulation$/, ""), card = $("program");
-  $("programfiles").textContent = `mimic_job_${stamp}.py · moves.json · README.md`;
+  $("programfiles").textContent = `mimic_job_${stamp}.py · mimic_arm_${stamp}.ino · moves.json · README.md`;
+  fetch(`/api/runs/${r.folder}/program.json`).then((x) => x.ok ? x.json() : null).then((p) => {
+    if (!p) return;
+    const size = (n) => n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`;
+    $("programfiles").textContent = p.files.map((f) => `${f.name.split("/").pop()} ${size(f.bytes)}`).join(" · ");
+    $("programfiles").title = $("programfiles").textContent;
+    if (p.simulation_angles) $("programnote").textContent = "Simulation angles: dry run only until the ring is calibrated.";
+  });
   $("download").href = `/api/runs/${r.folder}/program.zip`;
   $("programnote").textContent = "Try --dry-run first. " + (r.summary.stack
     ? "A real stack needs calib/stack.json." : "Real runs need the calibrated ring.");

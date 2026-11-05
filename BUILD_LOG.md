@@ -368,3 +368,13 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   length is checked. "What Spark read" highlights the phrases inside the user's sentence, with SAM's count for each and
   the moves. Real run on Girik's upload with his long sentence: blue, black and red die found, read as black onto
   blue then red onto black, pile built where blue lies; $0.0079 (one Spark call; the rest cached).
+- The arm program is now real, standalone hardware code, made from the plan by code (`mimic/program.py`, templates
+  filled in, not AI): `mimic_job_<time>.py` needs only pyserial (the limits and start pose as constants, every step as
+  a commented table, a small serial driver for the board's line protocol, checks before the port opens: limits, speed,
+  every claw-closed stretch under 4.5 s, base 80-120; typed-yes enable; s or Ctrl+C sends S then D; `--dry-run`,
+  `--port`), and `mimic_arm_<time>/mimic_arm_<time>.ino` is the same plan as an ESP32Servo sketch (the board's pins,
+  the limits, the start pose, staggered servo start, the 5 s grip release, a typed "go"). While ring.json or
+  stack.json is a placeholder both hold the simulation's angles and say so; the program refuses the real arm and the
+  sketch starts with `#error`. Checked: the program dry-runs 45 steps with a plain system Python outside the repo and
+  refuses `--port`; the sketch (without its #error line) compiles for the ESP32 with arduino-cli. The card lists the
+  zip's files with their sizes.

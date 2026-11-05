@@ -4,13 +4,15 @@ Fake SAM and Spark (test_sim.Fakes); the real arm is never opened (the bridge is
 """
 import io
 import json
+import subprocess
+import sys
 import zipfile
 
 import pytest
 from test_ring import fitted, made_up
 from test_sim import Fakes
 
-from mimic import arm, job, pickdrop
+from mimic import arm, job, pickdrop, program
 from mimic import ring as ring_module
 
 
@@ -20,20 +22,28 @@ def a_job(tmp_path, monkeypatch, goal=None):
     return fakes.out_dir()
 
 
-def test_the_zip_holds_the_script_the_move_list_and_a_readme(tmp_path, monkeypatch):
+def test_the_zip_holds_a_standalone_program_a_sketch_the_move_list_and_a_readme(tmp_path, monkeypatch):
     run_dir = a_job(tmp_path, monkeypatch)
-    name, data = job.program_zip(run_dir)
+    name, data = program.program_zip(run_dir)
     stamp = run_dir.name.removesuffix("_simulation")
     assert name == f"mimic_arm_program_{stamp}.zip"
     z = zipfile.ZipFile(io.BytesIO(data))
-    assert sorted(z.namelist()) == sorted([f"mimic_job_{stamp}.py", "moves.json", "README.md"])
+    script, sketch = f"mimic_job_{stamp}.py", f"mimic_arm_{stamp}/mimic_arm_{stamp}.ino"
+    assert sorted(z.namelist()) == sorted([script, sketch, "moves.json", "README.md"])
     assert z.read("moves.json") == (run_dir / "simulation_moves.json").read_bytes()
-    script = z.read(f"mimic_job_{stamp}.py").decode()
-    compile(script, "mimic_job.py", "exec")                      # a real Python file
-    namespace = {}
-    exec(script.replace('if __name__ == "__main__"', "if False"), namespace)
-    assert namespace["JOB"]["target"] == ["red die", "black die", "blue die"] and namespace["main"] is job.main
-    assert "--dry-run" in script and "80-120" in z.read("README.md").decode()
+    code = z.read(script).decode()
+    assert "import mimic" not in code and "from mimic" not in code and "SIMULATION_ANGLES = True" in code
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "job.py").write_text(code)
+    dry = subprocess.run([sys.executable, "-I", "job.py", "--dry-run"], cwd=tmp_path / "out", capture_output=True,
+                         text=True, timeout=30)
+    assert dry.returncode == 0 and "steps checked, nothing was sent" in dry.stdout and "step  1: J " in dry.stdout
+    real = subprocess.run([sys.executable, "-I", "job.py", "--port", "COM7"], cwd=tmp_path / "out", capture_output=True,
+                          text=True, timeout=30)
+    assert real.returncode == 1 and "REFUSED: these are the simulation's angles" in real.stdout
+    ino = z.read(sketch).decode()
+    assert '#error "Simulation angles: calibrate the ring before uploading"' in ino and "#include <ESP32Servo.h>" in ino
+    assert "const Step STEPS[] = {" in ino and "waitForGo();" in ino and "SIMULATION ANGLES" in z.read("README.md").decode()
 
 
 def test_a_dry_run_replays_the_simulation_on_the_fake_arm(tmp_path, monkeypatch):
