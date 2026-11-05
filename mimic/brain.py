@@ -267,10 +267,16 @@ GOAL_PROMPT = """Look at this photo of objects on a sheet of paper, and read wha
 3. List the moves in order. For a stack, each carry puts one object onto another; the first carry goes onto the
 object at the bottom, which does not move, and each later carry goes onto the object carried just before it. For a
 row, "onto" is null and the carries are in the order of the row.
+4. "setup": the hardware and context you noticed in the goal or the photo, as short phrases in the user's words
+where possible (for example "esp32 robot arm", "hardware code"). "task": the task in one plain sentence. "reasoning":
+2 to 4 short sentences on why these objects and this order.
 
-Reply with ONLY a JSON object and no other text, like this:
-{{"objects": ["blue die", "black die", "red die"], "kind": "stack",
- "carries": [{{"object": "black die", "onto": "blue die"}}, {{"object": "red die", "onto": "black die"}}]}}"""
+Reply with ONLY a JSON object and no other text. The format, for a different example (a cup and a block put in a
+row; write your own task and reasoning for this photo and goal):
+{{"objects": ["green cup", "yellow block"], "kind": "row",
+ "carries": [{{"object": "green cup", "onto": null}}, {{"object": "yellow block", "onto": null}}],
+ "setup": ["robot arm", "kitchen table"], "task": "Put the green cup first in the row, then the yellow block.",
+ "reasoning": "The goal names the cup first, so it takes the first place. The block follows it."}}"""
 
 GOAL_RENAME_PROMPT = """Look at this photo again. For the user's goal <goal>{goal}</goal> you chose these search
 phrases: {objects}. An object finder searched the photo for each one. A good phrase matches exactly 1 object.
@@ -347,7 +353,16 @@ def parse_goal_reply(reply: str) -> dict:
         if base in moved or base == clean[0]["object"]:
             raise GoalError("The bottom of the pile cannot also be carried.")
         order = [base] + moved
-    return {"kind": data["kind"], "objects": order, "carries": clean, "order": order}
+    return {"kind": data["kind"], "objects": order, "carries": clean, "order": order, **_display_only(data)}
+
+
+def _display_only(data: dict) -> dict:
+    """setup, task and reasoning: shown on the page only, never used for a move. Cleaned and capped."""
+    def text(value, limit):
+        return " ".join(str(value).split())[:limit] if isinstance(value, str) else ""
+    setup = data.get("setup")
+    setup = [text(x, 40) for x in setup if isinstance(x, str) and x.strip()][:5] if isinstance(setup, list) else []
+    return {"setup": setup, "task": text(data.get("task"), 200), "reasoning": text(data.get("reasoning"), 600)}
 
 
 def goal_content(image_path: str, goal: str) -> list:

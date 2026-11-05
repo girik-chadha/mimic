@@ -378,3 +378,12 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   sketch starts with `#error`. Checked: the program dry-runs 45 steps with a plain system Python outside the repo and
   refuses `--port`; the sketch (without its #error line) compiles for the ESP32 with arduino-cli. The card lists the
   zip's files with their sizes.
+- "What Spark read" with real reasoning: Spark's goal reply also gives "setup" (hardware and context it noticed),
+  "task" (one sentence) and "reasoning" (2-4 sentences), shown only, never used for a move (code still validates only
+  the objects and moves, and cleans and caps these). The prompt's example is now an unrelated scene (a cup and a block
+  in a row): with an example matching the demo, Spark copied its task and reasoning word for word. The tab is in
+  sections (The task, What it noticed, Why this order, The objects with SAM's count and position in cm, The moves as
+  plain sentences); in the sentence, objects are highlighted in their colours, Spark's setup phrases in neutral and
+  task words (a fixed list, matched by code) in blue. The Plan tab lists each carry as 8 numbered steps. Real run on
+  20261105-001640_upload.jpg with the long sentence: black onto blue, then red onto black; setup "esp32 robot arm",
+  "hardware code"; $0.0203 of Spark calls for the two runs.

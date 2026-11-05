@@ -250,7 +250,21 @@ main { grid-column: 3; grid-row: 2; padding: 14px 16px 12px; display: flex; flex
 .num { font-variant-numeric: tabular-nums; }
 mark.hl { background: color-mix(in srgb, var(--c, #14121F) 16%, transparent); color: inherit; border-radius: 6px;
   padding: 0 3px; box-shadow: inset 0 -2px 0 var(--c, #14121F); }
-.said { font-size: 17px; line-height: 1.55; margin: 0 0 10px; }
+.said { font-size: 17px; line-height: 1.6; margin: 0 0 8px; }
+.read { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 0 30px; padding: 4px; }
+.read section { margin: 0 0 18px; }
+.read section p { margin: 0 0 6px; font-size: 14px; }
+.read .lead { font-family: "Instrument Serif", serif; font-size: 24px; line-height: 1.2; margin-bottom: 8px; }
+.read .key { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--soft); }
+mark.hl.ctx { background: rgba(20, 18, 31, .07); box-shadow: inset 0 -2px 0 rgba(20, 18, 31, .25); }
+mark.hl.task { background: rgba(45, 91, 255, .12); box-shadow: inset 0 -2px 0 rgba(45, 91, 255, .6); }
+.ctxchip { display: inline-block; padding: 3px 11px; border-radius: 999px; background: rgba(20, 18, 31, .06);
+  font-size: 13.5px; margin: 0 6px 6px 0; }
+.view ol.steps-list { counter-reset: step; margin: 6px 0 4px; font-size: 13.5px; color: var(--soft); }
+.view ol.steps-list li { counter-increment: step; margin: 1px 0; }
+.view ol.steps-list li::before { content: counter(step) "."; background: none; width: 22px; height: auto;
+  border-radius: 0; display: inline-block; margin-right: 2px; font-size: 13px; color: var(--ink); }
+.view ol.steps-list b { color: var(--ink); font-weight: 650; }
 .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; padding: 4px; }
 .carry { padding: 10px 2px; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 18px; align-items: start; }
 .carry + .carry { border-top: 1px solid var(--hair); }
@@ -780,10 +794,16 @@ function fillTabs(s, folder) {
         (c.next_correction_deg != null ? `, next aim ${c.next_correction_deg > 0 ? "+" : ""}${fmt(c.next_correction_deg)}°` : "");
     return `<div class="carry"><div>${chip(c.name)} <b>to ${s.stack ? "the stack" : "slot " + c.slot}` +
       `${c.try > 1 ? ", try " + c.try : ""}</b>
-      <p>Base to <b class="num">${c.pick_deg}°</b> with the claw open (${c.grip_open}), shoulder down from
-      ${c.above}° to the table at <b class="num">${c.table}°</b> in 2° steps, close the claw to
-      <b class="num">${c.grip_hold}</b>, lift to ${c.lifted}°, swing to base <b class="num">${c.drop_deg}°</b>, down to
-      ${c.table}°, open, lift back to ${c.lifted}°.</p><p>Simulated camera check: ${outcome}</p></div>
+      <ol class="steps-list">
+        <li>Turn the base to <b class="num">${c.pick_deg}°</b> with the claw open (${c.grip_open}).</li>
+        <li>Lower the shoulder from ${c.above}° to the table at <b class="num">${c.table}°</b>, 2° at a time.</li>
+        <li>Close the claw to <b class="num">${c.grip_hold}</b>.</li>
+        <li>Lift to ${c.lifted}°.</li>
+        <li>Swing the base to <b class="num">${c.drop_deg}°</b>.</li>
+        <li>Lower to ${c.table}°.</li>
+        <li>Open the claw.</li>
+        <li>Lift back to ${c.lifted}°.</li>
+      </ol><p>Simulated camera check: ${outcome}</p></div>
       <div class="clock">Claw closed <b class="num">${fmt(c.claw_closed_s, 2)} s</b> of ${fmt(c.claw_limit_s)} s
         <div class="track" role="img" aria-label="${fmt(c.claw_closed_s, 2)} of ${fmt(c.claw_limit_s)} seconds">` +
         `<i class="${share > 0.9 ? "close" : ""}" style="width:${Math.min(100, 100 * share)}%"></i></div>
@@ -793,29 +813,49 @@ function fillTabs(s, folder) {
 
 // The goal as Spark read it: the phrases it pulled out (highlighted in the sentence where they appear word for word),
 // how many objects SAM found for each, and the moves code accepted
+const TASK_WORDS = ["on top of", "line up", "in a row", "stacking", "stacked", "stack", "onto", "pile", "tower", "row",
+  "put", "place"];
+
+// The goal as Spark read it, in sections. In the sentence: objects in their colours, the hardware and context Spark
+// noticed in a soft neutral, and task words (a fixed list, matched by code) in soft blue.
 function fillSparkRead(s, read) {
+  const marks = read.objects.map((o) => [o, "hl", OBJ_HEX[colourOf(o)] || "#14121F"])
+    .concat((read.setup || []).map((x) => [x, "hl ctx", null]), TASK_WORDS.map((w) => [w, "hl task", null]));
   let sentence = escape(s.instruction || "");
-  [...read.objects].sort((a, b) => b.length - a.length).forEach((phrase) => {
+  const pieces = [];
+  marks.sort((a, b) => b[0].length - a[0].length).forEach(([phrase, cls, c]) => {
     const words = escape(phrase).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    sentence = sentence.replace(new RegExp(`\\b${words}\\b`, "gi"),
-      (hit) => `<mark class="hl" style="--c:${OBJ_HEX[colourOf(phrase)] || "#14121F"}">${hit}</mark>`);
+    sentence = sentence.replace(new RegExp(`\\b${words}\\b`, "gi"), (hit) => {
+      pieces.push(`<mark class="${cls}"${c ? ` style="--c:${c}"` : ""}>${hit}</mark>`);
+      return `\u0000${pieces.length - 1}\u0000`;   // a placeholder, so no mark is found inside another
+    });
   });
-  const counts = {};
+  sentence = sentence.replace(/\u0000(\d+)\u0000/g, (_, i) => pieces[Number(i)]);
+  const counts = {}, seen = (s.sam && s.sam.seen_cm) || {};
   (s.naming || []).forEach((a) => { counts[a.name] = a.boxes; });
-  const moves = read.kind === "row"
-    ? read.carries.map((c, i) => `${chip(c.object)} to place ${i + 1} in the row`)
-    : read.carries.map((c) => `${chip(c.object)} onto the ${escape(c.onto)}`);
+  const moves = read.carries.map((c, i) => read.kind === "row"
+    ? `Put the ${chip(c.object)} in place ${i + 1} of the row.` : `Put the ${chip(c.object)} on the ${escape(c.onto)}.`);
   const where = read.kind === "row" ? "A row, in this order." : "One pile, bottom first, built " +
     (s.stack_in_place ? `where the ${escape(s.target[0])} lies (it stays put).` : "on slot 1.");
-  $("view-spark").innerHTML = `<div class="columns"><div>
-      <h3>Your goal, read by Muse Spark 1.3 with the photo</h3><p class="said">${sentence}</p>
-      <h3>The objects it pulled out</h3><ul>${read.objects.map((o) => `<li>${chip(o)} <span class="` +
-        `${counts[o] === 1 ? "pass" : "miss"}">SAM found ${counts[o] ?? "?"}</span></li>`).join("")}</ul></div>
-    <div><h3>The moves</h3><ol>${moves.map((m) => `<li>${m}</li>`).join("")}</ol>
-      <p class="soft" style="margin:0 0 8px;font-size:13.5px">${where} Checked by code: every move uses an object SAM
-        found exactly once, and nothing else is accepted.</p>
-      ${s.stack ? '<p class="miss" style="margin:0;font-size:13.5px">Stacking is simulation only: the taped elbow ' +
-        "cannot let go of an object on top of another.</p>" : ""}</div></div>`;
+  const task = read.task || (read.kind === "row" ? "Line up " : "Stack ") + read.objects.join(", ") + ".";
+  $("view-spark").innerHTML = `<div class="read">
+    <div>
+      <section><h3>The task</h3><p class="lead">${escape(task)}</p><p class="said">${sentence}</p>
+        <p class="key"><mark class="hl" style="--c:#2D5BFF">an object</mark><mark class="hl task">task words</mark>` +
+        `<mark class="hl ctx">hardware and context</mark></p></section>
+      <section><h3>What it noticed</h3>${(read.setup || []).length ? read.setup.map((x) =>
+        `<span class="ctxchip">${escape(x)}</span>`).join("") : '<p class="soft">Nothing beyond the objects.</p>'}</section>
+      <section><h3>Why this order</h3><p>${escape(read.reasoning || "Spark gave no reasoning.")}</p></section>
+    </div>
+    <div>
+      <section><h3>The objects</h3><ul>${read.objects.map((o) => `<li>${chip(o)} <span class="${counts[o] === 1 ?
+        "pass" : "miss"}">SAM found ${counts[o] ?? "?"}</span>${seen[o] ? ` <span class="soft num">at (${fmt(seen[o][0])}, ` +
+        `${fmt(seen[o][1])}) cm</span>` : ""}</li>`).join("")}</ul></section>
+      <section><h3>The moves</h3><ol>${moves.map((m) => `<li>${m}</li>`).join("")}</ol>
+        <p class="soft">${where} Checked by code: every move uses an object SAM found exactly once.</p>
+        ${s.stack ? '<p class="miss">Stacking is simulation only: the taped elbow cannot let go of an object on top of ' +
+          "another.</p>" : ""}</section>
+    </div></div>`;
 }
 
 function showProgram(r) {

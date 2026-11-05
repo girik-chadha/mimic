@@ -80,7 +80,9 @@ def carries(kind, *pairs):
 LONG_GOAL = ("This is my esp32 robot arm and I want you to write hardware code to stack the black die on top of the blue "
              "die and then the red die on top of the black die in a three die stack")
 ON_BLUE = {"objects": ["blue die", "black die", "red die"], "kind": "stack",
-           "carries": carries("stack", ("black die", "blue die"), ("red die", "black die"))}
+           "carries": carries("stack", ("black die", "blue die"), ("red die", "black die")),
+           "setup": ["esp32 robot arm", "hardware code"], "task": "Stack black on blue, then red on black.",
+           "reasoning": "Blue is the base, so it stays put. Black goes on it first, then red on top."}
 GOAL_REPLIES = {   # what Spark would answer for each goal (the fakes look them up by the goal in the prompt)
     "row blue, red, black": {"objects": ["blue die", "red die", "black die"], "kind": "row",
                              "carries": carries("row", ("blue die", None), ("red die", None), ("black die", None))},
@@ -403,6 +405,15 @@ def test_spark_reads_a_long_sentence_into_objects_and_moves(tmp_path, monkeypatc
     assert read["by"] == "spark" and read["kind"] == "stack" and read["carries"] == [
         {"object": "black die", "onto": "blue die"}, {"object": "red die", "onto": "black die"}]
     assert [n["boxes"] for n in summary["naming"]] == [1, 1, 1]
+    assert read["setup"] == ["esp32 robot arm", "hardware code"] and read["task"].startswith("Stack black on blue")
+    assert read["reasoning"].startswith("Blue is the base")          # shown only; never used for a move
+
+
+def test_the_display_only_fields_are_cleaned_and_never_needed():
+    plan = brain.parse_goal_reply(json.dumps({"objects": ["red die", "blue die"], "kind": "row",
+        "carries": [{"object": "red die", "onto": None}, {"object": "blue die", "onto": None}],
+        "setup": ["robot arm", 7, "  esp32  "], "task": None}))
+    assert plan["setup"] == ["robot arm", "esp32"] and plan["task"] == "" and plan["reasoning"] == ""
 
 
 def test_a_goal_that_is_not_stacking_or_a_row_is_refused(tmp_path, monkeypatch):

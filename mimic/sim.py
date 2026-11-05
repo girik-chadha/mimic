@@ -281,7 +281,9 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
         summary.update(target=target, stack=stack, sim_only=STACK_WHY if stack else None,
                        mode="ring, simulated" + (", stack" if stack else ""))
         summary["goal_read"] = ({"mode": mode, "by": "spark", "kind": read["kind"], "objects": read["objects"],
-                                 "carries": read["carries"], "reply": read["reply"]} if read else {"mode": "photo"})
+                                 "carries": read["carries"], "setup": read.get("setup", []), "task": read.get("task", ""),
+                                 "reasoning": read.get("reasoning", ""), "reply": read["reply"]}
+                                if read else {"mode": "photo"})
         how = "photo order, left to right" if mode == "photo" else "read from the goal by Spark, checked by code"
         if stack:
             say(f"Target ({how}): a stack, bottom first: {', '.join(target)}. SIMULATION ONLY: {STACK_WHY}")
