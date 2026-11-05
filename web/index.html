@@ -24,8 +24,8 @@
 html, body { height: 100%; }
 body {
   margin: 0; color: var(--ink); background: var(--canvas); font: 15px/1.5 "Archivo", system-ui, sans-serif;
-  display: grid; grid-template-columns: 324px minmax(0, 1fr); grid-template-rows: 58px minmax(0, 1fr) 136px;
-  gap: 14px; padding: 14px 18px 16px; min-height: 100vh; overflow: hidden;
+  display: grid; grid-template-columns: var(--left, 324px) 14px minmax(0, 1fr);
+  grid-template-rows: 58px minmax(0, 1fr) 136px; gap: 14px 0; padding: 14px 18px 16px; min-height: 100vh; overflow: hidden;
 }
 :focus-visible { outline: 3px solid rgba(45, 91, 255, .45); outline-offset: 2px; border-radius: 10px; }
 .serif { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; letter-spacing: -.01em; }
@@ -135,7 +135,7 @@ header .brand i { font-family: "Instrument Serif", serif; font-size: 20px; color
 .state.stopped { background: rgba(255, 90, 54, .14); color: #C7361A; }
 
 /* ---------- left: the scene and the goal ---------- */
-aside { grid-row: 2 / 4; padding: 16px 18px 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+aside { position: relative; grid-column: 1; grid-row: 2 / 4; padding: 16px 18px 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 aside > * { flex-shrink: 0; }
 aside .titled { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 aside .titled button { padding: 6px 12px; font-size: 13px; }
@@ -150,13 +150,24 @@ h2 { font-family: "Instrument Serif", serif; font-weight: 400; font-size: 25px; 
 .drop.over { border-color: var(--blue); background: rgba(45, 91, 255, .1); transform: scale(1.015);
   box-shadow: 0 0 0 6px rgba(45, 91, 255, .12), 0 16px 44px -10px rgba(45, 91, 255, .55); }
 .drop[hidden], .preview[hidden] { display: none; }
+.handle { grid-column: 2; grid-row: 2 / 4; cursor: col-resize; display: grid; place-items: center;
+  touch-action: none; border-radius: 8px; }
+.handle::before { content: ""; width: 4px; height: 56px; border-radius: 4px; background: rgba(20, 18, 31, .14);
+  transition: background .2s, height .2s var(--ease); }
+.handle:hover::before, .handle:focus-visible::before, .handle.dragging::before { background: var(--blue); height: 96px; }
+body.resizing { cursor: col-resize; user-select: none; }
 .preview { margin: 0; }
 .preview .shot { position: relative; border-radius: 16px; overflow: hidden; background: rgba(20, 18, 31, .05);
   cursor: zoom-in; transition: box-shadow .25s var(--ease); }
 .preview .shot.over { box-shadow: 0 0 0 6px rgba(45, 91, 255, .14), 0 16px 44px -10px rgba(45, 91, 255, .55); }
-.preview img { display: block; width: 100%; height: auto; min-height: 320px; max-height: 460px; object-fit: contain; }
-.preview figcaption { display: flex; gap: 6px; font-size: 13px; color: var(--soft); margin-top: 6px; white-space: nowrap; }
-.preview figcaption span { overflow: hidden; text-overflow: ellipsis; }
+.preview img { display: block; width: 100%; object-fit: contain; transition: height .35s var(--ease);
+  height: clamp(320px, calc((var(--left, 324px) - 36px) * var(--ratio, .75)), 520px); }
+.preview.collapsed img { height: 64px; object-fit: cover; }
+.preview.collapsed .found { display: none; }
+.preview figcaption { display: flex; gap: 6px; align-items: baseline; font-size: 13px; color: var(--soft);
+  margin-top: 6px; white-space: nowrap; }
+.preview figcaption span { overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+.preview figcaption button { flex: none; }
 button.link { background: none; padding: 0; border-radius: 4px; color: var(--blue); font-weight: 600; font-size: inherit; }
 button.link:hover { text-decoration: underline; }
 #lightbox { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 28px;
@@ -182,9 +193,10 @@ textarea:focus { outline: none; background: #fff; box-shadow: 0 0 0 3px rgba(45,
 label.check { display: flex; gap: 9px; align-items: flex-start; cursor: pointer; font-size: 14px; }
 label.check input { accent-color: var(--blue); width: 16px; height: 16px; margin-top: 2px; }
 #run { font-size: 16px; padding: 12px 18px; width: 100%; }
-.runbar { position: sticky; bottom: 0; margin-top: auto; padding: 12px 0 16px;
-  background: linear-gradient(rgba(255, 255, 255, 0), #fff 22%); }
-.problem { margin-top: 10px; background: rgba(255, 90, 54, .1); color: #9E2A12; border-radius: 14px; padding: 10px 14px;
+.runbar { position: sticky; bottom: 0; z-index: 2; margin: auto -18px 0; padding: 12px 18px 14px; background: #fff;
+  box-shadow: 0 -12px 18px -16px rgba(20, 18, 31, .45); }
+#goal.big { overflow-y: auto; }
+.problem { margin: 0 0 16px; background: rgba(255, 90, 54, .1); color: #9E2A12; border-radius: 14px; padding: 10px 14px;
   font-size: 14px; line-height: 1.45; }
 .problem[hidden] { display: none; }
 .problem p { margin: 0 0 4px; }
@@ -194,7 +206,7 @@ label.check input { accent-color: var(--blue); width: 16px; height: 16px; margin
 .problem img { width: 100%; border-radius: 10px; cursor: zoom-in; display: block; }
 
 /* ---------- centre: the expected simulation and the tabs ---------- */
-main { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+main { grid-column: 3; grid-row: 2; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .tabs { display: flex; gap: 6px; align-items: center; }
 .tabs [role="tab"] { background: transparent; color: var(--soft); padding: 7px 14px; font-weight: 600; white-space: nowrap; }
 .tabs [role="tab"]:hover { background: rgba(20, 18, 31, .05); color: var(--ink); }
@@ -250,7 +262,7 @@ mark.hl { background: color-mix(in srgb, var(--c, #14121F) 16%, transparent); co
 .clock .track i.close { background: var(--sun); }
 
 /* ---------- bottom: the live log and the arm program ---------- */
-.bottom { grid-column: 2; grid-row: 3; display: flex; gap: 14px; min-height: 0; }
+.bottom { grid-column: 3; grid-row: 3; display: flex; gap: 14px; min-height: 0; }
 .log { flex: 1; min-width: 0; padding: 12px 18px 10px; display: flex; flex-direction: column; }
 .log .head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
 .log .head h2 { font-size: 22px; white-space: nowrap; }
@@ -260,13 +272,14 @@ mark.hl { background: color-mix(in srgb, var(--c, #14121F) 16%, transparent); co
 #log .sim { color: var(--soft); }
 #log .chip { color: var(--blue); background: rgba(45, 91, 255, .1); border-radius: 6px; padding: 0 6px; margin-right: 6px; }
 #log b { font-weight: 700; }
-.program { width: 410px; flex: none; padding: 12px 18px; display: flex; flex-direction: column; gap: 4px;
+.program { flex: 0 1 44%; min-width: 240px; max-width: 410px; padding: 12px 18px; display: flex; flex-direction: column; gap: 4px;
   background: linear-gradient(135deg, rgba(255, 194, 26, .16), rgba(255, 90, 54, .1)), var(--card); }
 .program[hidden] { display: none; }
 .program h2 { font-size: 24px; }
 .program a.download { padding: 8px 18px; }
 .program p { margin: 0; font-size: 12.5px; color: var(--soft); }
 .program .files { font: 11.5px/1.5 "JetBrains Mono", ui-monospace, monospace; color: var(--ink); }
+.program .files, .program p, .program a.download { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .program a.download { text-align: center; text-decoration: none; display: block; }
 .program.arrive { animation: arrive .7s var(--spring) both; }
 @keyframes arrive { from { transform: translateY(40px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -324,17 +337,21 @@ mark.hl { background: color-mix(in srgb, var(--c, #14121F) 16%, transparent); co
   <figure class="preview" id="preview" hidden>
     <div class="shot" id="shot"><img id="previewimg" alt="" tabindex="0">
       <div class="found" id="found" hidden aria-live="polite" aria-label="The objects Spark named"></div></div>
-    <figcaption><span id="photoname"></span>·<button type="button" class="link" id="change">Choose another</button></figcaption>
+    <figcaption><span id="photoname"></span>·<button type="button" class="link" id="change">Choose another</button>·<button
+      type="button" class="link" id="phototoggle" aria-expanded="true" aria-controls="shot">Hide photo</button></figcaption>
   </figure>
   <input type="file" id="file" accept="image/jpeg,image/png" hidden>
   <p class="error" id="photoerror" role="alert"></p>
-  <h2><label for="goal">Goal</label></h2>
+  <div class="titled"><h2><label for="goal">Goal</label></h2><button type="button" class="ghost" id="goalsize"
+    aria-pressed="false">Expand</button></div>
   <textarea id="goal" rows="4" placeholder="e.g. put black on blue, then red on black"></textarea>
   <p class="error" id="goalerror" role="alert"></p>
   <label class="check"><input type="checkbox" id="cache"> <span>Use cache <span class="soft">($0, not live)</span></span></label>
-  <div class="runbar"><button type="button" class="primary" id="run">Run</button>
-    <div class="problem" id="runerror" role="alert" hidden></div></div>
+  <div class="runbar"><button type="button" class="primary" id="run">Run</button></div>
+  <div class="problem" id="runerror" role="alert" hidden></div>
 </aside>
+<div class="handle" id="handle" role="separator" aria-orientation="vertical" aria-label="Resize the scene panel"
+  aria-valuemin="320" tabindex="0" title="Drag to resize; double-click to reset"></div>
 <div id="lightbox" hidden role="dialog" aria-label="The photo, full size" tabindex="-1"><img id="lightboximg" alt=""></div>
 
 <main class="card" aria-label="Expected simulation">
@@ -502,9 +519,81 @@ function grow() {
   g.style.height = "auto";
   g.style.height = Math.min(g.scrollHeight, most) + "px";
   g.style.overflowY = g.scrollHeight > most ? "auto" : "hidden";
+  if (layout.goalBig) {   // expanded: also take whatever height the card has free (Run's auto margin would hide it)
+    const aside = document.querySelector("aside"), bar = document.querySelector(".runbar"), err = $("runerror");
+    bar.style.marginTop = "0px";
+    const bottom = err.hidden ? bar.offsetTop + bar.offsetHeight : err.offsetTop + err.offsetHeight + 16;
+    bar.style.marginTop = "";
+    const free = aside.clientHeight - bottom;
+    if (free > 0) g.style.height = (g.offsetHeight + free) + "px";
+    g.style.overflowY = "auto";
+  }
 }
 $("goal").addEventListener("input", grow);
-grow();
+
+// ---------- the layout the viewer chose: panel width, photo hidden, goal expanded (remembered in this browser) ----------
+const LAYOUT_KEY = "mimic.layout", MIN_LEFT = 320;
+let layout = {left: null, photoHidden: false, goalBig: false};
+try { layout = Object.assign(layout, JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}")); } catch (e) { /* no storage */ }
+function remember() { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch (e) { /* no storage */ } }
+const maxLeft = () => Math.round(innerWidth * 0.6);
+function setLeft(px, save = true) {
+  if (px == null) { document.body.style.removeProperty("--left"); layout.left = null; }
+  else {
+    const width = Math.max(MIN_LEFT, Math.min(maxLeft(), Math.round(px)));
+    document.body.style.setProperty("--left", width + "px"); layout.left = width;
+  }
+  const now = layout.left || 324;
+  $("handle").setAttribute("aria-valuenow", now); $("handle").setAttribute("aria-valuemax", maxLeft());
+  if (save) remember();
+  grow();
+}
+let dragging = false;
+$("handle").addEventListener("pointerdown", (e) => {
+  e.preventDefault(); dragging = true; $("handle").setPointerCapture(e.pointerId);
+  $("handle").classList.add("dragging"); document.body.classList.add("resizing");
+});
+$("handle").addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  setLeft(e.clientX - parseFloat(getComputedStyle(document.body).paddingLeft) - 7, false);
+});
+["pointerup", "pointercancel"].forEach((kind) => $("handle").addEventListener(kind, () => {
+  if (!dragging) return;
+  dragging = false; $("handle").classList.remove("dragging"); document.body.classList.remove("resizing"); remember();
+}));
+$("handle").addEventListener("dblclick", () => setLeft(null));
+$("handle").addEventListener("keydown", (e) => {
+  const now = layout.left || 324, step = e.shiftKey ? 64 : 16;
+  const next = {ArrowLeft: now - step, ArrowRight: now + step, Home: MIN_LEFT, End: maxLeft()}[e.key];
+  if (next == null) return;
+  e.preventDefault(); setLeft(next);
+});
+addEventListener("resize", () => { if (layout.left) setLeft(layout.left, false); else grow(); });
+
+function setPhotoHidden(hidden, save = true) {
+  layout.photoHidden = hidden;
+  $("preview").classList.toggle("collapsed", hidden);
+  $("phototoggle").textContent = hidden ? "Show photo" : "Hide photo";
+  $("phototoggle").setAttribute("aria-expanded", !hidden);
+  if (save) remember();
+  setTimeout(grow, still ? 0 : 380);   // after the photo has finished shrinking or growing
+}
+$("phototoggle").addEventListener("click", () => setPhotoHidden(!layout.photoHidden));
+function setGoalBig(big, save = true) {
+  layout.goalBig = big;
+  $("goal").classList.toggle("big", big);
+  $("goalsize").textContent = big ? "Shrink" : "Expand";
+  $("goalsize").setAttribute("aria-pressed", big);
+  if (save) remember();
+  grow();
+}
+$("goalsize").addEventListener("click", () => { setGoalBig(!layout.goalBig); $("goal").focus(); });
+$("previewimg").addEventListener("load", () => {
+  const img = $("previewimg");
+  if (img.naturalWidth) $("preview").style.setProperty("--ratio", img.naturalHeight / img.naturalWidth);
+  grow();
+});
+setLeft(layout.left, false); setPhotoHidden(layout.photoHidden, false); setGoalBig(layout.goalBig, false);
 
 // an error: one plain sentence, and the technical text (no file paths) and the labelled photo under "Show details"
 const PLAIN = [
@@ -541,6 +630,7 @@ function showProblem(technical, folder) {
     thumb.addEventListener("error", () => thumb.remove());
   }
   box.hidden = false;
+  box.scrollIntoView({block: "nearest", behavior: still ? "auto" : "smooth"});
 }
 function clearProblem() { $("runerror").hidden = true; $("runerror").innerHTML = ""; }
 function takeFile(file) {
@@ -734,6 +824,7 @@ function showProgram(r) {
   $("download").href = `/api/runs/${r.folder}/program.zip`;
   $("programnote").textContent = "Try --dry-run first. " + (r.summary.stack
     ? "A real stack needs calib/stack.json." : "Real runs need the calibrated ring.");
+  $("programnote").title = $("programnote").textContent;
   card.hidden = false; card.classList.remove("arrive"); void card.offsetWidth; card.classList.add("arrive");
 }
 
