@@ -12,10 +12,12 @@ closes at table height it picks up the die under it, and when it opens there it 
 check after each carry reads where the simulation put the dice, not a photo. --sim-miss-deg N puts the first die
 down N degrees off, once, so the retry shows (an INJECTED TEST MISS, written on the video).
 
-The target: --instruction "row black, blue, red" (each colour must match exactly one of Spark's names), or the
-photo order: the dice left to right on the sheet go to slots 1, 2, 3. --instruction "stack black, blue, red" piles
-them on slot 1, black at the bottom: SIMULATION ONLY (STACK_WHY), so those moves are marked "sim_only" and
-run_mimic.py refuses a stack without --sim.
+The target: with a goal (--instruction, or the page's goal box, any sentence), Spark reads the goal and the photo
+in one call (brain.read_goal): the objects as short SAM phrases, "stack" or "row", and the carries; code checks every
+part and SAM must find each object exactly once. A stack is built where its bottom object lies (it stays put) when
+the arm can reach it there, otherwise on slot 1; it is SIMULATION ONLY (STACK_WHY), so its moves are marked
+"sim_only" and run_mimic.py refuses a stack without --sim. Without a goal: Spark names the objects, and the photo's
+left-to-right order fills slots 1, 2, 3.
 
 Outputs, in runs/<time>_simulation/, every name starting with "simulation_":
   simulation_moves.json      every line sent to the simulated arm, in order: what the real arm would receive if
@@ -32,7 +34,6 @@ Outputs, in runs/<time>_simulation/, every name starting with "simulation_":
 import dataclasses
 import json
 import math
-import re
 import shutil
 import time
 from pathlib import Path
@@ -51,7 +52,6 @@ from mimic.ring import RingError
 MADE_UP_RING = {"centre_cm": (18.5, 27.0), "radius_cm": 20.0, "scale": 1.0, "offset_deg": -180.0,
                 "slots_deg": [22, 38, 54]}
 PICK_RADIUS_CM = 1.0          # the claw picks up a die whose centre is this close to the claw tip
-INSTRUCTION_MODES = ("row", "stack")
 DIE_SUFFIX = " die"           # the naming prompt asks for "colour die"; anything else is not a die
 LABEL = "placed on the made-up ring"
 SIM_TAG = "[simulated] "
@@ -167,101 +167,15 @@ class SimArm(FakeTransport):
 
 # ---------- the target ----------
 
-def parse_instruction(text: str) -> tuple[str, list[str]]:
-    """'row black, blue, red' -> ("row", ["black", "blue", "red"])."""
-    parts = text.strip().lower().split(None, 1)
-    if len(parts) < 2 or parts[0] not in INSTRUCTION_MODES:
-        raise SimError(f'An instruction is "row" or "stack" and then colours separated by commas, for example '
-                       f'"row black, blue, red". Got {text!r}.')
-    colours = [c.strip() for c in parts[1].split(",") if c.strip()]
-    return parts[0], colours
+MAX_GOAL_CHARS = 600
 
 
-GOAL_EXAMPLES = ('Goals that work: "put black on blue, then red on black" (a stack, built on slot 1 from the bottom '
-                 'die up), "row black, blue, red" (slots 1, 2, 3), "stack black, blue, red" (bottom first), or leave '
-                 "it empty for the photo's left-to-right order.")
-PAIR = re.compile(r"^(?:(?:and|then|put|place)\s+)*(?:the\s+)?(.+?)\s+on\s+(?:top\s+of\s+)?(?:the\s+)?(.+)$")
-NOUN = r"(?:die|dice|block|blocks|cube|cubes|object|objects|one)"
-# "... stack the black die on top of the blue die ..." -> ("black", "blue"): the word before "on" (skipping a noun
-# like "die") and the word after "on", "on top of" or "on the". Used when the goal is a longer sentence.
-PAIR_IN_SENTENCE = re.compile(r"\b([a-z]+)(?:\s+" + NOUN + r")?\s+on\s+(?:top\s+of\s+)?(?:the\s+)?([a-z]+)\b")
-MAX_NAME_WORDS = 3   # a clause whose X or Y is longer than this is a sentence: scan it for pairs instead
-
-
-def parse_goal(text: str) -> tuple[str, list]:
-    """The goal, read by code (no API call), before anything else runs:
-        ""                                       -> ("photo", [])           the photo's left-to-right order
-        "row black, blue, red"                   -> ("row", ["black", ...])
-        "stack black, blue, red"                 -> ("stack", ["black", ...])   bottom first
-        "put black on blue, then red on black"   -> ("pairs", [("black", "blue"), ("red", "black")])
-    Anything else is refused with GOAL_EXAMPLES."""
-    text = " ".join(text.strip().lower().split())
-    if not text:
-        return "photo", []
-    first = text.split(None, 1)[0]
-    if first in INSTRUCTION_MODES:
-        try:
-            return parse_instruction(text)
-        except SimError:
-            raise SimError(f"Not understood: {text!r}. {GOAL_EXAMPLES}") from None
-    if " on " not in f" {text} ":
-        raise SimError(f"Not understood: {text!r}. {GOAL_EXAMPLES}")
-    pairs, sentence = [], False
-    for clause in (c.strip() for c in re.split(r",|\bthen\b", text)):
-        clause = re.sub(r"^(?:and\s+)+|\s+and$", "", clause).strip()
-        if not clause:
-            continue
-        found = PAIR.match(clause)
-        if not found or any(len(part.split()) > MAX_NAME_WORDS for part in found.groups()):
-            sentence = True   # not a short "X on Y" clause: read the whole goal as a sentence
-            break
-        pairs.append((found.group(1).strip(), found.group(2).strip()))
-    if sentence:
-        pairs = PAIR_IN_SENTENCE.findall(text)
-    if not pairs:
-        raise SimError(f"No \"X on Y\" found in {text!r}. {GOAL_EXAMPLES}")
-    return "pairs", pairs
-
-
-def resolve_goal(mode: str, spec: list, names: list[str], seen: dict) -> list[str]:
-    """The target order (for a stack: bottom first), with each colour matched to exactly one of Spark's names.
-    "X on Y" pairs must build one pile: each Y is the die on top so far ("red on black" after "black on blue")."""
-    if mode == "photo":
-        return photo_order(seen)
-    if mode in INSTRUCTION_MODES:
-        return match_colours(spec, names)
-    order = []
-    for x_colour, y_colour in spec:
-        x, y = match_colours([x_colour], names)[0], match_colours([y_colour], names)[0]
-        if x == y:
-            raise SimError(f"{x} cannot go on itself.")
-        if not order:
-            order = [y, x]
-            continue
-        if y != order[-1]:
-            raise SimError(f"{x_colour} on {y_colour}: {y} is not on top of the pile ({order[-1]} is). Each pair "
-                           f"puts a die on the one placed last. {GOAL_EXAMPLES}")
-        if x in order:
-            raise SimError(f"{x} is already in the pile.")
-        order.append(x)
-    return order
-
-
-def match_colours(colours: list[str], names: list[str]) -> list[str]:
-    """Each colour (one or more words) must be in exactly one of Spark's names: 'blue' -> 'blue die'. A die's
-    whole name always picks that die ('blue die' when there is also a 'dark blue die')."""
-    order = []
-    for colour in colours:
-        matches = [n for n in names if n == colour] or [
-            n for n in names if all(word in n.split() for word in colour.split())]
-        if len(matches) != 1:
-            hint = " Separate the colours with commas." if len(colour.split()) > 1 and not matches else ""
-            raise SimError(f"{colour!r} matches {len(matches)} of the dice Spark named ({', '.join(names)}); it "
-                           f"must match exactly one.{hint}")
-        if matches[0] in order:
-            raise SimError(f"{matches[0]} is named twice in the instruction.")
-        order.append(matches[0])
-    return order
+def check_goal(text: str) -> str:
+    """Before any API call: the goal is free text that Spark reads with the photo; only its length is checked."""
+    text = " ".join(str(text).split())
+    if len(text) > MAX_GOAL_CHARS:
+        raise SimError(f"The goal is {len(text)} characters long; please keep it under {MAX_GOAL_CHARS}.")
+    return text
 
 
 def photo_order(positions: dict) -> list[str]:
@@ -306,8 +220,8 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
     start = arm_module.load_start_pose(say=say)
     the_ring = made_up_ring(ring_module.load_ring())
     ring_loop.preflight(layout, the_ring, limits)
-    mode, spec = parse_goal(instruction or "")   # refused here, before any API call
-    stack = mode in ("stack", "pairs")
+    goal = check_goal(instruction or "")   # an empty goal: the photo's left-to-right order (no goal reading)
+    stack = False                           # known once Spark has read the goal
 
     out_dir = Path(out_root) / f"{time.strftime('%Y%m%d-%H%M%S')}_simulation"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -334,10 +248,18 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
             say(f"  SAM found the 6 dots; the photo calibrated itself, check dots off by {', '.join(checks)}  "
                 f"(${meta_api.cost_so_far():.4f} so far)")
             naming = []
-            names = brain.name_objects(str(photo), attempts=naming)
+            if goal:   # Spark reads the goal and the photo together; code checks the reply; SAM finds each object
+                read = brain.read_goal(str(photo), goal, attempts=naming)
+                names = read["objects"]
+                say(f"  Spark read the goal: {read['kind']}, objects {', '.join(names)}; moves " +
+                    ", then ".join(f"{c['object']} onto {c['onto']}" if c["onto"] else c["object"]
+                                   for c in read["carries"]) + f"  (${meta_api.cost_so_far():.4f} so far)")
+            else:
+                read = None
+                names = brain.name_objects(str(photo), attempts=naming)
             say(f"  Spark named: {', '.join(names)}; SAM found exactly 1 box for each  "
                 f"(${meta_api.cost_so_far():.4f} so far)")
-            dice = [n for n in names if n.endswith(DIE_SUFFIX)]
+            dice = names if read else [n for n in names if n.endswith(DIE_SUFFIX)]
             if len(dice) < len(names):
                 say(f"  not dice, left out: {', '.join(n for n in names if n not in dice)}")
             boxes = {}
@@ -351,10 +273,16 @@ def run(photo, instruction: str | None = None, miss_deg: float = 0.0, out_root=c
         finally:
             config.BUDGET_USD = budget_before
             summary["cost_usd"] = round(meta_api.cost_so_far(), 4)
-        target = resolve_goal(mode, spec, dice, seen)
-        summary["target"] = target
-        summary["goal_read"] = {"mode": mode, "spec": spec}
-        how = "photo order, left to right" if mode == "photo" else "read from the goal by code"
+        if read:
+            target, mode = read["order"], ("pairs" if read["kind"] == "stack" else "row")
+        else:
+            target, mode = photo_order(seen), "photo"
+        stack = mode == "pairs"
+        summary.update(target=target, stack=stack, sim_only=STACK_WHY if stack else None,
+                       mode="ring, simulated" + (", stack" if stack else ""))
+        summary["goal_read"] = ({"mode": mode, "by": "spark", "kind": read["kind"], "objects": read["objects"],
+                                 "carries": read["carries"], "reply": read["reply"]} if read else {"mode": "photo"})
+        how = "photo order, left to right" if mode == "photo" else "read from the goal by Spark, checked by code"
         if stack:
             say(f"Target ({how}): a stack, bottom first: {', '.join(target)}. SIMULATION ONLY: {STACK_WHY}")
         else:

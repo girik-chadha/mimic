@@ -740,3 +740,13 @@ it. The same safety checks run as for any other move, and if they fail the pile 
 Two sentences: "The demo page is now bright and lively, but every effect is pure CSS or a few lines of script, with
 no libraries and nothing loaded from the internet. The fun never hides the facts: the simulation label, the cost and
 the real numbers stay on screen."
+
+### 5 Nov: Spark reads the goal
+
+- The goal box now takes any sentence. Spark reads it together with the photo and answers with the objects (as short
+  phrases SAM can search for), whether it is a stack or a row, and the moves, in strict JSON. Plain code then checks
+  every part, SAM must find each object exactly once, and anything that is not stacking or lining up is refused.
+
+Two sentences: "Spark turns a free sentence and a photo into a small, strict list of objects and moves, and code
+refuses anything in it that does not add up. SAM then has to find every object exactly once before a single move is
+planned."

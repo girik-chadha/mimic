@@ -14,7 +14,8 @@ streams every line the run prints to the page as it happens (Server-Sent Events)
     GET  /api/runs/<folder>/program.zip   the arm program (mimic/job.py): mimic_job_<time>.py, moves.json, README
 
 One run at a time. A photo must be a JPEG or PNG (checked by its first bytes and by decoding it), at most 15 MB.
-The goal is read by code (sim.parse_goal) and refused, with examples, before any API call. Only the Python
+The goal is free text: Spark reads it with the photo (brain.read_goal) and code checks the reply; before any API
+call only its length is checked (sim.check_goal). Only the Python
 standard library serves the page; nothing is loaded from the internet.
 """
 import argparse
@@ -85,10 +86,9 @@ def photo_bytes(data_url: str) -> tuple[bytes, str]:
 
 def check_goal(goal: str) -> str:
     try:
-        sim.parse_goal(goal or "")
+        return sim.check_goal(goal or "")   # free text: Spark reads it with the photo; only its length is checked
     except sim.SimError as error:
         raise Refused("goal", str(error)) from None
-    return goal or ""
 
 
 # ---------- one run at a time ----------

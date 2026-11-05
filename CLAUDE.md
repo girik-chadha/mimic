@@ -48,7 +48,8 @@ Read these before any task:
 ## Design decisions (do not change without asking)
 
 - Code for exact logic (move order, geometry, safety limits). AI for judgement
-  (naming objects from the demo photo, diagnosing failed placements).
+  (naming objects from the demo photo, reading the goal sentence with the photo (5 Nov, checked by code),
+  diagnosing failed placements).
 - Scene: A3 sheet with 4 calibration stickers, a mess area, and an empty target row
   of numbered slots, so placements never collide.
 - Safety limits live in the firmware as well as in Python.

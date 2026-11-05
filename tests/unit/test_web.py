@@ -92,8 +92,8 @@ def test_a_text_file_or_a_bad_goal_is_refused_and_nothing_runs(server, monkeypat
     assert post(server, {"photo": data_url(b"not an image", "text/plain"), "goal": ""}) == (
         400, {"field": "photo", "error": "Only JPEG or PNG photos can be used; this file is not one (it says "
                                          "text/plain). A phone's HEIC photo can be exported as JPEG."})
-    code, reply = post(server, {"photo": data_url(jpeg()), "goal": "make a tower"})
-    assert code == 400 and reply["field"] == "goal" and "Goals that work" in reply["error"]
+    code, reply = post(server, {"photo": data_url(jpeg()), "goal": "put black on blue " * 50})
+    assert code == 400 and reply["field"] == "goal" and "please keep it under 600" in reply["error"]
 
 
 def test_a_run_streams_its_lines_then_the_result(server, monkeypatch, tmp_path):

@@ -252,3 +252,150 @@ def diagnose(before_path: str, after_path: str, move, error_cm) -> dict:
     reply = meta_api.call(config.SPARK_MODEL, diagnose_content(before_path, after_path, move, error_cm))
     return parse_diagnosis(reply)
 
+
+
+# ---------- reading the user's goal, with the photo ----------
+
+GOAL_PROMPT = """Look at this photo of objects on a sheet of paper, and read what the user wants:
+<goal>{goal}</goal>
+
+1. List the objects the goal is about, as short search phrases for an object finder: 2 to 4 words each, at most
+15 words in all, all lowercase, using the user's own words where possible (for example "black die", "coffee mug",
+"yellow block"). Each phrase must pick out exactly one object you can see on the sheet.
+2. Say what kind of task it is: "stack" (put objects on top of each other), "row" (line them up), or "other"
+(anything else).
+3. List the moves in order. For a stack, each carry puts one object onto another; the first carry goes onto the
+object at the bottom, which does not move, and each later carry goes onto the object carried just before it. For a
+row, "onto" is null and the carries are in the order of the row.
+
+Reply with ONLY a JSON object and no other text, like this:
+{{"objects": ["blue die", "black die", "red die"], "kind": "stack",
+ "carries": [{{"object": "black die", "onto": "blue die"}}, {{"object": "red die", "onto": "black die"}}]}}"""
+
+GOAL_RENAME_PROMPT = """Look at this photo again. For the user's goal <goal>{goal}</goal> you chose these search
+phrases: {objects}. An object finder searched the photo for each one. A good phrase matches exactly 1 object.
+These did not:
+{failures}
+
+Give a new phrase for each of those (2 to 4 words, all lowercase), different from every phrase already tried:
+{tried}. Reply with ONLY a JSON object that maps each failed phrase to its new phrase, like this:
+{{"black die": "black cube"}}"""
+
+GOAL_KINDS = ("stack", "row")
+MAX_PHRASE_WORDS, MAX_GOAL_WORDS = 4, 15
+CANNOT = "Mimic can stack or line up the objects it finds. It can't do that yet."
+
+
+class GoalError(ValueError):
+    """A goal that cannot be done, in one plain sentence for the page."""
+
+
+def _phrases(objects) -> list[str]:
+    if not isinstance(objects, list) or not objects or not all(isinstance(o, str) for o in objects):
+        raise GoalError("Spark did not list the objects the goal is about.")
+    objects = [" ".join(o.lower().split()) for o in objects]
+    for o in objects:
+        if not 2 <= len(o.split()) <= MAX_PHRASE_WORDS:
+            raise GoalError(f"Spark's phrase {o!r} is not 2 to {MAX_PHRASE_WORDS} words.")
+    if sum(len(o.split()) for o in objects) > MAX_GOAL_WORDS:
+        raise GoalError(f"Spark's phrases are over {MAX_GOAL_WORDS} words in all.")
+    if len(set(objects)) != len(objects):
+        raise GoalError("Spark gave two objects the same phrase.")
+    return objects
+
+
+def parse_goal_reply(reply: str) -> dict:
+    """Spark's JSON -> {"kind", "objects" (only those the moves use), "carries", "order"}, checked by code:
+    every carry uses a listed object; a stack is one pile (the first carry onto the bottom object, each later one
+    onto the object carried just before); a row has no "onto"; nothing is carried twice. "order" is the target:
+    for a stack, bottom first; for a row, the row's order."""
+    data = _json_in(reply, r"\{.*\}", "object")
+    if not isinstance(data, dict):
+        raise GoalError("Spark's reply about the goal could not be read.")
+    if data.get("kind") not in GOAL_KINDS:
+        raise GoalError(CANNOT)
+    objects = _phrases(data.get("objects"))
+    carries = data.get("carries")
+    if not isinstance(carries, list) or not carries:
+        raise GoalError("Spark found no moves in the goal.")
+    clean = []
+    for carry in carries:
+        if not isinstance(carry, dict) or not isinstance(carry.get("object"), str):
+            raise GoalError("Spark's moves could not be read.")
+        thing = " ".join(carry["object"].lower().split())
+        onto = carry.get("onto")
+        onto = " ".join(onto.lower().split()) if isinstance(onto, str) else None
+        for phrase in (thing, onto):
+            if phrase is not None and phrase not in objects:
+                raise GoalError(f"Spark's move uses {phrase!r}, which is not one of the objects it listed.")
+        clean.append({"object": thing, "onto": onto})
+    moved = [c["object"] for c in clean]
+    if len(set(moved)) != len(moved):
+        raise GoalError("Spark's moves carry the same object twice.")
+    if data["kind"] == "row":
+        if any(c["onto"] for c in clean):
+            raise GoalError("A row cannot put one object onto another.")
+        order = moved
+    else:
+        if any(c["onto"] is None for c in clean):
+            raise GoalError("Every move of a stack must say what it goes onto.")
+        base = clean[0]["onto"]
+        for before, carry in zip(clean, clean[1:]):
+            if carry["onto"] != before["object"]:
+                raise GoalError(f"The {carry['object']} must go onto the {before['object']}, the object placed just "
+                                "before it: Mimic builds one pile.")
+        if base in moved or base == clean[0]["object"]:
+            raise GoalError("The bottom of the pile cannot also be carried.")
+        order = [base] + moved
+    return {"kind": data["kind"], "objects": order, "carries": clean, "order": order}
+
+
+def goal_content(image_path: str, goal: str) -> list:
+    return _with_photo(GOAL_PROMPT.format(goal=goal.replace("<", "(").replace(">", ")")), image_path)
+
+
+def read_goal(image_path: str, goal: str, attempts: list | None = None) -> dict:
+    """Spark reads the goal and the photo in one call; code checks the reply (parse_goal_reply); SAM must find
+    exactly 1 object for each phrase. A phrase that finds none or several gets one rephrase from Spark, then the
+    goal is refused naming that object. Every SAM check is added to `attempts` as {"round", "name", "boxes"}."""
+    attempts = [] if attempts is None else attempts
+    reply = meta_api.call(config.SPARK_MODEL, goal_content(image_path, goal))
+    plan = parse_goal_reply(reply)
+    counts = {}
+    for phrase in plan["objects"]:
+        counts[phrase] = len(sam.find(image_path, phrase))
+        attempts.append({"round": 0, "name": phrase, "boxes": counts[phrase]})
+    failed = {p: n for p, n in counts.items() if n != 1}
+    if failed:
+        failure_lines = "\n".join(f'- "{p}": {n} matches' for p, n in failed.items())
+        text = GOAL_RENAME_PROMPT.format(goal=goal.replace("<", "(").replace(">", ")"),
+                                         objects=json.dumps(plan["objects"]), failures=failure_lines,
+                                         tried=json.dumps(plan["objects"]))
+        renames = _json_in(meta_api.call(config.SPARK_MODEL, _with_photo(text, image_path)), r"\{.*\}", "object")
+        renames = {" ".join(str(k).lower().split()): v for k, v in (renames if isinstance(renames, dict) else {}).items()}
+        for old, n in failed.items():
+            new = renames.get(old)
+            if not isinstance(new, str) or not new.strip():
+                raise GoalError(_not_found(old, n))
+            new = _phrases([new])[0]
+            found = len(sam.find(image_path, new))
+            attempts.append({"round": 1, "name": new, "boxes": found})
+            if found != 1:
+                raise GoalError(_not_found(old, found if found else n))
+            plan = _rename(plan, old, new)
+    plan["reply"] = reply
+    return plan
+
+
+def _not_found(phrase: str, count: int) -> str:
+    if count == 0:
+        return f"I couldn't find the {phrase} in the photo."
+    return f"I found {count} things that look like the {phrase}; I need exactly one."
+
+
+def _rename(plan: dict, old: str, new: str) -> dict:
+    swap = (lambda p: new if p == old else p)
+    if new in plan["objects"]:
+        raise GoalError(f"The new phrase {new!r} is already used for another object.")
+    return dict(plan, objects=[swap(p) for p in plan["objects"]], order=[swap(p) for p in plan["order"]],
+                carries=[{"object": swap(c["object"]), "onto": c["onto"] and swap(c["onto"])} for c in plan["carries"]])

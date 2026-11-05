@@ -236,6 +236,9 @@ main { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px
 .view ol li::before { content: counter(n); display: inline-grid; place-items: center; width: 20px; height: 20px;
   border-radius: 50%; background: rgba(20, 18, 31, .07); font-size: 12px; font-weight: 650; margin-right: 8px; }
 .num { font-variant-numeric: tabular-nums; }
+mark.hl { background: color-mix(in srgb, var(--c, #14121F) 16%, transparent); color: inherit; border-radius: 6px;
+  padding: 0 3px; box-shadow: inset 0 -2px 0 var(--c, #14121F); }
+.said { font-size: 17px; line-height: 1.55; margin: 0 0 10px; }
 .columns { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; padding: 4px; }
 .carry { padding: 10px 2px; display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 18px; align-items: start; }
 .carry + .carry { border-top: 1px solid var(--hair); }
@@ -511,7 +514,8 @@ const PLAIN = [
   [/off the sheet/, () => "Something was found off the sheet. Check that the whole sheet is in view."],
   [/No name that SAM finds exactly once/, () => "Spark and SAM could not agree on a name for every object. Try a clearer photo."],
   [/matches \d+ of the (dice|objects) Spark named/, () => "Your goal names something I could not find in the photo."],
-  [/No "X on Y" found|Not understood/, () => "I could not read a goal in that. Try \u201cput black on blue, then red on black\u201d."],
+  [/Mimic can stack or line up/, () => "Mimic can stack or line up the objects it finds. It can't do that yet."],
+  [/^I (couldn't find the|found \d+ things that look like)/, (m) => m.input],
   [/apart|from slot|outside the ring|not on top of the pile|already in the pile/,
    () => "I could not plan safe moves for this layout. Spread the objects out, or check the goal."],
   [/budget|cap/i, () => "This run reached its cost cap."],
@@ -668,6 +672,7 @@ function fillTabs(s, folder) {
     ? `${chip(name)} ${i === 0 ? (s.stack_in_place ? "stays where it lies (the bottom)" : "to slot 1 (the bottom)")
                               : "on top of the " + escape(s.target[i - 1])}`
     : `${chip(name)} to slot ${i + 1}`);
+  if (read.by === "spark") { fillSparkRead(s, read); } else
   $("view-spark").innerHTML = `<div class="columns"><div>
       <h3>Muse Spark 1.3 named the objects</h3><p class="soft" style="margin:0 0 6px;font-size:13px">SAM 3.1 checked each
       name: a good name finds exactly 1 box.</p><ul>${naming || "<li>No naming record in this run.</li>"}</ul></div>
@@ -694,6 +699,33 @@ function fillTabs(s, folder) {
         `<i class="${share > 0.9 ? "close" : ""}" style="width:${Math.min(100, 100 * share)}%"></i></div>
         The firmware opens a claw held 5 s.</div></div>`;
   }).join("") || '<p class="waiting">No carries in this run.</p>';
+}
+
+// The goal as Spark read it: the phrases it pulled out (highlighted in the sentence where they appear word for word),
+// how many objects SAM found for each, and the moves code accepted
+function fillSparkRead(s, read) {
+  let sentence = escape(s.instruction || "");
+  [...read.objects].sort((a, b) => b.length - a.length).forEach((phrase) => {
+    const words = escape(phrase).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    sentence = sentence.replace(new RegExp(`\\b${words}\\b`, "gi"),
+      (hit) => `<mark class="hl" style="--c:${OBJ_HEX[colourOf(phrase)] || "#14121F"}">${hit}</mark>`);
+  });
+  const counts = {};
+  (s.naming || []).forEach((a) => { counts[a.name] = a.boxes; });
+  const moves = read.kind === "row"
+    ? read.carries.map((c, i) => `${chip(c.object)} to place ${i + 1} in the row`)
+    : read.carries.map((c) => `${chip(c.object)} onto the ${escape(c.onto)}`);
+  const where = read.kind === "row" ? "A row, in this order." : "One pile, bottom first, built " +
+    (s.stack_in_place ? `where the ${escape(s.target[0])} lies (it stays put).` : "on slot 1.");
+  $("view-spark").innerHTML = `<div class="columns"><div>
+      <h3>Your goal, read by Muse Spark 1.3 with the photo</h3><p class="said">${sentence}</p>
+      <h3>The objects it pulled out</h3><ul>${read.objects.map((o) => `<li>${chip(o)} <span class="` +
+        `${counts[o] === 1 ? "pass" : "miss"}">SAM found ${counts[o] ?? "?"}</span></li>`).join("")}</ul></div>
+    <div><h3>The moves</h3><ol>${moves.map((m) => `<li>${m}</li>`).join("")}</ol>
+      <p class="soft" style="margin:0 0 8px;font-size:13.5px">${where} Checked by code: every move uses an object SAM
+        found exactly once, and nothing else is accepted.</p>
+      ${s.stack ? '<p class="miss" style="margin:0;font-size:13.5px">Stacking is simulation only: the taped elbow ' +
+        "cannot let go of an object on top of another.</p>" : ""}</div></div>`;
 }
 
 function showProgram(r) {

@@ -6,12 +6,13 @@ tests/fixtures/photos/dice_sheet.jpg: red, black, blue from left to right across
 import dataclasses
 import json
 import math
+import re
 
 import cv2
 import numpy as np
 import pytest
 
-from mimic import arm, brain, camera, config, marks, ring_loop, sam, scene, sim, sim_video
+from mimic import arm, brain, camera, config, marks, meta_api, ring_loop, sam, scene, sim, sim_video
 from mimic import ring as ring_module
 from mimic.sam import Box
 
@@ -42,8 +43,18 @@ class Fakes:
             [box_at(cm, 25) for cm in layout.dots_cm.values()] if name == layout.dot_prompt
             else [box_at(self.seen[name], 38)] if name in self.seen else []))
         monkeypatch.setattr(brain, "name_objects", lambda path, attempts=None: list(names or self.seen))
+        self.spark_calls = []
+        monkeypatch.setattr(meta_api, "call", self.spark)
         monkeypatch.setattr(arm, "SerialBridgeTransport", lambda *a, **k: pytest.fail("serial bridge opened"))
         monkeypatch.setattr(camera, "capture", lambda *a, **k: pytest.fail("camera used"))
+
+    def spark(self, model, content, save_as=None, use_cache=True):
+        text = content[0]["text"]
+        goal = re.search(r"<goal>(.*?)</goal>", text, re.S).group(1)
+        self.spark_calls.append(goal)
+        if "you chose these search" in text:          # the one rephrase
+            return json.dumps(RENAMES.get(goal, {}))
+        return json.dumps(GOAL_REPLIES[goal])
 
     def video(self, out_path, story, say=print):
         self.stories.append(story)
@@ -60,6 +71,29 @@ class Fakes:
 
     def attempts(self):
         return [json.loads(line) for line in (self.out_dir() / "simulation_attempts.jsonl").read_text().splitlines()]
+
+
+def carries(kind, *pairs):
+    return [{"object": o, "onto": onto} for o, onto in pairs]
+
+
+LONG_GOAL = ("This is my esp32 robot arm and I want you to write hardware code to stack the black die on top of the blue "
+             "die and then the red die on top of the black die in a three die stack")
+ON_BLUE = {"objects": ["blue die", "black die", "red die"], "kind": "stack",
+           "carries": carries("stack", ("black die", "blue die"), ("red die", "black die"))}
+GOAL_REPLIES = {   # what Spark would answer for each goal (the fakes look them up by the goal in the prompt)
+    "row blue, red, black": {"objects": ["blue die", "red die", "black die"], "kind": "row",
+                             "carries": carries("row", ("blue die", None), ("red die", None), ("black die", None))},
+    "stack black, blue, red": {"objects": ["black die", "blue die", "red die"], "kind": "stack",
+                               "carries": carries("stack", ("blue die", "black die"), ("red die", "blue die"))},
+    "stack blue, black, red": ON_BLUE,
+    "put black on blue, then red on black": ON_BLUE,
+    LONG_GOAL: ON_BLUE,
+    "paint the red die green": {"objects": ["red die"], "kind": "other", "carries": []},
+    "put the green die on the blue die": {"objects": ["green die", "blue die"], "kind": "stack",
+                                          "carries": carries("stack", ("green die", "blue die"))},
+}
+RENAMES = {"put the green die on the blue die": {"green die": "green cube"}}
 
 
 def the_ring():
@@ -125,20 +159,10 @@ def test_a_typed_row_instruction_sets_the_order(tmp_path, monkeypatch):
     assert [m["result"] for m in summary["moves"]] == ["PASS"] * 3
 
 
-@pytest.mark.parametrize("instruction, names, problem", [
-    ("dance red, blue", ["red die"], 'An instruction is "row" or "stack"'),
-    ("row purple", ["red die", "blue die"], "'purple' matches 0 of the dice Spark named"),
-    ("row black blue", ["black die", "blue die"], "Separate the colours with commas"),
-    ("row blue", ["blue die", "dark blue die"], "'blue' matches 2"),
-    ("row red, red", ["red die"], "red die is named twice"),
-])
-def test_an_instruction_that_does_not_match_the_dice_is_refused(instruction, names, problem):
-    with pytest.raises(sim.SimError, match=problem):
-        sim.match_colours(sim.parse_instruction(instruction)[1], names)
 
 
-def test_a_two_word_colour_matches_one_die():
-    assert sim.match_colours(["dark blue", "blue die"], ["blue die", "dark blue die"]) == ["dark blue die", "blue die"]
+
+
 
 
 def test_names_that_are_not_dice_are_left_out(tmp_path, monkeypatch):
@@ -222,10 +246,10 @@ def test_a_stack_piles_every_die_on_slot_1_bottom_first(tmp_path, monkeypatch):
     fakes = Fakes(tmp_path, monkeypatch)
     summary = fakes.run("stack black, blue, red")
     assert summary["stack"] is True and summary["success"] is True and "cannot stack" in summary["sim_only"]
-    assert [(m["name"], m["slot"]) for m in summary["moves"]] == [("black die", 1), ("blue die", 1), ("red die", 1)]
+    assert [(m["name"], m["slot"]) for m in summary["moves"]] == [("blue die", 1), ("red die", 1)]   # black stays
     final = fakes.stories[0].log[-1]
-    slot = the_ring().point_at(the_ring().slots_deg[0])
-    assert all(math.dist(final["dice"][n], slot) < 0.2 for n in summary["target"])
+    spot = final["dice"]["black die"]
+    assert all(math.dist(final["dice"][n], spot) < 0.3 for n in summary["target"])
     assert final["level"] == {"black die": 0, "blue die": 1, "red die": 2}
     assert sim_video._labels(final["dice"], final["level"]) == [(final["dice"]["black die"], "stack: black, blue, red")]
     claw = [c["simulated_claw"] for c in fakes.moves_json()["commands"] if "simulated_claw" in c]
@@ -328,49 +352,15 @@ def test_the_real_replies_on_dice_sheet_fit_the_made_up_ring(tmp_path, monkeypat
 
 # ---------- the goal, read by code ----------
 
-NAMES3 = ["red die", "black die", "blue die"]
 
 
-@pytest.mark.parametrize("text, mode, order", [
-    ("", "photo", ["red die", "black die", "blue die"]),
-    ("row blue, red, black", "row", ["blue die", "red die", "black die"]),
-    ("stack black, blue, red", "stack", ["black die", "blue die", "red die"]),
-    ("put black on blue, then red on black", "pairs", ["blue die", "black die", "red die"]),
-    ("Put the black die on the blue die and then red on top of black", "pairs", ["blue die", "black die", "red die"]),
-    ("red on blue", "pairs", ["blue die", "red die"]),
-    ("black on blue, sideways", "pairs", ["blue die", "black die"]),   # a pair is found, so it is not refused
-    ("This is my esp32 robot arm and I want you to write hardware code to stack the black die on top of the blue die "
-     "and then the red die on top of the black die in a three die stack", "pairs", ["blue die", "black die", "red die"]),
-    ("Please put the black one on the blue, and the red block on top of the black.", "pairs",
-     ["blue die", "black die", "red die"]),
-])
-def test_goals_that_code_can_read(text, mode, order):
-    parsed_mode, spec = sim.parse_goal(text)
-    assert parsed_mode == mode
-    assert sim.resolve_goal(parsed_mode, spec, NAMES3, SEEN) == order
 
 
-@pytest.mark.parametrize("text, problem", [
-    ("make a tower", "Not understood: 'make a tower'. Goals that work: \"put black on blue"),
-    ("row", "Not understood: 'row'"),
-    ("I want you to write hardware code for my robot arm, please", "Not understood: .*Goals that work"),
-    ("turn it on", 'No "X on Y" found in'),
-])
-def test_other_goals_are_refused_with_an_example_before_any_call(text, problem):
-    with pytest.raises(sim.SimError, match=problem):
-        sim.parse_goal(text)
 
 
-@pytest.mark.parametrize("text, problem", [
-    ("black on blue, then red on blue", "blue die is not on top of the pile \\(black die is\\)"),
-    ("black on black", "black die cannot go on itself"),
-    ("black on blue, then blue on black", "blue die is already in the pile"),
-    ("purple on blue", "'purple' matches 0 of the dice Spark named"),
-])
-def test_pairs_that_do_not_make_one_pile_are_refused(text, problem):
-    mode, spec = sim.parse_goal(text)
-    with pytest.raises(sim.SimError, match=problem):
-        sim.resolve_goal(mode, spec, NAMES3, SEEN)
+
+
+
 
 
 def test_a_pairs_goal_builds_the_pile_where_the_bottom_die_lies(tmp_path, monkeypatch):
@@ -399,3 +389,52 @@ def test_a_pile_whose_bottom_die_cannot_be_reached_goes_on_slot_1(tmp_path, monk
     assert summary["stack_in_place"] is False and [m["name"] for m in summary["moves"]] == [
         "blue die", "black die", "red die"]
     assert any("building the pile on slot 1 instead" in line for line in fakes.said)
+
+
+
+# ---------- Spark reads the goal with the photo; code checks every part ----------
+
+def test_spark_reads_a_long_sentence_into_objects_and_moves(tmp_path, monkeypatch):
+    fakes = Fakes(tmp_path, monkeypatch)
+    summary = fakes.run(LONG_GOAL)
+    assert fakes.spark_calls == [LONG_GOAL]                               # one call: the goal and the photo together
+    assert summary["target"] == ["blue die", "black die", "red die"] and summary["stack_in_place"] is True
+    read = summary["goal_read"]
+    assert read["by"] == "spark" and read["kind"] == "stack" and read["carries"] == [
+        {"object": "black die", "onto": "blue die"}, {"object": "red die", "onto": "black die"}]
+    assert [n["boxes"] for n in summary["naming"]] == [1, 1, 1]
+
+
+def test_a_goal_that_is_not_stacking_or_a_row_is_refused(tmp_path, monkeypatch):
+    fakes = Fakes(tmp_path, monkeypatch)
+    with pytest.raises(brain.GoalError, match="Mimic can stack or line up the objects it finds. It can't do that yet."):
+        fakes.run("paint the red die green")
+
+
+def test_an_object_sam_cannot_find_gets_one_rephrase_then_a_plain_refusal(tmp_path, monkeypatch):
+    fakes = Fakes(tmp_path, monkeypatch)
+    with pytest.raises(brain.GoalError, match="^I couldn't find the green die in the photo.$"):
+        fakes.run("put the green die on the blue die")
+    assert len(fakes.spark_calls) == 2                                    # the read, and one rephrase
+
+
+@pytest.mark.parametrize("reply, problem", [
+    ({"objects": ["black die"], "kind": "stack", "carries": [{"object": "black die", "onto": "mug"}]},
+     "not one of the objects it listed"),
+    ({"objects": ["a b c d e"], "kind": "row", "carries": [{"object": "a b c d e", "onto": None}]}, "2 to 4 words"),
+    ({"objects": ["red die", "blue die", "black die"], "kind": "stack",
+      "carries": [{"object": "red die", "onto": "blue die"}, {"object": "black die", "onto": "blue die"}]},
+     "must go onto the red die"),
+    ({"objects": ["red die", "blue die"], "kind": "row", "carries": [{"object": "red die", "onto": "blue die"}]},
+     "A row cannot put one object onto another"),
+    ({"objects": ["red die"], "kind": "row", "carries": [{"object": "red die", "onto": None}] * 2},
+     "carry the same object twice"),
+])
+def test_code_refuses_a_reply_that_does_not_make_sense(reply, problem):
+    with pytest.raises(brain.GoalError, match=problem):
+        brain.parse_goal_reply(json.dumps(reply))
+
+
+def test_an_overlong_goal_is_refused_before_any_call():
+    with pytest.raises(sim.SimError, match="please keep it under 600"):
+        sim.check_goal("put black on blue " * 50)

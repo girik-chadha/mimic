@@ -94,10 +94,10 @@ def test_a_measured_stack_lets_go_one_level_higher_each_time(tmp_path, monkeypat
                                 "pick_base_deg": {"blue die": 84, "black die": 110, "red die": 116}}))
     monkeypatch.setattr(job, "STACK_PATH", path)
     planned = job.carries(the_job, ring_module.load_ring(), dry_run=False)
-    assert [c["shoulder_drop"] for c in planned] == [180, 176, 172]
+    assert [c["shoulder_drop"] for c in planned] == [176, 172]           # blue stays put: levels 2 and 3
     steps = job.plan_all(arm.load_limits(), arm.load_start_pose(), ring_module.load_ring(), planned)
     opens = [s.angles["shoulder"] for _, carry_steps, _ in steps for s in carry_steps if s.label == "open"]
-    assert opens == [180, 176, 172]
+    assert opens == [176, 172]
 
 
 def test_a_drop_shoulder_above_the_lift_is_refused():

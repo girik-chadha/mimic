@@ -114,4 +114,4 @@ def test_a_stack_report_says_stacking_is_simulation_only(tmp_path, monkeypatch):
     run_dir = a_simulation(tmp_path, monkeypatch, "stack black, blue, red")
     report.main([str(run_dir)], say=lambda s: None)
     page = (run_dir / "simulation_report.html").read_text()
-    assert "3 of 3 dice stacked on slot 1" in page and "Stacking is simulation only. The real arm cannot stack" in page
+    assert "2 of 2 dice stacked on the black die" in page and "Stacking is simulation only. The real arm cannot stack" in page

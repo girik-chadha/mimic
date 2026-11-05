@@ -357,3 +357,14 @@ Everything in this repo was written during the Meta Global AI Developer Hackatho
   the labelled photo, which opens full size; the server now sends the failed run's folder for it. The privacy line
   moved to the README. Girik's real upload and long goal through the server: calibrated (0.19 and 0.16 cm), Spark
   named red, blue and black die, read as black on blue then red on black, pile built where blue lies, $0.0136.
+- Spark reads the goal (Girik's change, 5 Nov): any goal sentence goes to Muse Spark 1.3 together with the photo, in
+  one call (`brain.read_goal`). It returns the objects as short SAM phrases (2-4 words, at most 15 in all, the user's
+  own words where possible), "stack" or "row", and the carries, as strict JSON. Code checks every part
+  (`brain.parse_goal_reply`): every carry uses a listed object, a stack is one pile (each carry onto the one before,
+  the bottom object not moved), a row has no "onto", nothing is carried twice; anything else is refused with "Mimic
+  can stack or line up the objects it finds. It can't do that yet." SAM must find exactly one object for each phrase;
+  a phrase that finds none or several gets one rephrase from Spark, then the goal is refused naming the object.
+  Without a goal, Spark names the objects as before. The code goal reader is gone; before any call only the goal's
+  length is checked. "What Spark read" highlights the phrases inside the user's sentence, with SAM's count for each and
+  the moves. Real run on Girik's upload with his long sentence: blue, black and red die found, read as black onto
+  blue then red onto black, pile built where blue lies; $0.0079 (one Spark call; the rest cached).
